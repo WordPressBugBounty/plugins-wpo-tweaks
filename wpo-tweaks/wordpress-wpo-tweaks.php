@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name: WPO Tweaks & Optimizations
+ * Plugin Name: Performance Optimizations & WPO Tweaks
  * Plugin URI: https://servicios.ayudawp.com/
- * Description: Several WordPress WPO Optimizations to save hosting resources, Speed Up WordPress and get better results in Google PageSpeed, GTMetrix, Pingdom Tools & WebPageTest
- * Version: 1.0.6
+ * Description: Several WordPress Performance Optimizations for WPO to save hosting resources, Speed Up WordPress and get better results in Google PageSpeed, GTMetrix, Pingdom Tools & WebPageTest
+ * Version: 1.0.7
  * Author: Fernando Tellado
  * Author URI: https://tellado.es/
  *
@@ -33,6 +33,7 @@ function wpo_tweaks_init() {
 	load_plugin_textdomain( 'wpo-tweaks', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
 }
 add_action( 'plugins_loaded', 'wpo_tweaks_init' );
+
 /* DISABLE SELF PINGBACKS */
 function wpo_tweaks_no_self_ping( &$links ) {
 
@@ -46,26 +47,31 @@ foreach ( $links as $l => $link )
 }
 
 add_action( 'pre_ping', 'wpo_tweaks_no_self_ping' );
+
 /** ADMIN FOOTER TEXT **/
 function wpo_tweaks_change_admin_footer_text( $text ) {
 	return sprintf( __( 'Powered by <a target="_blank" href="https://wordpress.org/">WordPress</a> | Optimized with <a href="%s" title="WordPress WPO Tweaks by Fernando Tellado" target="_blank">WPO Tweaks</a>', 'wpo-tweaks'  ), 'https://wordpress.org/plugins/wpo-tweaks/' );
 }
 add_filter( 'admin_footer_text', 'wpo_tweaks_change_admin_footer_text' );
+
 /** REMOVE DASHICONS FROM ADMIN BAR FOR NON LOGGED IN USERS **/
 add_action( 'wp_print_styles', function() {
 if ( ! is_admin_bar_showing() && ! is_customize_preview() ) {
   wp_deregister_style( 'dashicons' );
 }
 }, 100);
+
 /** DISABLE REST API **/
 add_filter('json_enabled', '__return_false');
 add_filter('json_jsonp_enabled', '__return_false');
+
 /** CONTROL HEARTBEAT API **/
 function wpo_tweaks_control_heartbeat( $settings ) {
     $settings['interval'] = 60;
     return $settings;
 }
 add_filter( 'heartbeat_settings', 'wpo_tweaks_control_heartbeat' );
+
 /** REMOVE QUERIES FROM STATIC RESOURCES **/
 function wpo_tweaks_remove_script_version( $src ) {
 	$parts = explode( '?ver', $src );
@@ -74,22 +80,26 @@ function wpo_tweaks_remove_script_version( $src ) {
 }
 add_filter( 'script_loader_src', 'wpo_tweaks_remove_script_version', 15, 1 );
 add_filter( 'style_loader_src', 'wpo_tweaks_remove_script_version', 15, 1 );
+
 /** REMOVE GRAVATAR QUERY STRINGS **/
 function wpo_tweaks_avatar_remove_querystring( $url ) {
 	$url_parts = explode( '?', $url );
 	return $url_parts[0];
 }
 add_filter( 'get_avatar_url', 'wpo_tweaks_avatar_remove_querystring' );
+
 /** REMOVE CAPITAL P DANGIT **/
 remove_filter( 'the_title', 'capital_P_dangit', 11 );
 remove_filter( 'the_content', 'capital_P_dangit', 11 );
 remove_filter( 'comment_text', 'capital_P_dangit', 31 );
+
 /** DISABLE PDF THUMBNAILS PREVIEW **/
 function wpo_tweaks_disable_pdf_previews() {
 $fallbacksizes = array();
 return $fallbacksizes;
 }
 add_filter('fallback_intermediate_image_sizes', 'wpo_tweaks_disable_pdf_previews');
+
 /**
  * Header items cleaning.
  *
@@ -117,6 +127,7 @@ function wpo_tweaks_clean_header() {
 	add_filter( 'the_generator', '__return_false' ); // REMOVE GENERATOR NAME FROM RSS FEEDS.
 }
 add_action( 'after_setup_theme', 'wpo_tweaks_clean_header' );
+
 /** SECURE METHOD FOR DEFER PARSING OF JAVASCRIPT MOVING ALL JS FROM HEADER TO FOOTER **/
 function wpo_defer_parsing_of_js($tag, $handle) {
     if (is_admin()){
@@ -132,6 +143,7 @@ function wpo_defer_parsing_of_js($tag, $handle) {
 	}
 }
 add_filter('script_loader_tag', 'wpo_defer_parsing_of_js',10,2);
+
 /** BROWSER CACHE EXPIRES & GZIP COMPRESSION **/
 function wpo_tweaks_htaccess() {
 	// We get the main WordPress .htaccess filepath.
@@ -176,7 +188,7 @@ function wpo_delete_tweaks_htaccess() {
 
 	$lineas[] = '# Optimizaciones eliminadas al desactivar el plugin';
 
-	insert_with_markers( $ruta_htaccess, 'WordPress WPO Tweaks by Fernando Tellado', $lineas ); // https://developer.wordpress.org/reference/functions/insert_with_markers/ !
+	insert_with_markers( $ruta_htaccess, 'WordPress Performance Optimizations by Fernando Tellado', $lineas ); // https://developer.wordpress.org/reference/functions/insert_with_markers/ !
 }
 /**
  * We run the function that ckecks here

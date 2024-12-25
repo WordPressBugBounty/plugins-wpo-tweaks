@@ -4,7 +4,7 @@ Donate link: https://www.paypal.me/fernandotellado
 Tags: wpo, optimization, optimisation, gzip, browser cache, cache expires, compression, speed, query strings, heartbeat api, json, rest api, json api, jquery_migrate, emoji, query strings, dashicons, pagespeed, pingdom, gtmetrix 
 Requires at least: 4.8
 Requires PHP: 7.4
-Tested up to: 6.6.1
+Tested up to: 6.7.1
 Stable tag: trunk
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
@@ -94,6 +94,9 @@ No. WordPress WPO Tweaks plugin is intended for users that want to safely obtain
 2. Pingdom Tools results after plugin activation.
 
 == Changelog ==
+= 1.0.7 =
+* Tested up to WordPress 6.7.1
+
 = 1.0.6 =
 * Tested up to WordPress 6.6.1
 
