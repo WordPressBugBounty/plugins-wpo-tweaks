@@ -4,7 +4,7 @@ Tags: performance, optimization, speed, cache, lazy-loading
 Requires at least: 5.0
 Requires PHP: 7.4
 Tested up to: 6.8
-Stable tag: 2.0
+Stable tag: 2.0.1
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -12,7 +12,7 @@ Advanced performance optimizations for WordPress. Improves speed, reduces server
 
 == Description ==
 
-**New version 2.0.0 with advanced optimizations!**
+**New version 2.0.x with advanced optimizations!**
 
 WPO Tweaks is the most complete performance optimization plugin for WordPress. It combines the best WPO (Web Performance Optimization) practices in a single easy-to-use tool. No configuration needed: activate and enjoy a faster WordPress.
 
@@ -20,7 +20,7 @@ By default, WordPress loads several functions, services and scripts that are not
 
 With this plugin you can safely disable those annoying services, unnecessary codes and scripts to save resources and hosting costs, and speed up WordPress to get better results in tools like Google PageSpeed, Pingdom Tools, GTMetrix, WebPageTest and others.
 
-### ✨ **NEW FEATURES V2.0.0**
+### ✨ **NEW FEATURES V2.0.x**
 
 **🚀 Advanced CSS Optimizations:**
 * **Automatic Critical CSS**: Above-the-fold critical CSS generation and injection
@@ -217,6 +217,9 @@ Yes, v2.0 includes multiple WordPress filters for developers that allow customiz
 
 == Changelog ==
 
+= 2.0.1 =
+* Fixed bug with WooCommerce not showing products in taxonomy and archive pages 
+
 = 2.0.0 =
 * **NEW MAJOR VERSION with advanced optimizations**
 * ✨ **Automatic Critical CSS**: Above-the-fold critical CSS generation and injection
@@ -376,5 +379,5 @@ Yes, v2.0 includes multiple WordPress filters for developers that allow customiz
 
 == Upgrade Notice ==
 
-= 2.0.0 =
+= 2.0.x =
 NEW MAJOR VERSION! Includes advanced optimizations like automatic critical CSS, deferred CSS loading, automatic preconnect, native lazy loading, database optimizations and much more. Fully backward compatible. Update for maximum performance!

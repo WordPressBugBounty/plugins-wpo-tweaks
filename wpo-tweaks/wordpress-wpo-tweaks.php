@@ -3,7 +3,7 @@
  * Plugin Name: WPO Tweaks & Performance Optimizations
  * Plugin URI: https://servicios.ayudawp.com/
  * Description: Advanced performance optimizations for WordPress. Improve speed, reduce server resources, and optimize Google PageSpeed.
- * Version: 2.0.0
+ * Version: 2.0.1
  * Author: Fernando Tellado
  * Author URI: https://tellado.es/
  * Text Domain: wpo-tweaks
@@ -571,18 +571,34 @@ class AyudaWP_WPO_Tweaks {
         });
     }
     
-    /**
-     * Optimizar queries principales
-     */
-    private function ayudawp_optimize_queries() {
-        add_action('pre_get_posts', function($query) {
-            if (!is_admin() && $query->is_main_query()) {
-                if ($query->is_archive() || $query->is_home()) {
-                    $query->set('no_found_rows', true);
-                }
+/**
+ * Optimizar queries principales - VERSIÓN SEGURA PARA WOOCOMMERCE  
+ */
+private function ayudawp_optimize_queries() {
+    add_action('pre_get_posts', function($query) {
+        if (!is_admin() && $query->is_main_query()) {
+            // EXCLUIR TODO LO RELACIONADO CON WOOCOMMERCE
+            if (function_exists('is_woocommerce') && is_woocommerce()) {
+                return; // Salir sin tocar nada de WooCommerce
             }
-        });
-    }
+            
+            // Excluir categorías de productos específicamente
+            if (function_exists('is_product_category') && is_product_category()) {
+                return;
+            }
+            
+            // Excluir todas las taxonomías de WooCommerce
+            if (is_tax(array('product_cat', 'product_tag', 'product_shipping_class'))) {
+                return;
+            }
+            
+            // Solo aplicar a páginas de archivo del blog (categorías normales, fechas, etc.)
+            if ($query->is_archive() || $query->is_home()) {
+                $query->set('no_found_rows', true);
+            }
+        }
+    });
+}
     
     /**
      * Optimizar feeds
