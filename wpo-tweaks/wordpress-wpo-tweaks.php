@@ -3,9 +3,9 @@
  * Plugin Name: WPO Tweaks & Performance Optimizations
  * Plugin URI: https://servicios.ayudawp.com/
  * Description: Advanced performance optimizations for WordPress. Improve speed, reduce server resources, and optimize Google PageSpeed.
- * Version: 2.0.1
+ * Version: 2.0.2
  * Author: Fernando Tellado
- * Author URI: https://tellado.es/
+ * Author URI: https://ayudawp.com/
  * Text Domain: wpo-tweaks
  * Requires at least: 5.0
  * Tested up to: 6.8
@@ -14,13 +14,13 @@
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  */
 
-// Prevenir acceso directo
+// Impedir acceso directo
 if (!defined('ABSPATH')) {
     exit;
 }
 
 // Definir constantes del plugin
-define('AYUDAWP_WPO_VERSION', '2.0.0');
+define('AYUDAWP_WPO_VERSION', '2.0.2');
 define('AYUDAWP_WPO_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('AYUDAWP_WPO_PLUGIN_PATH', plugin_dir_path(__FILE__));
 
@@ -39,7 +39,7 @@ class AyudaWP_WPO_Tweaks {
         add_action('wp_head', array($this, 'ayudawp_add_dns_prefetch'), 1);
         add_action('wp_footer', array($this, 'ayudawp_defer_non_critical_css'), 999);
         
-        // Optimizaciones de backend
+        // Optimizaciones de admin
         add_action('admin_init', array($this, 'ayudawp_admin_optimizations'));
         
         // Optimizaciones de base de datos
@@ -61,10 +61,10 @@ class AyudaWP_WPO_Tweaks {
         add_action('wp_head', array($this, 'ayudawp_inline_critical_css'), 1);
         add_filter('style_loader_tag', array($this, 'ayudawp_defer_non_critical_css_filter'), 10, 4);
         
-        // JavaScript diferido (método original mejorado)
+        // JavaScript diferido
         add_filter('script_loader_tag', array($this, 'ayudawp_defer_parsing_of_js'), 10, 2);
         
-        // Optimizaciones clásicas del plugin original
+        // Optimizaciones clásicas de v1.x
         add_action('pre_ping', array($this, 'ayudawp_no_self_ping'));
         add_filter('admin_footer_text', array($this, 'ayudawp_change_admin_footer_text'));
         add_action('wp_print_styles', array($this, 'ayudawp_remove_dashicons_for_non_logged'), 100);
@@ -98,7 +98,7 @@ class AyudaWP_WPO_Tweaks {
     }
     
     /**
-     * Deshabilitar self pingbacks (función original)
+     * Deshabilitar self pingbacks
      */
     public function ayudawp_no_self_ping(&$links) {
         $home = get_option('home');
@@ -110,7 +110,7 @@ class AyudaWP_WPO_Tweaks {
     }
     
     /**
-     * Cambiar texto del footer del admin (función original)
+     * Cambiar texto del footer del admin
      */
     public function ayudawp_change_admin_footer_text($text) {
         return sprintf(
@@ -121,7 +121,7 @@ class AyudaWP_WPO_Tweaks {
     }
     
     /**
-     * Eliminar Dashicons para usuarios no logueados (función original mejorada)
+     * Eliminar Dashicons para usuarios no conectados
      */
     public function ayudawp_remove_dashicons_for_non_logged() {
         if (!is_admin_bar_showing() && !is_customize_preview()) {
@@ -130,7 +130,7 @@ class AyudaWP_WPO_Tweaks {
     }
     
     /**
-     * Control del Heartbeat API (función original)
+     * Control del Heartbeat API
      */
     public function ayudawp_control_heartbeat($settings) {
         $settings['interval'] = 60;
@@ -138,7 +138,7 @@ class AyudaWP_WPO_Tweaks {
     }
     
     /**
-     * Eliminar versiones de scripts y estilos (función original)
+     * Eliminar versiones de scripts y estilos
      */
     public function ayudawp_remove_script_version($src) {
         $parts = explode('?ver', $src);
@@ -146,7 +146,7 @@ class AyudaWP_WPO_Tweaks {
     }
     
     /**
-     * Eliminar query strings de Gravatar (función original)
+     * Eliminar query strings de Gravatar
      */
     public function ayudawp_avatar_remove_querystring($url) {
         $url_parts = explode('?', $url);
@@ -154,14 +154,14 @@ class AyudaWP_WPO_Tweaks {
     }
     
     /**
-     * Deshabilitar previews de PDF (función original)
+     * Deshabilitar previews de PDF
      */
     public function ayudawp_disable_pdf_previews() {
         return array();
     }
     
     /**
-     * Diferir parsing de JavaScript (función original mejorada)
+     * Diferir parsing de JavaScript
      */
     public function ayudawp_defer_parsing_of_js($tag, $handle) {
         if (is_admin()) {
@@ -183,7 +183,7 @@ class AyudaWP_WPO_Tweaks {
     }
     
     /**
-     * Optimizaciones de scripts y estilos (nuevas funcionalidades)
+     * Optimizaciones de scripts y estilos
      */
     public function ayudawp_optimize_scripts() {
         // Eliminar jQuery Migrate si no es necesario
@@ -203,7 +203,7 @@ class AyudaWP_WPO_Tweaks {
             wp_dequeue_script('wp-embed');
             wp_deregister_script('wp-embed');
             
-            // Eliminar Dashicons para usuarios no logueados
+            // Eliminar Dashicons para usuarios no conectados
             if (!is_user_logged_in()) {
                 wp_dequeue_style('dashicons');
                 wp_deregister_style('dashicons');
@@ -268,7 +268,7 @@ class AyudaWP_WPO_Tweaks {
     }
     
     /**
-     * Optimizaciones del área de administración
+     * Optimizaciones del área de admin
      */
     public function ayudawp_admin_optimizations() {
         // Reducir revisiones automáticas
@@ -315,7 +315,7 @@ class AyudaWP_WPO_Tweaks {
     }
     
     /**
-     * Limpiar transients caducados usando WordPress methods
+     * Limpiar transients caducados usando métodos de WordPress
      */
     public function ayudawp_clean_expired_transients() {
         // Usar caché de WordPress y verificar si ya existe
@@ -366,7 +366,7 @@ class AyudaWP_WPO_Tweaks {
             }
         }
         
-        // Límite de seguridad para evitar timeouts
+        // Límite de seguridad para evitar desconexiones
         if ($cleaned > 50) {
             return;
         }
@@ -398,14 +398,14 @@ class AyudaWP_WPO_Tweaks {
     }
     
     /**
-     * Tweaks de seguridad ligeros
+     * Retoques de seguridad ligeros
      */
     public function ayudawp_security_tweaks() {
         // Eliminar información de versión
         remove_action('wp_head', 'wp_generator');
         add_filter('the_generator', '__return_empty_string');
         
-        // Ocultar errores de login
+        // Ocultar errores de login - Vulnerabilidad de enumeración de usuarios
         add_filter('login_errors', function() {
             return __('Incorrect login information.', 'wpo-tweaks');
         });
@@ -423,7 +423,7 @@ class AyudaWP_WPO_Tweaks {
     }
     
     /**
-     * Limpiar el head de WordPress (función original expandida)
+     * Limpiar el head de WordPress
      */
     public function ayudawp_clean_header() {
         // Eliminar enlaces innecesarios
@@ -491,7 +491,7 @@ class AyudaWP_WPO_Tweaks {
     }
     
     /**
-     * Obtener CSS crítico (versión simplificada)
+     * Obtener CSS crítico
      */
     private function ayudawp_get_critical_css() {
         $cache_key = 'ayudawp_critical_css_' . get_template();
@@ -501,7 +501,7 @@ class AyudaWP_WPO_Tweaks {
             return $critical_css;
         }
         
-        // Verificar transient como fallback
+        // Verificar transient como alternativa
         $critical_css = get_transient($cache_key);
         if ($critical_css !== false) {
             wp_cache_set($cache_key, $critical_css, '', WEEK_IN_SECONDS);
@@ -561,8 +561,6 @@ class AyudaWP_WPO_Tweaks {
      * Eliminar acciones innecesarias
      */
     private function ayudawp_remove_unnecessary_actions() {
-        // Optimizar heartbeat ya configurado en función original
-        
         // Desactivar pingbacks automáticos
         add_filter('xmlrpc_methods', function($methods) {
             unset($methods['pingback.ping']);
@@ -571,34 +569,45 @@ class AyudaWP_WPO_Tweaks {
         });
     }
     
-/**
- * Optimizar queries principales - VERSIÓN SEGURA PARA WOOCOMMERCE  
- */
-private function ayudawp_optimize_queries() {
-    add_action('pre_get_posts', function($query) {
-        if (!is_admin() && $query->is_main_query()) {
-            // EXCLUIR TODO LO RELACIONADO CON WOOCOMMERCE
-            if (function_exists('is_woocommerce') && is_woocommerce()) {
-                return; // Salir sin tocar nada de WooCommerce
+    /**
+     * Optimizar queries principales - VERSIÓN CORREGIDA PARA PAGINACIÓN  
+     */
+    private function ayudawp_optimize_queries() {
+        add_action('pre_get_posts', function($query) {
+            if (!is_admin() && $query->is_main_query()) {
+                // EXCLUIR TODO LO RELACIONADO CON WOOCOMMERCE
+                if (function_exists('is_woocommerce') && is_woocommerce()) {
+                    return; // Salir sin tocar nada de WooCommerce
+                }
+                
+                // Excluir categorías de productos específicamente
+                if (function_exists('is_product_category') && is_product_category()) {
+                    return;
+                }
+                
+                // Excluir todas las taxonomías de WooCommerce
+                if (is_tax(array('product_cat', 'product_tag', 'product_shipping_class'))) {
+                    return;
+                }
+                
+                // Solo aplicar no_found_rows cuando NO necesitemos paginación
+                if ($query->is_archive() || $query->is_home()) {
+                    // Verificar si hay más posts que el límite de posts_per_page
+                    $posts_per_page = get_option('posts_per_page', 10);
+                    
+                    // Solo aplicar no_found_rows si no vamos a necesitar paginación
+                    // Es decir, si estamos seguros de que no hay más posts que mostrar
+                    $total_posts = wp_count_posts()->publish;
+                    
+                    // Si hay pocos posts o estamos en una página específica que no necesita paginación
+                    if ($total_posts <= $posts_per_page && !is_paged()) {
+                        $query->set('no_found_rows', true);
+                    }
+                    // En cualquier otro caso, NO aplicar no_found_rows para mantener la paginación
+                }
             }
-            
-            // Excluir categorías de productos específicamente
-            if (function_exists('is_product_category') && is_product_category()) {
-                return;
-            }
-            
-            // Excluir todas las taxonomías de WooCommerce
-            if (is_tax(array('product_cat', 'product_tag', 'product_shipping_class'))) {
-                return;
-            }
-            
-            // Solo aplicar a páginas de archivo del blog (categorías normales, fechas, etc.)
-            if ($query->is_archive() || $query->is_home()) {
-                $query->set('no_found_rows', true);
-            }
-        }
-    });
-}
+        });
+    }
     
     /**
      * Optimizar feeds
@@ -646,7 +655,7 @@ private function ayudawp_optimize_queries() {
             wp_schedule_event(time(), 'daily', 'ayudawp_clean_transients');
         }
         
-        // Añadir reglas .htaccess (función original)
+        // Añadir reglas .htaccess
         $this->ayudawp_htaccess();
     }
     
@@ -660,7 +669,7 @@ private function ayudawp_optimize_queries() {
         // Limpiar transients del plugin
         $this->ayudawp_clear_plugin_transients();
         
-        // Eliminar reglas .htaccess (función original)
+        // Eliminar reglas .htaccess
         $this->ayudawp_delete_tweaks_htaccess();
         
         if (function_exists('wp_cache_flush')) {
@@ -724,6 +733,7 @@ private function ayudawp_optimize_queries() {
             return;
         }
         
+        $lines = array();
         $lines = array();
         $lines[] = '<IfModule mod_expires.c>';
         $lines[] = '# Activar caducidad de contenido';

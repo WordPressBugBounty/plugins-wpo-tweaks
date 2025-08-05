@@ -4,7 +4,7 @@ Tags: performance, optimization, speed, cache, lazy-loading
 Requires at least: 5.0
 Requires PHP: 7.4
 Tested up to: 6.8
-Stable tag: 2.0.1
+Stable tag: 2.0.2
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -70,7 +70,7 @@ With this plugin you can safely disable those annoying services, unnecessary cod
 * ✅ Disable PDF thumbnails previews
 * ✅ Disable internal Self Pingbacks
 
-**New Optimizations v2.0:**
+**New Optimizations (since v2.0):**
 * 🆕 **Automatic Critical CSS** with smart cache
 * 🆕 **Deferred CSS Loading** for non-critical styles
 * 🆕 **Automatic preconnect** for Google Fonts, Analytics, etc.
@@ -216,6 +216,13 @@ Yes, v2.0 includes multiple WordPress filters for developers that allow customiz
 3. Google PageSpeed results showing Core Web Vitals improvements
 
 == Changelog ==
+
+= 2.0.2 =
+* Fixed: Pagination issues with Twenty Twenty and other themes
+* Improved: Query optimization logic to preserve pagination functionality
+* Enhanced: Better compatibility with various theme pagination systems
+* Added: Better error handling for transient cleanup
+* Improved: Memory usage optimization
 
 = 2.0.1 =
 * Fixed bug with WooCommerce not showing products in taxonomy and archive pages 
@@ -378,6 +385,12 @@ Yes, v2.0 includes multiple WordPress filters for developers that allow customiz
 * Initial version
 
 == Upgrade Notice ==
+
+= 2.0.2 =
+Important fix for pagination issues. Update recommended for all users experiencing pagination problems.
+
+= 2.0.1 =
+* Fixed: WooCommerce compatibility improvements.
 
 = 2.0.x =
 NEW MAJOR VERSION! Includes advanced optimizations like automatic critical CSS, deferred CSS loading, automatic preconnect, native lazy loading, database optimizations and much more. Fully backward compatible. Update for maximum performance!
