@@ -4,7 +4,7 @@ Tags: performance, optimization, speed, cache, lazy-loading
 Requires at least: 5.0
 Requires PHP: 7.4
 Tested up to: 6.8
-Stable tag: 2.0.2
+Stable tag: 2.0.3
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -112,7 +112,6 @@ The plugin is completely automatic and applies optimizations safely without brea
 **Recommended tools:**
 * [Google PageSpeed Insights](https://pagespeed.web.dev/)
 * [GTMetrix](https://gtmetrix.com/)
-* [Pingdom Tools](https://tools.pingdom.com/)
 * [WebPageTest](https://www.webpagetest.org/)
 
 **Best measurement practices:**
@@ -137,7 +136,6 @@ WPO stands for Web Performance Optimization. It measures a set of various improv
 = Where can I test my site performance? =
 
 * Go to [Google PageSpeed](https://pagespeed.web.dev/) and test your site
-* Go to [Pingdom Tools](https://tools.pingdom.com/) and test your site  
 * Go to [GTMetrix](https://gtmetrix.com/) and test your site
 * Go to [WebPageTest](https://www.webpagetest.org/) and test your site
 
@@ -216,6 +214,11 @@ Yes, v2.0 includes multiple WordPress filters for developers that allow customiz
 3. Google PageSpeed results showing Core Web Vitals improvements
 
 == Changelog ==
+
+= 2.0.3 =
+* Removed: Admin Footer Credits (absolutely not necessary)
+* Removed: Deactivation of WordPress file editor (better handle with a security plugin)
+* Fixed: Better selection of dashboard widgets to remove (maintaining security related)
 
 = 2.0.2 =
 * Fixed: Pagination issues with Twenty Twenty and other themes

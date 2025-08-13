@@ -3,7 +3,7 @@
  * Plugin Name: WPO Tweaks & Performance Optimizations
  * Plugin URI: https://servicios.ayudawp.com/
  * Description: Advanced performance optimizations for WordPress. Improve speed, reduce server resources, and optimize Google PageSpeed.
- * Version: 2.0.2
+ * Version: 2.0.3
  * Author: Fernando Tellado
  * Author URI: https://ayudawp.com/
  * Text Domain: wpo-tweaks
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Definir constantes del plugin
-define('AYUDAWP_WPO_VERSION', '2.0.2');
+define('AYUDAWP_WPO_VERSION', '2.0.3');
 define('AYUDAWP_WPO_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('AYUDAWP_WPO_PLUGIN_PATH', plugin_dir_path(__FILE__));
 
@@ -66,7 +66,6 @@ class AyudaWP_WPO_Tweaks {
         
         // Optimizaciones clásicas de v1.x
         add_action('pre_ping', array($this, 'ayudawp_no_self_ping'));
-        add_filter('admin_footer_text', array($this, 'ayudawp_change_admin_footer_text'));
         add_action('wp_print_styles', array($this, 'ayudawp_remove_dashicons_for_non_logged'), 100);
         add_filter('heartbeat_settings', array($this, 'ayudawp_control_heartbeat'));
         add_filter('script_loader_src', array($this, 'ayudawp_remove_script_version'), 15, 1);
@@ -107,17 +106,6 @@ class AyudaWP_WPO_Tweaks {
                 unset($links[$l]);
             }
         }
-    }
-    
-    /**
-     * Cambiar texto del footer del admin
-     */
-    public function ayudawp_change_admin_footer_text($text) {
-        return sprintf(
-            /* translators: %s: URL to WPO Tweaks plugin page */
-            __('Powered by <a target="_blank" href="https://wordpress.org/">WordPress</a> | Optimized with <a href="%s" title="WPO Tweaks by Fernando Tellado" target="_blank">WPO Tweaks</a>', 'wpo-tweaks'),
-            'https://wordpress.org/plugins/wpo-tweaks/'
-        );
     }
     
     /**
@@ -281,11 +269,6 @@ class AyudaWP_WPO_Tweaks {
             define('EMPTY_TRASH_DAYS', 7);
         }
         
-        // Desactivar el editor de archivos
-        if (!defined('DISALLOW_FILE_EDIT')) {
-            define('DISALLOW_FILE_EDIT', true);
-        }
-        
         // Eliminar widgets innecesarios del dashboard
         add_action('wp_dashboard_setup', array($this, 'ayudawp_remove_dashboard_widgets'));
     }
@@ -298,9 +281,6 @@ class AyudaWP_WPO_Tweaks {
         remove_meta_box('dashboard_secondary', 'dashboard', 'side');
         remove_meta_box('dashboard_quick_press', 'dashboard', 'side');
         remove_meta_box('dashboard_recent_drafts', 'dashboard', 'side');
-        remove_meta_box('dashboard_php_nag', 'dashboard', 'normal');
-        remove_meta_box('dashboard_browser_nag', 'dashboard', 'normal');
-        remove_meta_box('health_check_status', 'dashboard', 'normal');
     }
     
     /**
