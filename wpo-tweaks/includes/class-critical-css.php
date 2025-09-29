@@ -4,7 +4,7 @@
  * Handles critical CSS generation and deferred CSS loading
  *
  * @package WPO_Tweaks
- * @since 2.1.0
+ * @since 2.1.1
  */
 
 if (!defined('ABSPATH')) {
@@ -92,7 +92,7 @@ class AyudaWP_WPO_Critical_CSS {
     }
     
     /**
-     * Check if CSS handle is critical - FIXED FOR NON-LOGGED USERS
+     * Check if CSS handle is critical - FIXED v2.1.1
      */
     private function ayudawp_wpotweaks_is_critical_css_handle($handle) {
         $critical_handles = array(
@@ -102,7 +102,7 @@ class AyudaWP_WPO_Critical_CSS {
         );
         
         // Only add dashicons if user is logged in AND can manage options
-        if (is_user_logged_in() && current_user_can('manage_options')) {
+        if (is_user_logged_in()) {
             $critical_handles[] = 'dashicons';
         }
         

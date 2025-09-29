@@ -4,7 +4,7 @@
  * Handles activation notice with optimization summary
  *
  * @package WPO_Tweaks
- * @since 2.1.0
+ * @since 2.1.1
  */
 
 if (!defined('ABSPATH')) {
@@ -138,10 +138,14 @@ class AyudaWP_WPO_Admin_Notice {
                 
                 <div class="ayudawp-notice-footer">
                     <p>
-                        If this plugin has been helpful, I would appreciate if you publish a 
-                        <a href="https://wordpress.org/support/plugin/wpo-tweaks/reviews/#new-post" target="_blank" rel="noopener">5-star review on WordPress.org</a>. 
-                        For professional WordPress services, contact me at 
-                        <a rel="nofollow noopener" target="_blank" href="https://servicios.ayudawp.com/">AyudaWP WordPress Services</a>.
+                        <?php
+                        printf(
+                            // translators: 1: link to wordpress.or reviews page, 2: link to plugin author professional services website
+                            esc_html__('If this plugin has been helpful, I would appreciate if you publish a %1$s. For professional WordPress services, contact me at %2$s.', 'wpo-tweaks'),
+                            '<a href="https://wordpress.org/support/plugin/wpo-tweaks/reviews/#new-post" target="_blank" rel="noopener">' . esc_html__('5-star review on WordPress.org', 'wpo-tweaks') . '</a>',
+                            '<a rel="nofollow noopener" target="_blank" href="https://servicios.ayudawp.com/">' . esc_html__('AyudaWP WordPress Services', 'wpo-tweaks') . '</a>'
+                        );
+                        ?>
                     </p>
                 </div>
             </div>

@@ -4,7 +4,7 @@ Tags: performance, optimization, speed, cache, lazy-loading
 Requires at least: 5.0
 Requires PHP: 7.4
 Tested up to: 6.8
-Stable tag: 2.1.0
+Stable tag: 2.1.1
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -222,6 +222,15 @@ Yes, since v2.0+ the plugin includes multiple WordPress filters for developers t
 
 == Changelog ==
 
+= 2.1.1 =
+* **CRITICAL FIX: Admin bar display for Editor and Author roles**
+* Fixed bug where users with Editor and Author roles couldn't see the admin bar correctly
+* Dashicons now only removed for non-logged users (ALL logged-in users, regardless of role, can see admin bar)
+* Improved logic in Script Optimization module
+* Improved logic in Critical CSS module
+* Better compatibility with all WordPress user roles
+* Fixed: Admin notice footer text now fully translatable
+
 = 2.1.0 =
 * **NEW MAJOR REFACTORING: Modular architecture for better maintainability**
 * NEW: **Missing Image Dimensions** - Automatically adds width/height attributes to <img> and <picture> elements for better Cumulative Layout Shift (CLS) scores
@@ -413,6 +422,9 @@ Yes, since v2.0+ the plugin includes multiple WordPress filters for developers t
 
 == Upgrade Notice ==
 
+= 2.1.1 =
+CRITICAL FIX: Resolves admin bar display issue for Editor and Author roles. Immediate update recommended for multi-user sites.
+
 = 2.1.0 =
 MAJOR UPDATE: New modular architecture with enhanced file management system. Automatic backups, missing image dimensions feature, and improved reliability. Fully backward compatible.
 
@@ -427,3 +439,17 @@ Important fix for pagination issues. Update recommended for all users experienci
 
 = 2.0.x =
 NEW MAJOR VERSION! Includes advanced optimizations like automatic critical CSS, deferred CSS loading, automatic preconnect, native lazy loading, database optimizations and much more. Fully backward compatible. Update for maximum performance!
+
+== Support ==
+
+= Need help or have suggestions? =
+* [Official website](https://servicios.ayudawp.com/)
+* [WordPress support forum](https://wordpress.org/support/plugin/wpo-tweaks/)
+* [YouTube channel](https://www.youtube.com/AyudaWordPressES)
+* [Documentation and tutorials](https://ayudawp.com/)
+
+**Love the plugin?** Please leave us a 5-star review and help spread the word!
+
+== About AyudaWP ==
+
+We are specialists in WordPress security, SEO, and performance optimization plugins. We create tools that solve real problems for WordPress site owners while maintaining the highest coding standards and accessibility requirements.

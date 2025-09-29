@@ -4,7 +4,7 @@
  * Handles JavaScript and CSS optimizations
  *
  * @package WPO_Tweaks
- * @since 2.1.0
+ * @since 2.1.1
  */
 
 if (!defined('ABSPATH')) {
@@ -55,12 +55,12 @@ class AyudaWP_WPO_Script_Optimization {
     }
     
     /**
-     * Remove Dashicons for non-admin users - FIXED FOR NON-LOGGED USERS
+     * Remove Dashicons for non-logged users only - FIXED v2.1.1
      */
     public function ayudawp_wpotweaks_remove_dashicons() {
-        // Only remove Dashicons if user is NOT an administrator
-        // This covers: not logged in users + logged in users without admin rights
-        if (!is_user_logged_in() || !current_user_can('manage_options')) {
+        // Only remove Dashicons if user is NOT logged in
+        // Any logged-in user (regardless of role) needs Dashicons for admin bar
+        if (!is_user_logged_in()) {
             wp_dequeue_style('dashicons');
             wp_deregister_style('dashicons');
         }

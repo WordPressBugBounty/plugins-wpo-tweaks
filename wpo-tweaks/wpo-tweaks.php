@@ -3,7 +3,7 @@
  * Plugin Name: WPO Tweaks & Performance Optimizations
  * Plugin URI: https://servicios.ayudawp.com/
  * Description: Advanced performance optimizations for WordPress. Improve speed, reduce server resources, and optimize Google PageSpeed.
- * Version: 2.1.0
+ * Version: 2.1.1
  * Author: Fernando Tellado
  * Author URI: https://ayudawp.com/
  * Text Domain: wpo-tweaks
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('AYUDAWP_WPOTWEAKS_VERSION', '2.1.0');
+define('AYUDAWP_WPOTWEAKS_VERSION', '2.1.1');
 define('AYUDAWP_WPOTWEAKS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('AYUDAWP_WPOTWEAKS_PLUGIN_PATH', plugin_dir_path(__FILE__));
 define('AYUDAWP_WPOTWEAKS_INCLUDES_PATH', AYUDAWP_WPOTWEAKS_PLUGIN_PATH . 'includes/');
