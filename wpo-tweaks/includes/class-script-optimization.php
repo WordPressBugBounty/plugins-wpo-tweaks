@@ -4,7 +4,7 @@
  * Handles JavaScript and CSS optimizations
  *
  * @package WPO_Tweaks
- * @since 2.1.1
+ * @since 2.1.3
  */
 
 if (!defined('ABSPATH')) {
@@ -88,9 +88,15 @@ class AyudaWP_WPO_Script_Optimization {
     
     /**
      * Defer JavaScript parsing
+     * @since 2.1.3
      */
     public function ayudawp_wpotweaks_defer_parsing_of_js($tag, $handle) {
         if (is_admin()) {
+            return $tag;
+        }
+        
+        // Don't defer anything when Divi builder is active
+        if (isset($_GET['et_fb'])) {
             return $tag;
         }
         
@@ -115,6 +121,9 @@ class AyudaWP_WPO_Script_Optimization {
         if (strpos($tag, 'async') !== false) {
             return $tag;
         }
+        
+        // Check user agent for IE9 compatibility
+        $user_agent = ayudawp_wpotweaks_get_user_agent();
         
         // Check user agent for IE9 compatibility
         $user_agent = ayudawp_wpotweaks_get_user_agent();

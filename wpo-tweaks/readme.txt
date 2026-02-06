@@ -3,8 +3,8 @@ Contributors: fernandot, ayudawp
 Tags: performance, optimization, speed, cache, lazy-loading
 Requires at least: 5.0
 Requires PHP: 7.4
-Tested up to: 6.8
-Stable tag: 2.1.1
+Tested up to: 6.9
+Stable tag: 2.1.3
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -143,7 +143,7 @@ The plugin includes multiple filters for developers:
 * All well-coded themes
 * Cache plugins (W3 Total Cache, WP Rocket, etc.)
 * WordPress Multisite
-* Builders (Elementor, Divi, Gutenberg)
+* Page Builders (Divi, Elementor, Beaver Builder, Gutenberg)
 
 ### INSTALLATION AND USE
 
@@ -166,7 +166,7 @@ The plugin is completely automatic and applies optimizations safely without brea
 
 == Installation ==
 
-1. Go to your WP Dashboard > Plugins and search for 'wpo tweaks' or…
+1. Go to your WP Dashboard > Plugins and search for 'wpo tweaks' or …
 2. Download the plugin from WP repository
 3. Upload the 'wpo-tweaks' folder to '/wp-content/plugins/' directory
 4. Activate the plugin through the 'Plugins' menu in WordPress
@@ -221,6 +221,15 @@ Yes, since v2.0+ the plugin includes multiple WordPress filters for developers t
 2. Pingdom Tools results after plugin activation
 
 == Changelog ==
+
+= 2.1.3 =
+* **FIX: Divi 5 Visual Builder compatibility**
+* JavaScript defer is now disabled when Divi Visual Builder is active
+* Fixes issue where Divi 5 builder would get stuck loading infinitely
+* Frontend performance remains optimized (defer only disabled during editing)
+
+= 2.1.2 =
+* Tested up to WordPress 6.9
 
 = 2.1.1 =
 * **CRITICAL FIX: Admin bar display for Editor and Author roles**
@@ -421,6 +430,12 @@ Yes, since v2.0+ the plugin includes multiple WordPress filters for developers t
 * Initial version
 
 == Upgrade Notice ==
+
+= 2.1.3 =
+FIX: Resolves Divi 5 Visual Builder compatibility issue. Recommended update for Divi users.
+
+= 2.1.2 =
+Plugin tested with WordPress 6.9 (and it works)
 
 = 2.1.1 =
 CRITICAL FIX: Resolves admin bar display issue for Editor and Author roles. Immediate update recommended for multi-user sites.
