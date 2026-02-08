@@ -3,8 +3,8 @@
  * Admin Notice Module
  * Handles activation notice with optimization summary
  *
- * @package WPO_Tweaks
- * @since 2.1.1
+ * @package Zero_Config_Performance
+ * @since 2.2.0
  */
 
 if (!defined('ABSPATH')) {
@@ -90,7 +90,7 @@ class AyudaWP_WPO_Admin_Notice {
             <div class="ayudawp-notice-content">
                 <h3 class="ayudawp-notice-title">
                     <span class="dashicons dashicons-performance"></span>
-                    <?php esc_html_e('WPO Tweaks Successfully Activated!', 'wpo-tweaks'); ?>
+                    <?php esc_html_e('Zero Config Performance Optimization Successfully Activated!', 'wpo-tweaks'); ?>
                 </h3>
                 
                 <p class="ayudawp-notice-intro">
@@ -107,6 +107,7 @@ class AyudaWP_WPO_Admin_Notice {
                             <li><?php esc_html_e('Critical CSS generation and deferred loading', 'wpo-tweaks'); ?></li>
                             <li><?php esc_html_e('Image lazy loading with async decoding', 'wpo-tweaks'); ?></li>
                             <li><?php esc_html_e('Automatic image dimensions for better CLS', 'wpo-tweaks'); ?></li>
+                            <li><?php esc_html_e('Logo and first image preload (LCP optimization)', 'wpo-tweaks'); ?></li>
                             <li><?php esc_html_e('JavaScript defer parsing', 'wpo-tweaks'); ?></li>
                             <li><?php esc_html_e('Google Fonts display=swap optimization', 'wpo-tweaks'); ?></li>
                             <li><?php esc_html_e('DNS prefetch and preconnect hints', 'wpo-tweaks'); ?></li>
@@ -115,16 +116,17 @@ class AyudaWP_WPO_Admin_Notice {
                     
                     <div class="ayudawp-optimization-column">
                         <h4 class="ayudawp-optimization-title">
-                            <span class="dashicons dashicons-shield"></span>
-                            <?php esc_html_e('Backend & Security:', 'wpo-tweaks'); ?>
+                            <span class="dashicons dashicons-database"></span>
+                            <?php esc_html_e('Backend & Server:', 'wpo-tweaks'); ?>
                         </h4>
                         <ul class="ayudawp-optimization-list">
-                            <li><?php esc_html_e('Browser cache and GZIP compression rules', 'wpo-tweaks'); ?></li>
-                            <li><?php esc_html_e('Header cleanup and security headers', 'wpo-tweaks'); ?></li>
+                            <li><?php esc_html_e('Browser cache rules with immutable flag', 'wpo-tweaks'); ?></li>
+                            <li><?php esc_html_e('GZIP and Brotli compression', 'wpo-tweaks'); ?></li>
+                            <li><?php esc_html_e('Keep-Alive connections enabled', 'wpo-tweaks'); ?></li>
                             <li><?php esc_html_e('Database transients cleanup', 'wpo-tweaks'); ?></li>
                             <li><?php esc_html_e('Heartbeat API optimization (60s)', 'wpo-tweaks'); ?></li>
                             <li><?php esc_html_e('Post revisions limited to 3', 'wpo-tweaks'); ?></li>
-                            <li><?php esc_html_e('Trash retention reduced to 7 days', 'wpo-tweaks'); ?></li>
+                            <li><?php esc_html_e('Self-pingback prevention', 'wpo-tweaks'); ?></li>
                         </ul>
                     </div>
                 </div>
@@ -140,10 +142,10 @@ class AyudaWP_WPO_Admin_Notice {
                     <p>
                         <?php
                         printf(
-                            // translators: 1: link to wordpress.or reviews page, 2: link to plugin author professional services website
+                            // translators: 1: link to wordpress.org reviews page, 2: link to plugin author professional services website
                             esc_html__('If this plugin has been helpful, I would appreciate if you publish a %1$s. For professional WordPress services, contact me at %2$s.', 'wpo-tweaks'),
                             '<a href="https://wordpress.org/support/plugin/wpo-tweaks/reviews/#new-post" target="_blank" rel="noopener">' . esc_html__('5-star review on WordPress.org', 'wpo-tweaks') . '</a>',
-                            '<a rel="nofollow noopener" target="_blank" href="https://servicios.ayudawp.com/">' . esc_html__('AyudaWP WordPress Services', 'wpo-tweaks') . '</a>'
+                            '<a rel="nofollow noopener" target="_blank" href="https://servicios.ayudawp.com/">' . esc_html__('WordPress Services', 'wpo-tweaks') . '</a>'
                         );
                         ?>
                     </p>
@@ -154,7 +156,7 @@ class AyudaWP_WPO_Admin_Notice {
     }
     
     /**
-     * Handle notice dismissal - FIXED SECURITY ISSUES
+     * Handle notice dismissal
      */
     public function ayudawp_wpotweaks_dismiss_notice() {
         // Check if nonce exists in $_POST

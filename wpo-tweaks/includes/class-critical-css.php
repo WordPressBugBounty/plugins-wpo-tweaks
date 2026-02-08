@@ -3,8 +3,8 @@
  * Critical CSS Module
  * Handles critical CSS generation and deferred CSS loading
  *
- * @package WPO_Tweaks
- * @since 2.1.1
+ * @package Zero_Config_Performance
+ * @since 2.2.0
  */
 
 if (!defined('ABSPATH')) {

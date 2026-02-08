@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name: WPO Tweaks & Performance Optimizations
+ * Plugin Name: Zero Config Performance Optimization
  * Plugin URI: https://servicios.ayudawp.com/
- * Description: Advanced performance optimizations for WordPress. Improve speed, reduce server resources, and optimize Google PageSpeed.
- * Version: 2.1.3
+ * Description: Advanced performance optimizations for WordPress. Improves speed, reduces server resources and optimizes PageSpeed.
+ * Version: 2.2.0
  * Author: Fernando Tellado
  * Author URI: https://ayudawp.com/
  * Text Domain: wpo-tweaks
@@ -20,13 +20,13 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('AYUDAWP_WPOTWEAKS_VERSION', '2.1.3');
+define('AYUDAWP_WPOTWEAKS_VERSION', '2.2.0');
 define('AYUDAWP_WPOTWEAKS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('AYUDAWP_WPOTWEAKS_PLUGIN_PATH', plugin_dir_path(__FILE__));
 define('AYUDAWP_WPOTWEAKS_INCLUDES_PATH', AYUDAWP_WPOTWEAKS_PLUGIN_PATH . 'includes/');
 
 /**
- * Main WPO Tweaks Plugin Class
+ * Main Zero Config Performance Plugin Class
  */
 class AyudaWP_WPO_Tweaks {
     
@@ -48,7 +48,7 @@ class AyudaWP_WPO_Tweaks {
     }
     
     /**
-     * Load all optimization modules - WITH ADMIN NOTICE MODULE
+     * Load all optimization modules
      */
     public function ayudawp_wpotweaks_load_modules() {
         $modules = array(
@@ -59,7 +59,6 @@ class AyudaWP_WPO_Tweaks {
             'image-dimensions'      => 'Image_Dimensions',
             'database-optimization' => 'Database_Optimization',
             'script-optimization'   => 'Script_Optimization',
-            'security-tweaks'       => 'Security_Tweaks',
             'admin-optimization'    => 'Admin_Optimization',
             'cache-optimization'    => 'Cache_Optimization'
         );
@@ -133,7 +132,9 @@ class AyudaWP_WPO_Tweaks {
     }
 }
 
-// Helper functions with correct prefixes
+/**
+ * Helper function to get user agent safely
+ */
 function ayudawp_wpotweaks_get_user_agent() {
     if (!isset($_SERVER['HTTP_USER_AGENT'])) {
         return '';
@@ -141,16 +142,9 @@ function ayudawp_wpotweaks_get_user_agent() {
     return sanitize_text_field(wp_unslash($_SERVER['HTTP_USER_AGENT']));
 }
 
-function ayudawp_wpotweaks_needs_xmlrpc() {
-    return class_exists('Jetpack') || 
-           is_plugin_active('jetpack/jetpack.php') ||
-           apply_filters('ayudawp_wpotweaks_keep_xmlrpc', false);
-}
-
-function ayudawp_wpotweaks_needs_feeds() {
-    return apply_filters('ayudawp_wpotweaks_keep_feeds', true);
-}
-
+/**
+ * Check if current page is login page
+ */
 function ayudawp_wpotweaks_is_login_page() {
     if (!isset($GLOBALS['pagenow'])) {
         return false;

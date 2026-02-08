@@ -1,7 +1,8 @@
 /**
- * WPO Tweaks Admin Notice JavaScript
- * @package WPO_Tweaks
- * @since 2.1.0
+ * Zero Config Performance Admin Notice JavaScript
+ * 
+ * @package Zero_Config_Performance
+ * @since 2.2.0
  */
 
 (function($) {
@@ -44,7 +45,7 @@
                     $notice.removeClass('ayudawp-dismissing');
                     
                     // Log error for debugging
-                    console.error('WPO Tweaks: Failed to dismiss notice', error);
+                    console.error('Zero Config Performance: Failed to dismiss notice', error);
                 }
             });
         });
@@ -63,7 +64,7 @@
             var linkHref = $(this).attr('href');
             
             // Log link click for future analytics if needed
-            console.log('WPO Tweaks: Link clicked', linkText, linkHref);
+            console.log('Zero Config Performance: Link clicked', linkText, linkHref);
         });
     }
     
@@ -89,7 +90,7 @@
         
         if ($notice.length) {
             // Add ARIA label to dismiss button
-            $notice.find('.notice-dismiss').attr('aria-label', 'Dismiss WPO Tweaks activation notice');
+            $notice.find('.notice-dismiss').attr('aria-label', 'Dismiss Zero Config Performance activation notice');
             
             // Add role and aria-live for screen readers
             $notice.attr({
@@ -149,7 +150,7 @@
             handleResponsive();
             
             // Log initialization for debugging
-            console.log('WPO Tweaks: Admin notice initialized');
+            console.log('Zero Config Performance: Admin notice initialized');
         }
     });
     

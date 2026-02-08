@@ -3,8 +3,8 @@
  * Image Dimensions Module
  * Automatically adds missing width and height attributes to images and picture elements
  *
- * @package WPO_Tweaks
- * @since 2.1.0
+ * @package Zero_Config_Performance
+ * @since 2.2.0
  */
 
 if (!defined('ABSPATH')) {

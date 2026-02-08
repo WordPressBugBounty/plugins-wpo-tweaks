@@ -1,10 +1,10 @@
-=== WPO Tweaks & Performance Optimizations ===
+=== Zero Config Performance Optimization ===
 Contributors: fernandot, ayudawp
 Tags: performance, optimization, speed, cache, lazy-loading
 Requires at least: 5.0
 Requires PHP: 7.4
 Tested up to: 6.9
-Stable tag: 2.1.3
+Stable tag: 2.2.0
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -12,138 +12,105 @@ Advanced performance optimizations for WordPress. Improves speed, reduces server
 
 == Description ==
 
-WPO Tweaks is the most complete performance optimization plugin for WordPress. It combines the best WPO (Web Performance Optimization) practices in a single easy-to-use tool. No configuration needed: activate and enjoy a faster WordPress.
+Zero Config Performance Optimization is the most complete performance optimization plugin for WordPress. It combines the best WPO (Web Performance Optimization) practices in a single easy-to-use tool. No configuration needed: activate and enjoy a faster WordPress.
 
 By default, WordPress loads several functions, services and scripts that are not mandatory and usually slow down your installation and consume hosting resources. For years I have been testing tweaks to save hosting resources and improve WordPress performance and loading times. After thousands of tests, this plugin includes my best speed and performance optimizations with a single click.
 
 With this plugin you can safely disable those annoying services, unnecessary codes and scripts to save resources and hosting costs, and speed up WordPress to get better results in tools like Google PageSpeed, Pingdom Tools, GTMetrix, WebPageTest and others.
 
-**New version 2.1.x with modular architecture and enhanced reliability!**
+**New version 2.2.0 with enhanced .htaccess rules and LCP optimizations!**
 
-### NEW FEATURES V2.1.x
+### NEW FEATURES V2.2.0
 
-**Modular Architecture:**
-* **Complete Code Refactoring**: Plugin rebuilt with modular architecture for better maintainability and performance
-* **Separated Components**: Each optimization is now in its own module for easier debugging and updates
-* **Enhanced Reliability**: Improved error handling and better compatibility across different hosting environments
+**Enhanced .htaccess Rules:**
+* **Brotli Compression**: Modern compression algorithm, better than GZIP (when server supports it)
+* **Keep-Alive Connections**: Enables connection reuse for faster subsequent requests
+* **Vary Accept-Encoding**: Better CDN and proxy caching
+* **Cache-Control Immutable**: Prevents unnecessary revalidation of static assets
+* **CORS Headers for Fonts**: Full CDN compatibility for web fonts
+* **Extended MIME Types**: Video, audio, and manifest files now properly cached
 
-**File Management System:**
-* **Automatic Backups**: Creates secure backups of wp-config.php and .htaccess before modifications
-* **Safe Restoration**: Automatic restoration of original files on plugin deactivation
-* **Intelligent Installation**: Detects and resolves conflicts with existing configurations
+**LCP Optimizations:**
+* **Automatic Logo Preload**: Site logo is automatically preloaded with high priority
+* **fetchpriority Attribute**: First image gets `fetchpriority="high"` for faster LCP
+* **Improved First Image Detection**: Better handling of hero images and logos
 
-**Image Optimizations:**
-* **Missing Image Dimensions**: Automatically detects and adds width/height attributes to images and picture elements without dimensions, improving Cumulative Layout Shift (CLS) scores
-* **Picture Element Support**: First plugin to automatically add dimensions to <picture> elements (more comprehensive than most optimization plugins)
-* **Enhanced Lazy Loading**: Improved lazy loading system with better Gravatar support
-
-**Configuration Management:**
-* **wp-config.php Optimization**: Direct wp-config.php modifications for guaranteed trash retention settings (7 days)
-* **Conflict Resolution**: Automatically removes conflicting existing configurations
-* **Clean Deactivation**: Complete cleanup of all modifications when plugin is deactivated
-
-**User Experience:**
-* **Activation Notice**: Informative welcome message showing all applied optimizations
-* **Admin Dashboard**: Clean interface with optimization summary
-* **Developer Friendly**: Enhanced filter system for advanced customization
+**Bug Fixes:**
+* **Clean .htaccess Removal**: Fixed issue where plugin markers remained after deactivation
+* **Legacy Marker Cleanup**: Automatically removes old "WPO Tweaks" markers on upgrade
 
 ### INCLUDED OPTIMIZATIONS
 
-**Classic Optimizations (since v1.0):**
-* Browser cache rules in .htaccess
-* GZIP compression in .htaccess  
-* Remove Dashicons in admin bar (non-logged users only)
-* Remove Emojis styles and scripts
-* Disable REST API (completely disabled)
-* Control Heartbeat API interval (60s instead of 15s)
-* Remove Query Strings from static resources
-* Defer JavaScript parsing
-* Remove Query Strings from Gravatar
-* Remove Really Simple Discovery link from header
-* Remove wlwmanifest.xml (Windows Live Writer) from header
-* Remove URL Shortlink from header
-* Remove WordPress Generator version from header
-* Remove DNS Prefetch from s.w.org
-* Remove unnecessary links from header
-* Remove RSS feeds generator name
-* Remove Capital P Dangit filter
-* Disable PDF thumbnails previews
-* Disable internal Self Pingbacks
+**Frontend Optimizations:**
+* Automatic Critical CSS generation and injection
+* Deferred CSS Loading with noscript fallback
+* Native Lazy Loading with `loading="lazy"` and `decoding="async"`
+* fetchpriority attribute for LCP optimization
+* Automatic preconnect for Google Fonts, Analytics, etc.
+* Smart DNS Prefetch for external resources including Gravatar
+* Automatic image dimensions for better CLS scores
+* Google Fonts display=swap optimization
+* JavaScript defer parsing
+* Logo and first image preload
 
-**Advanced Optimizations (since v2.0):**
-* **Automatic Critical CSS** with smart cache
-* **Deferred CSS Loading** for non-critical styles
-* **Automatic preconnect** for Google Fonts, Analytics, etc.
-* **Smart DNS Prefetch** for external resources including Gravatar
-* **Native Lazy Loading** with decoding=async
-* **Automatic transients cleanup** for expired entries
-* **Database query optimization**
-* **jQuery Migrate removal** when not needed
-* **Critical resources preloading** (theme CSS, fonts)
-* **Enhanced security headers**
-* **Administrative dashboard cleanup**
-* **Smart revisions and trash management**
+**Server Optimizations:**
+* Browser cache rules with immutable flag
+* GZIP and Brotli compression
+* Keep-Alive connections
+* Vary Accept-Encoding headers
+* CORS headers for fonts (CDN compatibility)
+* Extended MIME type coverage
 
-**New in v2.1.0:**
-* **Missing Image Dimensions** - Automatically adds width/height attributes to improve CLS scores
-* **Enhanced File Management** - Secure backup and restoration system
-* **Modular Code Architecture** - Better performance and maintainability
-* **Improved wp-config.php Handling** - Direct configuration management for better reliability
+**Backend Optimizations:**
+* Database transients cleanup
+* Query optimizations
+* Heartbeat API control (60s interval)
+* Post revisions limited to 3
+* Trash retention reduced to 7 days
+* jQuery Migrate removal when not needed
+* Self-pingback prevention
+* Gravatar query string removal for better caching
+* Dashboard widgets cleanup
 
 ### HOW TO VERIFY OPTIMIZATIONS ARE WORKING
 
-You can check each optimization individually to ensure WPO Tweaks is working correctly:
+You can check each optimization individually to ensure Zero Config Performance Optimization is working correctly:
 
-**Missing Image Dimensions:** Inspect images in your browser (F12 > Elements). Images should have `width="X"` and `height="Y"` attributes even if they weren't originally coded with dimensions.
+**Logo Preload:** View page source (Ctrl+U) and look for `<link rel="preload" ... fetchpriority="high">` pointing to your logo image.
 
-**Critical CSS:** View page source (Ctrl+U) and look for `<style id="ayudawp-wpotweaks-critical-css">` in the head section containing basic CSS rules.
+**fetchpriority:** Inspect the first image in your content (F12 > Elements). It should have `fetchpriority="high"` attribute.
 
-**Deferred CSS:** In source code, look for `<link>` tags with `rel="preload" as="style"` instead of `rel="stylesheet"`, followed by `<noscript>` fallbacks.
+**Brotli/GZIP Compression:** Test at [giftofspeed.com/gzip-test](https://www.giftofspeed.com/gzip-test/) - should show compression enabled.
 
-**Google Fonts Optimization:** Google Fonts URLs should include `&display=swap` parameter.
+**Cache Headers:** Check your `.htaccess` file for a section marked "BEGIN Zero Config Performance" with `immutable` in Cache-Control headers.
 
-**Preconnect:** Look for `<link rel="preconnect">` tags in the head pointing to fonts.googleapis.com, fonts.gstatic.com, etc.
+**Critical CSS:** View page source and look for `<style id="ayudawp-wpotweaks-critical-css">` in the head section.
 
-**DNS Prefetch:** Check for `<link rel="dns-prefetch">` tags pointing to external domains like gravatar.com, stats.wp.com.
+**Deferred CSS:** In source code, look for `<link>` tags with `rel="preload" as="style"` instead of `rel="stylesheet"`.
 
 **Lazy Loading:** Inspect images (F12) - they should have `loading="lazy"` and `decoding="async"` attributes.
 
-**Resource Preload:** Look for `<link rel="preload">` tags for your theme's CSS and critical fonts.
-
-**Version Removal:** Source code should NOT contain `<meta name="generator" content="WordPress X.X">` or `?ver=` in script/style URLs.
-
-**Dashicons Removal:** When logged out, source code should NOT include `dashicons.min.css`. When logged in, it should appear.
-
-**Emojis Removal:** Source code should NOT contain `wp-emoji-release.min.js` or emoji-related styles.
-
-**Header Cleanup:** Source code should NOT contain `<link rel="EditURI">`, `<link rel="wlwmanifest">`, or `<link rel="shortlink">`.
-
-**JavaScript Defer:** Most `<script>` tags (except jQuery) should include the `defer` attribute.
-
-**GZIP Compression:** Test at [giftofspeed.com/gzip-test](https://www.giftofspeed.com/gzip-test/) - should show "GZIP is enabled".
-
-**Cache Headers:** Check your `.htaccess` file for a section marked "BEGIN WPO Tweaks by Fernando Tellado" with expiration rules.
-
-**Heartbeat Control:** In WordPress Dashboard, open browser dev tools (F12) > Network tab. AJAX requests to `admin-ajax.php` with `action=heartbeat` should occur every 60 seconds instead of 15.
+**Keep-Alive:** Use browser dev tools (F12 > Network) and check response headers for `Connection: keep-alive`.
 
 Use tools like Google PageSpeed, GTMetrix, Pingdom Tools, and WebPageTest to measure overall performance improvements. Always test twice to account for caching effects.
 
 ### COMPATIBILITY AND EXTENSIBILITY
 
 The plugin includes multiple filters for developers:
+
 * `ayudawp_wpotweaks_critical_css` - Customize critical CSS
 * `ayudawp_wpotweaks_preconnect_hints` - Add custom preconnect
 * `ayudawp_wpotweaks_dns_prefetch_domains` - Customize DNS prefetch domains
 * `ayudawp_wpotweaks_critical_fonts` - Define critical fonts for preload
-* `ayudawp_wpotweaks_keep_xmlrpc` - Keep XML-RPC if needed
-* `ayudawp_wpotweaks_keep_feeds` - Control feeds removal
 
 **Compatible with:**
-* Jetpack (keeps XML-RPC automatically)
+
 * All well-coded themes
-* Cache plugins (W3 Total Cache, WP Rocket, etc.)
+* Cache plugins (W3 Total Cache, WP Rocket, LiteSpeed Cache, etc.)
+* Security plugins (no conflicts, focused only on performance)
 * WordPress Multisite
 * Page Builders (Divi, Elementor, Beaver Builder, Gutenberg)
+* CDNs (Cloudflare, StackPath, KeyCDN, etc.)
 
 ### INSTALLATION AND USE
 
@@ -154,11 +121,13 @@ The plugin is completely automatic and applies optimizations safely without brea
 ### MEASURING RESULTS
 
 **Recommended tools:**
+
 * [Google PageSpeed Insights](https://pagespeed.web.dev/)
 * [GTMetrix](https://gtmetrix.com/)
 * [WebPageTest](https://www.webpagetest.org/)
 
 **Best measurement practices:**
+
 * Run at least 2 tests (first one may not show cache)
 * Always use the same tool for comparison
 * Measure performance over time, not just once
@@ -166,12 +135,16 @@ The plugin is completely automatic and applies optimizations safely without brea
 
 == Installation ==
 
-1. Go to your WP Dashboard > Plugins and search for 'wpo tweaks' or …
+1. Go to your WP Dashboard > Plugins and search for 'zero config performance' or...
 2. Download the plugin from WP repository
 3. Upload the 'wpo-tweaks' folder to '/wp-content/plugins/' directory
 4. Activate the plugin through the 'Plugins' menu in WordPress
 
 == Frequently Asked Questions ==
+
+= What does Zero Config mean? =
+
+Zero Config means you don't need to configure anything. Just activate the plugin and all optimizations are applied automatically. No settings page, no options to tweak, no learning curve.
 
 = What does WPO mean? =
 
@@ -197,11 +170,11 @@ Please check the "HOW TO VERIFY OPTIMIZATIONS ARE WORKING" section in the Descri
 
 = Something went wrong after activation =
 
-This plugin is compatible with all WordPress JavaScript functions (`wp_localize_script()`, js in header, in footer...) and works with all well-coded plugins and themes. If a plugin or theme is not enqueuing scripts correctly, your site may not work. If your hosting doesn't support some of the tweaks, usually due to security restrictions, something may fail. 
+This plugin is compatible with all WordPress JavaScript functions (`wp_localize_script()`, js in header, in footer...) and works with all well-coded plugins and themes. If a plugin or theme is not enqueuing scripts correctly, your site may not work. If your hosting doesn't support some of the tweaks, usually due to server restrictions, something may fail.
 
 If something fails, please access your `/wp-content/plugins/wpo-tweaks/` directory via your favorite FTP client or hosting panel (cPanel, Plesk, etc.) and rename the plugin folder to deactivate it.
 
-If you get a 500 Error (server error), then go to your hosting panel and edit the .htaccess file to remove the lines added by the plugin (they start with 'WPO Tweaks by Fernando Tellado') and save changes, or delete the file and create it again from Dashboard > Settings > Permalinks > Save changes.
+If you get a 500 Error (server error), then go to your hosting panel and edit the .htaccess file to remove the lines added by the plugin (they start with 'Zero Config Performance') and save changes, or delete the file and create it again from Dashboard > Settings > Permalinks > Save changes.
 
 = What's next? =
 
@@ -209,11 +182,23 @@ I will be including in next updates every new performance tweak I test for bette
 
 = Do you plan to include a settings panel? =
 
-No. WPO Tweaks plugin is intended for users who want to get optimizations and speed safely with one click. If you are a developer and know what you are doing, then please check out [Machete plugin by my friend Nilo Velez](https://wordpress.org/plugins/machete/), a complete suite to decide how to solve common WordPress problems and annoyances. And yes, it has a huge settings page!
+No. Zero Config Performance Optimization plugin is intended for users who want to get optimizations and speed safely with one click. If you are a developer and know what you are doing, then please check out [Machete plugin by my friend Nilo Velez](https://wordpress.org/plugins/machete/), a complete suite to decide how to solve common WordPress problems and annoyances. And yes, it has a huge settings page!
 
 = Can I customize the optimizations? =
 
-Yes, since v2.0+ the plugin includes multiple WordPress filters for developers that allow customizing plugin behavior according to specific site needs.
+Yes, the plugin includes multiple WordPress filters for developers that allow customizing plugin behavior according to specific site needs.
+
+= Is it compatible with caching plugins? =
+
+Yes! Zero Config Performance Optimization plugin is designed to work alongside caching plugins. We recommend using it with Cache Enabler, WP Super Cache, W3 Total Cache, LiteSpeed Cache, or WP Rocket for maximum performance.
+
+= Is it compatible with security plugins? =
+
+Yes! This plugin focuses exclusively on performance optimizations and does not include any security features, so it won't conflict with your security plugins.
+
+= Does it work with CDNs? =
+
+Yes. The plugin includes CORS headers for fonts and proper Vary headers that ensure full compatibility with CDNs like Cloudflare, StackPath, KeyCDN, and others.
 
 == Screenshots ==
 
@@ -221,6 +206,23 @@ Yes, since v2.0+ the plugin includes multiple WordPress filters for developers t
 2. Pingdom Tools results after plugin activation
 
 == Changelog ==
+
+= 2.2.0 =
+* **REBRANDING: Plugin renamed to Zero Config Performance Optimization**
+* **NEW: Brotli compression support** - Modern compression for servers that support it
+* **NEW: Keep-Alive connections** - Enables connection reuse for faster requests
+* **NEW: Vary Accept-Encoding header** - Better CDN and proxy caching
+* **NEW: Cache-Control immutable flag** - Prevents unnecessary revalidation
+* **NEW: CORS headers for fonts** - Full CDN compatibility
+* **NEW: Extended MIME types** - Video, audio, manifest files properly cached
+* **NEW: Automatic logo preload** - Site logo preloaded with high priority for LCP
+* **NEW: fetchpriority attribute** - First image gets `fetchpriority="high"` for faster LCP
+* **FIX: Clean .htaccess removal** - Plugin markers now fully removed on deactivation
+* **FIX: Legacy marker cleanup** - Old "WPO Tweaks" markers automatically cleaned
+* IMPROVED: Better first image detection for LCP optimization
+* IMPROVED: More comprehensive browser caching rules
+* IMPROVED: Updated admin notice with new branding
+* REMOVED: Security tweaks module (use dedicated security plugins instead)
 
 = 2.1.3 =
 * **FIX: Divi 5 Visual Builder compatibility**
@@ -242,8 +244,8 @@ Yes, since v2.0+ the plugin includes multiple WordPress filters for developers t
 
 = 2.1.0 =
 * **NEW MAJOR REFACTORING: Modular architecture for better maintainability**
-* NEW: **Missing Image Dimensions** - Automatically adds width/height attributes to <img> and <picture> elements for better Cumulative Layout Shift (CLS) scores
-* NEW: **Picture Element Support** - First plugin to automatically add dimensions to <picture> elements (more comprehensive than most optimization plugins)
+* NEW: **Missing Image Dimensions** - Automatically adds width/height attributes to img and picture elements for better Cumulative Layout Shift (CLS) scores
+* NEW: **Picture Element Support** - First plugin to automatically add dimensions to picture elements (more comprehensive than most optimization plugins)
 * NEW: **Enhanced File Management System** - Automatic backup and restoration of wp-config.php and .htaccess files
 * NEW: **Direct wp-config.php Management** - Guaranteed trash retention settings by modifying wp-config.php directly
 * NEW: **Admin Activation Notice** - Informative welcome message showing all applied optimizations
@@ -255,7 +257,6 @@ Yes, since v2.0+ the plugin includes multiple WordPress filters for developers t
 * IMPROVED: Enhanced Gravatar lazy loading support
 * IMPROVED: All filter names updated to `ayudawp_wpotweaks_*` for better specificity
 * IMPROVED: Each optimization now has its own dedicated module for easier maintenance
-* ARCHITECTURAL: Separated into specialized modules: File Management, Critical CSS, Image Optimization, Image Dimensions, Database Optimization, Script Optimization, Security Tweaks, Admin Optimization, Cache Optimization, and Admin Notice
 
 = 2.0.3 =
 * Removed: Admin Footer Credits (absolutely not necessary)
@@ -270,7 +271,7 @@ Yes, since v2.0+ the plugin includes multiple WordPress filters for developers t
 * Improved: Memory usage optimization
 
 = 2.0.1 =
-* Fixed bug with WooCommerce not showing products in taxonomy and archive pages 
+* Fixed bug with WooCommerce not showing products in taxonomy and archive pages
 
 = 2.0.0 =
 * **NEW MAJOR VERSION with advanced optimizations**
@@ -282,12 +283,10 @@ Yes, since v2.0+ the plugin includes multiple WordPress filters for developers t
 * NEW: **Database Optimizations**: Automatic cleanup of expired transients and query optimization
 * NEW: **Resource Preloading**: Automatic preload for theme CSS and critical fonts
 * NEW: **Smart jQuery Migrate Removal**: Only removes when not needed
-* NEW: **Security Headers**: X-Pingback removal and sensitive information hiding
 * NEW: **Dashboard Cleanup**: Removes unnecessary widgets from administration area
 * NEW: **Revisions Management**: Limits automatic revisions to 3 and reduces trash retention to 7 days
 * NEW: **Google Fonts Optimization**: Automatically adds display=swap
 * IMPROVED: **Multiple Developer Filters**: Allows advanced customization via hooks
-* IMPROVED: **Jetpack Compatibility**: Automatically keeps XML-RPC if Jetpack is active
 * IMPROVED: **Smart Cache**: Enhanced cache system for critical CSS and other resources
 * IMPROVED: **Scheduled Tasks**: Automatic daily cleanup of expired transients
 * IMPROVED: **Improved Architecture**: Code restructured following WordPress best practices
@@ -431,6 +430,9 @@ Yes, since v2.0+ the plugin includes multiple WordPress filters for developers t
 
 == Upgrade Notice ==
 
+= 2.2.0 =
+REBRANDING + NEW FEATURES: Plugin renamed to Zero Config Performance Optimization. New Brotli compression, Keep-Alive, immutable cache headers, logo preload, and fetchpriority for LCP. Security tweaks removed (use dedicated plugins). Fixed .htaccess cleanup on deactivation.
+
 = 2.1.3 =
 FIX: Resolves Divi 5 Visual Builder compatibility issue. Recommended update for Divi users.
 
@@ -450,20 +452,21 @@ NEW: First Image Preload Optimization for better LCP performance and smart first
 Important fix for pagination issues. Update recommended for all users experiencing pagination problems.
 
 = 2.0.1 =
-* Fixed: WooCommerce compatibility improvements.
+Fixed: WooCommerce compatibility improvements.
 
 = 2.0.x =
 NEW MAJOR VERSION! Includes advanced optimizations like automatic critical CSS, deferred CSS loading, automatic preconnect, native lazy loading, database optimizations and much more. Fully backward compatible. Update for maximum performance!
 
 == Support ==
 
-= Need help or have suggestions? =
+Need help or have suggestions?
+
 * [Official website](https://servicios.ayudawp.com/)
 * [WordPress support forum](https://wordpress.org/support/plugin/wpo-tweaks/)
 * [YouTube channel](https://www.youtube.com/AyudaWordPressES)
 * [Documentation and tutorials](https://ayudawp.com/)
 
-**Love the plugin?** Please leave us a 5-star review and help spread the word!
+Love the plugin? Please leave us a 5-star review and help spread the word!
 
 == About AyudaWP ==
 

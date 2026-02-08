@@ -3,8 +3,8 @@
  * Script Optimization Module
  * Handles JavaScript and CSS optimizations
  *
- * @package WPO_Tweaks
- * @since 2.1.3
+ * @package Zero_Config_Performance
+ * @since 2.2.0
  */
 
 if (!defined('ABSPATH')) {
@@ -55,7 +55,7 @@ class AyudaWP_WPO_Script_Optimization {
     }
     
     /**
-     * Remove Dashicons for non-logged users only - FIXED v2.1.1
+     * Remove Dashicons for non-logged users only
      */
     public function ayudawp_wpotweaks_remove_dashicons() {
         // Only remove Dashicons if user is NOT logged in
@@ -88,6 +88,7 @@ class AyudaWP_WPO_Script_Optimization {
     
     /**
      * Defer JavaScript parsing
+     * 
      * @since 2.1.3
      */
     public function ayudawp_wpotweaks_defer_parsing_of_js($tag, $handle) {
@@ -96,7 +97,8 @@ class AyudaWP_WPO_Script_Optimization {
         }
         
         // Don't defer anything when Divi builder is active
-        if (isset($_GET['et_fb'])) {
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only check for page builder detection, no form processing
+        if (isset($_GET['et_fb']) && !empty($_GET['et_fb'])) {
             return $tag;
         }
         
@@ -124,9 +126,6 @@ class AyudaWP_WPO_Script_Optimization {
         
         // Check user agent for IE9 compatibility
         $user_agent = ayudawp_wpotweaks_get_user_agent();
-        
-        // Check user agent for IE9 compatibility
-        $user_agent = ayudawp_wpotweaks_get_user_agent();
         if (!empty($user_agent) && strpos($user_agent, 'MSIE 9.') !== false) {
             return $tag;
         }
@@ -136,7 +135,7 @@ class AyudaWP_WPO_Script_Optimization {
     }
     
     /**
-     * Remove version strings from scripts and styles - FIXED VERSION
+     * Remove version strings from scripts and styles
      */
     public function ayudawp_wpotweaks_remove_script_version($src) {
         if (is_admin()) {
@@ -212,7 +211,7 @@ class AyudaWP_WPO_Script_Optimization {
     }
     
     /**
-     * Clean importmap URLs (WordPress 6.5+) - FIXED LOGIC
+     * Clean importmap URLs (WordPress 6.5+)
      */
     public function ayudawp_wpotweaks_clean_importmap($importmap) {
         // Don't modify in admin area
