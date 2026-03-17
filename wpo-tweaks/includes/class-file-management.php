@@ -1,10 +1,10 @@
 <?php
 /**
  * File Management Module
- * Handles wp-config.php and .htaccess modifications with backups
+ * Handles .htaccess modifications with backups
  *
  * @package Zero_Config_Performance
- * @since 2.2.0
+ * @since 2.3.0
  */
 
 if (!defined('ABSPATH')) {
@@ -35,14 +35,15 @@ class AyudaWP_WPO_File_Management {
      */
     public function on_activation() {
         $this->ayudawp_wpotweaks_create_backup_directory();
-        $this->ayudawp_wpotweaks_backup_and_modify_files();
+        $this->ayudawp_wpotweaks_backup_htaccess();
+        $this->ayudawp_wpotweaks_modify_htaccess();
+        $this->ayudawp_wpotweaks_cleanup_legacy_wp_config();
     }
     
     /**
      * Module deactivation tasks
      */
     public function on_deactivation() {
-        $this->ayudawp_wpotweaks_restore_files();
         $this->ayudawp_wpotweaks_clean_htaccess();
     }
     
@@ -63,7 +64,7 @@ class AyudaWP_WPO_File_Management {
             $wp_filesystem->mkdir($backup_dir, 0755);
         }
         
-        // Add .htaccess to prevent direct access
+        // Prevent direct access to backup directory
         $htaccess_backup = $backup_dir . '.htaccess';
         if (!$wp_filesystem->exists($htaccess_backup)) {
             $wp_filesystem->put_contents($htaccess_backup, "deny from all\n");
@@ -71,37 +72,7 @@ class AyudaWP_WPO_File_Management {
     }
     
     /**
-     * Backup and modify wp-config.php and .htaccess
-     */
-    private function ayudawp_wpotweaks_backup_and_modify_files() {
-        $this->ayudawp_wpotweaks_backup_wp_config();
-        $this->ayudawp_wpotweaks_backup_htaccess();
-        $this->ayudawp_wpotweaks_modify_wp_config();
-        $this->ayudawp_wpotweaks_modify_htaccess();
-    }
-    
-    /**
-     * Backup wp-config.php
-     */
-    private function ayudawp_wpotweaks_backup_wp_config() {
-        global $wp_filesystem;
-        
-        if (empty($wp_filesystem)) {
-            require_once(ABSPATH . '/wp-admin/includes/file.php');
-            WP_Filesystem();
-        }
-        
-        $wp_config_path = ABSPATH . 'wp-config.php';
-        $backup_path = AYUDAWP_WPOTWEAKS_PLUGIN_PATH . 'backup/wp-config.php.bak';
-        
-        if ($wp_filesystem->exists($wp_config_path)) {
-            $content = $wp_filesystem->get_contents($wp_config_path);
-            $wp_filesystem->put_contents($backup_path, $content);
-        }
-    }
-    
-    /**
-     * Backup .htaccess
+     * Backup .htaccess before modification
      */
     private function ayudawp_wpotweaks_backup_htaccess() {
         global $wp_filesystem;
@@ -125,9 +96,15 @@ class AyudaWP_WPO_File_Management {
     }
     
     /**
-     * Modify wp-config.php
+     * Remove legacy wp-config.php modifications from previous versions
+     * 
+     * Previous versions (<= 2.2.0) added EMPTY_TRASH_DAYS to wp-config.php.
+     * This safely removes those additions on upgrade. Trash retention is now
+     * handled via cron in the Database Optimization module.
+     * 
+     * @since 2.3.0
      */
-    private function ayudawp_wpotweaks_modify_wp_config() {
+    private function ayudawp_wpotweaks_cleanup_legacy_wp_config() {
         global $wp_filesystem;
         
         if (empty($wp_filesystem)) {
@@ -138,26 +115,33 @@ class AyudaWP_WPO_File_Management {
         $wp_config_path = ABSPATH . 'wp-config.php';
         
         if (!$wp_filesystem->exists($wp_config_path) || !$wp_filesystem->is_writable($wp_config_path)) {
-            return false;
+            return;
         }
         
         $content = $wp_filesystem->get_contents($wp_config_path);
+        $original_content = $content;
         
-        // Remove existing EMPTY_TRASH_DAYS if exists
-        $content = preg_replace('/define\s*\(\s*[\'"]EMPTY_TRASH_DAYS[\'"]\s*,\s*[^)]+\)\s*;?\s*/', '', $content);
+        // Only remove our complete block: comment + define together as a unit.
+        // This avoids accidentally deleting EMPTY_TRASH_DAYS set by the user or another plugin.
+        $content = preg_replace(
+            '/\n?\/\/\s*Zero Config Performance Configuration\s*\n\s*define\s*\(\s*[\'"]EMPTY_TRASH_DAYS[\'"]\s*,\s*\d+\s*\)\s*;\s*\n?/',
+            "\n",
+            $content
+        );
         
-        // Find the insertion point (before /* That's all, stop editing! */)
-        $insertion_point = "/* That's all, stop editing! Happy publishing. */";
-        $our_config = "\n// Zero Config Performance Configuration\ndefine('EMPTY_TRASH_DAYS', 7);\n\n";
+        // Clean up multiple consecutive blank lines left behind
+        $content = preg_replace('/\n{3,}/', "\n\n", $content);
         
-        if (strpos($content, $insertion_point) !== false) {
-            $content = str_replace($insertion_point, $our_config . $insertion_point, $content);
-        } else {
-            // Fallback: add after opening PHP tag
-            $content = str_replace('<?php', '<?php' . $our_config, $content);
+        // Only write if we actually changed something
+        if ($content !== $original_content) {
+            $wp_filesystem->put_contents($wp_config_path, $content);
         }
         
-        return $wp_filesystem->put_contents($wp_config_path, $content);
+        // Also remove old wp-config backup file if it exists
+        $backup_path = AYUDAWP_WPOTWEAKS_PLUGIN_PATH . 'backup/wp-config.php.bak';
+        if ($wp_filesystem->exists($backup_path)) {
+            $wp_filesystem->delete($backup_path);
+        }
     }
     
     /**
@@ -359,33 +343,6 @@ class AyudaWP_WPO_File_Management {
         // Only write if content changed
         if ($content !== $original_content) {
             $wp_filesystem->put_contents($htaccess_file, $content);
-        }
-    }
-    
-    /**
-     * Restore wp-config.php from backup
-     */
-    private function ayudawp_wpotweaks_restore_files() {
-        $this->ayudawp_wpotweaks_restore_wp_config();
-    }
-    
-    /**
-     * Restore wp-config.php from backup
-     */
-    private function ayudawp_wpotweaks_restore_wp_config() {
-        global $wp_filesystem;
-        
-        if (empty($wp_filesystem)) {
-            require_once(ABSPATH . '/wp-admin/includes/file.php');
-            WP_Filesystem();
-        }
-        
-        $wp_config_path = ABSPATH . 'wp-config.php';
-        $backup_path = AYUDAWP_WPOTWEAKS_PLUGIN_PATH . 'backup/wp-config.php.bak';
-        
-        if ($wp_filesystem->exists($backup_path)) {
-            $content = $wp_filesystem->get_contents($backup_path);
-            $wp_filesystem->put_contents($wp_config_path, $content);
         }
     }
     

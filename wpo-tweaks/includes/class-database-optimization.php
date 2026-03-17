@@ -1,10 +1,10 @@
 <?php
 /**
  * Database Optimization Module
- * Handles database cleanup and query optimizations
+ * Handles database cleanup, query optimizations and trash retention
  *
  * @package Zero_Config_Performance
- * @since 2.2.0
+ * @since 2.3.0
  */
 
 if (!defined('ABSPATH')) {
@@ -12,6 +12,11 @@ if (!defined('ABSPATH')) {
 }
 
 class AyudaWP_WPO_Database_Optimization {
+    
+    /**
+     * Trash retention in days (replaces EMPTY_TRASH_DAYS constant)
+     */
+    private $trash_retention_days = 7;
     
     /**
      * Constructor
@@ -28,6 +33,9 @@ class AyudaWP_WPO_Database_Optimization {
         add_action('wp_scheduled_delete', array($this, 'ayudawp_wpotweaks_clean_expired_transients'));
         add_filter('comments_clauses', array($this, 'ayudawp_wpotweaks_optimize_comments_query'), 10, 2);
         add_action('pre_get_posts', array($this, 'ayudawp_wpotweaks_optimize_queries'));
+        
+        // Trash cleanup (replaces wp-config.php EMPTY_TRASH_DAYS modification)
+        add_action('ayudawp_wpotweaks_trash_cleanup', array($this, 'ayudawp_wpotweaks_delete_old_trash'));
     }
     
     /**
@@ -38,6 +46,59 @@ class AyudaWP_WPO_Database_Optimization {
         if (!wp_next_scheduled('ayudawp_wpotweaks_clean_transients')) {
             wp_schedule_event(time(), 'daily', 'ayudawp_wpotweaks_clean_transients');
         }
+        
+        // Schedule trash cleanup if not already scheduled
+        if (!wp_next_scheduled('ayudawp_wpotweaks_trash_cleanup')) {
+            wp_schedule_event(time(), 'daily', 'ayudawp_wpotweaks_trash_cleanup');
+        }
+    }
+    
+    /**
+     * Delete trashed posts older than retention period
+     * 
+     * Safer alternative to modifying wp-config.php with EMPTY_TRASH_DAYS.
+     * Uses WordPress API exclusively, respects capabilities and post types.
+     * 
+     * @since 2.3.0
+     */
+    public function ayudawp_wpotweaks_delete_old_trash() {
+        // Prevent concurrent execution
+        $lock_key = 'ayudawp_wpotweaks_trash_cleanup_lock';
+        if (get_transient($lock_key)) {
+            return;
+        }
+        set_transient($lock_key, true, 10 * MINUTE_IN_SECONDS);
+        
+        $cutoff_date = gmdate('Y-m-d H:i:s', time() - ($this->trash_retention_days * DAY_IN_SECONDS));
+        
+        // Get all public and private post types that support trash
+        $post_types = get_post_types(array(), 'names');
+        
+        $trashed_posts = get_posts(array(
+            'post_type'      => $post_types,
+            'post_status'    => 'trash',
+            'date_query'     => array(
+                array(
+                    'column' => 'post_modified_gmt',
+                    'before' => $cutoff_date,
+                ),
+            ),
+            'posts_per_page' => 100,
+            'fields'         => 'ids',
+            'no_found_rows'  => true,
+            'cache_results'  => false,
+        ));
+        
+        if (empty($trashed_posts)) {
+            delete_transient($lock_key);
+            return;
+        }
+        
+        foreach ($trashed_posts as $post_id) {
+            wp_delete_post($post_id, true);
+        }
+        
+        delete_transient($lock_key);
     }
     
     /**
@@ -152,14 +213,20 @@ class AyudaWP_WPO_Database_Optimization {
         if (!wp_next_scheduled('ayudawp_wpotweaks_clean_transients')) {
             wp_schedule_event(time(), 'daily', 'ayudawp_wpotweaks_clean_transients');
         }
+        
+        // Schedule trash cleanup
+        if (!wp_next_scheduled('ayudawp_wpotweaks_trash_cleanup')) {
+            wp_schedule_event(time(), 'daily', 'ayudawp_wpotweaks_trash_cleanup');
+        }
     }
     
     /**
      * Module deactivation tasks
      */
     public function on_deactivation() {
-        // Clear scheduled transient cleanup
+        // Clear scheduled hooks
         wp_clear_scheduled_hook('ayudawp_wpotweaks_clean_transients');
+        wp_clear_scheduled_hook('ayudawp_wpotweaks_trash_cleanup');
         
         // Clean plugin transients
         $this->ayudawp_wpotweaks_clear_plugin_transients();
@@ -185,7 +252,8 @@ class AyudaWP_WPO_Database_Optimization {
             'ayudawp_wpotweaks_last_transient_cleanup',
             'ayudawp_wpotweaks_plugin_transients_cleared',
             'ayudawp_wpotweaks_last_scheduled_cleanup',
-            'ayudawp_wpotweaks_scheduled_cleanup_running'
+            'ayudawp_wpotweaks_scheduled_cleanup_running',
+            'ayudawp_wpotweaks_trash_cleanup_lock'
         );
         
         $deleted_count = 0;

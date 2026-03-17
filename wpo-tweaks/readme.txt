@@ -4,7 +4,7 @@ Tags: performance, optimization, speed, cache, lazy-loading
 Requires at least: 5.0
 Requires PHP: 7.4
 Tested up to: 6.9
-Stable tag: 2.2.0
+Stable tag: 2.2.1
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -206,6 +206,13 @@ Yes. The plugin includes CORS headers for fonts and proper Vary headers that ens
 2. Pingdom Tools results after plugin activation
 
 == Changelog ==
+
+= 2.2.1 =
+* **FIX: Critical wp-config.php compatibility issue** - Plugin no longer modifies wp-config.php, fixing 500 errors on activation caused by conflicts with existing configurations
+* **NEW: Safe trash cleanup via cron** - Trash retention (7 days) now handled via scheduled task instead of modifying wp-config.php
+* **NEW: Legacy wp-config.php cleanup** - Automatically removes modifications added by previous versions on upgrade
+* IMPROVED: Safer activation process with no risk of breaking site configuration
+* REMOVED: wp-config.php backup/restore system (no longer needed)
 
 = 2.2.0 =
 * **REBRANDING: Plugin renamed to Zero Config Performance Optimization**
@@ -429,6 +436,9 @@ Yes. The plugin includes CORS headers for fonts and proper Vary headers that ens
 * Initial version
 
 == Upgrade Notice ==
+
+= 2.2.1 =
+CRITICAL FIX: Resolves 500 errors on activation caused by wp-config.php conflicts. Plugin no longer modifies wp-config.php. Trash cleanup now handled safely via cron. Immediate update recommended.
 
 = 2.2.0 =
 REBRANDING + NEW FEATURES: Plugin renamed to Zero Config Performance Optimization. New Brotli compression, Keep-Alive, immutable cache headers, logo preload, and fetchpriority for LCP. Security tweaks removed (use dedicated plugins). Fixed .htaccess cleanup on deactivation.
