@@ -3,8 +3,8 @@ Contributors: fernandot, ayudawp
 Tags: performance, optimization, speed, cache, lazy-loading
 Requires at least: 5.0
 Requires PHP: 7.4
-Tested up to: 6.9
-Stable tag: 2.2.1
+Tested up to: 7.0
+Stable tag: 2.2.2
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -206,6 +206,9 @@ Yes. The plugin includes CORS headers for fonts and proper Vary headers that ens
 2. Pingdom Tools results after plugin activation
 
 == Changelog ==
+
+= 2.2.2 =
+Tested up to WordPress 7.0
 
 = 2.2.1 =
 * **FIX: Critical wp-config.php compatibility issue** - Plugin no longer modifies wp-config.php, fixing 500 errors on activation caused by conflicts with existing configurations
