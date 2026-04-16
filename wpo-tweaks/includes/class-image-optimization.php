@@ -1,10 +1,15 @@
 <?php
 /**
  * Image Optimization Module
- * Handles lazy loading and other image optimizations
+ * Handles lazy loading, fetchpriority, and other image optimizations
+ *
+ * Runs at high priority (999) to catch all images regardless of source.
+ * Every attribute addition checks for existence first, so it never
+ * conflicts with WordPress core or other plugins that may have already
+ * set the attribute.
  *
  * @package Zero_Config_Performance
- * @since 2.2.0
+ * @since 2.3.0 Added existence checks to complement core without duplicating
  */
 
 if (!defined('ABSPATH')) {
@@ -29,9 +34,9 @@ class AyudaWP_WPO_Image_Optimization {
      * Initialize hooks
      */
     private function ayudawp_wpotweaks_init_hooks() {
-        add_filter('wp_get_attachment_image_attributes', array($this, 'ayudawp_wpotweaks_add_loading_lazy'), 10, 3);
-        add_filter('the_content', array($this, 'ayudawp_wpotweaks_add_lazy_loading_to_content'), 999);
-        add_filter('post_thumbnail_html', array($this, 'ayudawp_wpotweaks_add_lazy_loading_to_content'), 999);
+        add_filter('wp_get_attachment_image_attributes', array($this, 'ayudawp_wpotweaks_optimize_attachment_image'), 10, 3);
+        add_filter('the_content', array($this, 'ayudawp_wpotweaks_optimize_content_images'), 999);
+        add_filter('post_thumbnail_html', array($this, 'ayudawp_wpotweaks_optimize_content_images'), 999);
         add_filter('fallback_intermediate_image_sizes', array($this, 'ayudawp_wpotweaks_disable_pdf_previews'));
         
         // Reset first image flag for each request
@@ -46,34 +51,35 @@ class AyudaWP_WPO_Image_Optimization {
     }
     
     /**
-     * Add loading lazy, decoding async, and fetchpriority to attachment images
+     * Optimize attachment images (via wp_get_attachment_image)
      * 
-     * @since 2.2.0 Added fetchpriority="high" for first image (LCP optimization)
+     * Only adds attributes when NOT already present.
+     * 
+     * @since 2.2.0 Added fetchpriority support
+     * @since 2.3.0 Added existence checks to avoid conflicts with core
      */
-    public function ayudawp_wpotweaks_add_loading_lazy($attr, $attachment, $size) {
-        // Don't add lazy loading to the first image (LCP optimization)
+    public function ayudawp_wpotweaks_optimize_attachment_image($attr, $attachment, $size) {
+        // First image: high priority, no lazy loading
         if (!$this->first_image_found) {
             $this->first_image_found = true;
             
-            // Add decoding async to first image
             if (!isset($attr['decoding'])) {
                 $attr['decoding'] = 'async';
             }
             
-            // Add fetchpriority high for LCP optimization
             if (!isset($attr['fetchpriority'])) {
                 $attr['fetchpriority'] = 'high';
             }
             
             // Ensure no lazy loading on first image
-            if (isset($attr['loading'])) {
+            if (isset($attr['loading']) && $attr['loading'] === 'lazy') {
                 unset($attr['loading']);
             }
             
             return $attr;
         }
         
-        // Add lazy loading for subsequent images
+        // Subsequent images: lazy load + low priority
         if (!isset($attr['loading'])) {
             $attr['loading'] = 'lazy';
         }
@@ -82,7 +88,6 @@ class AyudaWP_WPO_Image_Optimization {
             $attr['decoding'] = 'async';
         }
         
-        // Add low fetchpriority for non-critical images
         if (!isset($attr['fetchpriority'])) {
             $attr['fetchpriority'] = 'low';
         }
@@ -91,74 +96,65 @@ class AyudaWP_WPO_Image_Optimization {
     }
     
     /**
-     * Add lazy loading and fetchpriority to images in content
+     * Optimize images in post content and thumbnails
      * 
-     * @since 2.2.0 Added fetchpriority attribute support
+     * Runs at priority 999 to catch ALL images including those added by
+     * themes, page builders, widgets, and custom templates that may bypass
+     * WordPress core processing. Only adds attributes when NOT present.
+     * 
+     * @since 2.2.0 Added fetchpriority support
+     * @since 2.3.0 Added existence checks to avoid conflicts with core
      */
-    public function ayudawp_wpotweaks_add_lazy_loading_to_content($content) {
+    public function ayudawp_wpotweaks_optimize_content_images($content) {
         if (is_admin() || is_feed()) {
             return $content;
         }
         
-        // Counter for images in content
         $image_count = 0;
         
-        // Process all img tags in a single pass
         $content = preg_replace_callback(
             '/<img([^>]*)>/i',
-            function($matches) use (&$image_count) {
+            function ($matches) use (&$image_count) {
                 $image_count++;
-                $img_attributes = $matches[1];
+                $attrs = $matches[1];
                 
-                // Check if it's a logo or first image - don't lazy load
-                $is_logo = (strpos($img_attributes, 'site-logo') !== false) || 
-                          (strpos($img_attributes, 'custom-logo') !== false);
+                $is_logo = (strpos($attrs, 'site-logo') !== false) ||
+                          (strpos($attrs, 'custom-logo') !== false);
                 
-                // Check if it's a Gravatar image
-                $is_gravatar = (strpos($img_attributes, 'gravatar.com') !== false) ||
-                              (strpos($img_attributes, 'secure.gravatar.com') !== false);
-                
-                // First image or logo - no lazy loading, high priority
+                // First image or logo: no lazy loading, high priority
                 if (($image_count === 1 && !$this->first_image_found) || $is_logo) {
                     $this->first_image_found = true;
                     
-                    // Add decoding="async" to first image/logo
-                    if (strpos($img_attributes, 'decoding=') === false) {
-                        $img_attributes .= ' decoding="async"';
+                    if (strpos($attrs, 'decoding=') === false) {
+                        $attrs .= ' decoding="async"';
                     }
                     
-                    // Add fetchpriority="high" for LCP optimization
-                    if (strpos($img_attributes, 'fetchpriority=') === false) {
-                        $img_attributes .= ' fetchpriority="high"';
+                    if (strpos($attrs, 'fetchpriority=') === false) {
+                        $attrs .= ' fetchpriority="high"';
                     }
                     
-                    // Remove loading="lazy" if present on first image
-                    $img_attributes = preg_replace('/\s*loading=["\'][^"\']*["\']/', '', $img_attributes);
+                    // Remove lazy loading if present on first image
+                    $attrs = preg_replace('/\s*loading=["\'][^"\']*["\']/', '', $attrs);
                     
-                    return '<img' . $img_attributes . '>';
+                    return '<img' . $attrs . '>';
                 }
                 
-                // For all other images (including Gravatar), add lazy loading
+                // All other images: lazy load + low priority (only if not present)
                 
-                // Add loading="lazy" if not present (force it for Gravatar)
-                if (strpos($img_attributes, 'loading=') === false) {
-                    $img_attributes .= ' loading="lazy"';
-                } elseif ($is_gravatar && strpos($img_attributes, 'loading="lazy"') === false) {
-                    // Force lazy loading for Gravatar even if it has other loading attribute
-                    $img_attributes = preg_replace('/loading=["\'][^"\']*["\']/', 'loading="lazy"', $img_attributes);
+                if (strpos($attrs, 'loading=') === false) {
+                    $attrs .= ' loading="lazy"';
                 }
                 
-                // Add decoding="async" if not present
-                if (strpos($img_attributes, 'decoding=') === false) {
-                    $img_attributes .= ' decoding="async"';
+                if (strpos($attrs, 'decoding=') === false) {
+                    $attrs .= ' decoding="async"';
                 }
                 
-                // Add fetchpriority="low" for non-critical images if not present
-                if (strpos($img_attributes, 'fetchpriority=') === false) {
-                    $img_attributes .= ' fetchpriority="low"';
+                // fetchpriority="low" - unique ZCP value, core does NOT do this
+                if (strpos($attrs, 'fetchpriority=') === false) {
+                    $attrs .= ' fetchpriority="low"';
                 }
                 
-                return '<img' . $img_attributes . '>';
+                return '<img' . $attrs . '>';
             },
             $content
         );
@@ -171,18 +167,5 @@ class AyudaWP_WPO_Image_Optimization {
      */
     public function ayudawp_wpotweaks_disable_pdf_previews() {
         return array();
-    }
-    
-    /**
-     * Add lazy loading specifically to avatar images
-     */
-    public function ayudawp_wpotweaks_add_lazy_to_avatar($avatar) {
-        if (!empty($avatar) && (strpos($avatar, 'gravatar.com') !== false || strpos($avatar, 'secure.gravatar.com') !== false)) {
-            // Force add loading="lazy" if not present
-            if (strpos($avatar, 'loading=') === false) {
-                $avatar = str_replace('<img ', '<img loading="lazy" ', $avatar);
-            }
-        }
-        return $avatar;
     }
 }

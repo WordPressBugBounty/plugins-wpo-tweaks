@@ -36,7 +36,11 @@ class AyudaWP_WPO_Critical_CSS {
         $critical_css = $this->ayudawp_wpotweaks_get_critical_css();
         
         if (!empty($critical_css)) {
-            echo '<style id="ayudawp-wpotweaks-critical-css">' . esc_html(wp_strip_all_tags($critical_css)) . '</style>' . "\n";
+            // Strip HTML tags to prevent injection, then prevent </style> breakout.
+            // We do NOT use esc_html() because it would escape valid CSS selectors
+            // like `.parent > .child` into `.parent &gt; .child` breaking the CSS.
+            $safe_css = str_replace('</style>', '', wp_strip_all_tags($critical_css));
+            printf('<style id="ayudawp-wpotweaks-critical-css">%s</style>' . "\n", $safe_css); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSS content sanitized above; esc_html would break valid selectors
         }
     }
     

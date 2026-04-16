@@ -3,7 +3,7 @@
  * Plugin Name: Zero Config Performance Optimization
  * Plugin URI: https://servicios.ayudawp.com/
  * Description: Advanced performance optimizations for WordPress. Improves speed, reduces server resources and optimizes PageSpeed.
- * Version: 2.2.2
+ * Version: 2.3.0
  * Author: Fernando Tellado
  * Author URI: https://ayudawp.com/
  * Text Domain: wpo-tweaks
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('AYUDAWP_WPOTWEAKS_VERSION', '2.2.2');
+define('AYUDAWP_WPOTWEAKS_VERSION', '2.3.0');
 define('AYUDAWP_WPOTWEAKS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('AYUDAWP_WPOTWEAKS_PLUGIN_PATH', plugin_dir_path(__FILE__));
 define('AYUDAWP_WPOTWEAKS_INCLUDES_PATH', AYUDAWP_WPOTWEAKS_PLUGIN_PATH . 'includes/');
@@ -95,6 +95,9 @@ class AyudaWP_WPO_Tweaks {
             wp_die(esc_html__('This plugin requires PHP 7.4 or higher.', 'wpo-tweaks'));
         }
         
+        // Clean ghost entries from previous versions
+        $this->ayudawp_wpotweaks_clean_ghost_entries();
+        
         // Let modules handle their own activation tasks
         foreach ($this->modules as $module) {
             if (method_exists($module, 'on_activation')) {
@@ -121,6 +124,38 @@ class AyudaWP_WPO_Tweaks {
         
         if (function_exists('wp_cache_flush')) {
             wp_cache_flush();
+        }
+    }
+    
+    /**
+     * Clean ghost entries from active_plugins option
+     * 
+     * Removes entries for plugin files that no longer exist on disk.
+     * Fixes persistent admin notices from renamed or incorrectly 
+     * registered plugin paths in previous versions.
+     * 
+     * @since 2.2.2
+     */
+    private function ayudawp_wpotweaks_clean_ghost_entries() {
+        $active_plugins = get_option('active_plugins', array());
+        $current_plugin = plugin_basename(__FILE__);
+        $cleaned = false;
+        
+        foreach ($active_plugins as $key => $plugin) {
+            // Skip the current valid entry
+            if ($plugin === $current_plugin) {
+                continue;
+            }
+            
+            // Check if it's a ghost entry from our plugin (old paths)
+            if (strpos($plugin, 'wpo-tweaks/') === 0 && !file_exists(WP_PLUGIN_DIR . '/' . $plugin)) {
+                unset($active_plugins[$key]);
+                $cleaned = true;
+            }
+        }
+        
+        if ($cleaned) {
+            update_option('active_plugins', array_values($active_plugins));
         }
     }
     

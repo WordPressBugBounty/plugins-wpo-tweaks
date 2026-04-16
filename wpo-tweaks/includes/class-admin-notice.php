@@ -105,9 +105,9 @@ class AyudaWP_WPO_Admin_Notice {
                         </h4>
                         <ul class="ayudawp-optimization-list">
                             <li><?php esc_html_e('Critical CSS generation and deferred loading', 'wpo-tweaks'); ?></li>
-                            <li><?php esc_html_e('Image lazy loading with async decoding', 'wpo-tweaks'); ?></li>
+                            <li><?php esc_html_e('Image lazy loading and fetchpriority optimization', 'wpo-tweaks'); ?></li>
                             <li><?php esc_html_e('Automatic image dimensions for better CLS', 'wpo-tweaks'); ?></li>
-                            <li><?php esc_html_e('Logo and first image preload (LCP optimization)', 'wpo-tweaks'); ?></li>
+                            <li><?php esc_html_e('Logo preload with high priority (LCP optimization)', 'wpo-tweaks'); ?></li>
                             <li><?php esc_html_e('JavaScript defer parsing', 'wpo-tweaks'); ?></li>
                             <li><?php esc_html_e('Google Fonts display=swap optimization', 'wpo-tweaks'); ?></li>
                             <li><?php esc_html_e('DNS prefetch and preconnect hints', 'wpo-tweaks'); ?></li>

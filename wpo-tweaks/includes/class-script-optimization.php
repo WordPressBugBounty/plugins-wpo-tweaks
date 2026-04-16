@@ -205,9 +205,8 @@ class AyudaWP_WPO_Script_Optimization {
         remove_filter('the_content', 'capital_P_dangit', 11);
         remove_filter('comment_text', 'capital_P_dangit', 31);
         
-        // Disable JSON/REST API if not needed
-        add_filter('json_enabled', '__return_false');
-        add_filter('json_jsonp_enabled', '__return_false');
+        // Remove dns-prefetch for s.w.org (only used by emoji scripts we already disabled)
+        remove_action('wp_head', 'wp_resource_hints', 2);
     }
     
     /**

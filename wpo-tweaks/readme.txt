@@ -1,10 +1,10 @@
 === Zero Config Performance Optimization ===
 Contributors: fernandot, ayudawp
-Tags: performance, optimization, speed, cache, lazy-loading
+Tags: performance, optimization, speed, pagespeed, core-web-vitals
 Requires at least: 5.0
 Requires PHP: 7.4
 Tested up to: 7.0
-Stable tag: 2.2.2
+Stable tag: 2.3.0
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -18,40 +18,35 @@ By default, WordPress loads several functions, services and scripts that are not
 
 With this plugin you can safely disable those annoying services, unnecessary codes and scripts to save resources and hosting costs, and speed up WordPress to get better results in tools like Google PageSpeed, Pingdom Tools, GTMetrix, WebPageTest and others.
 
-**New version 2.2.0 with enhanced .htaccess rules and LCP optimizations!**
+### NEW IN V2.3.0
 
-### NEW FEATURES V2.2.0
-
-**Enhanced .htaccess Rules:**
-* **Brotli Compression**: Modern compression algorithm, better than GZIP (when server supports it)
-* **Keep-Alive Connections**: Enables connection reuse for faster subsequent requests
-* **Vary Accept-Encoding**: Better CDN and proxy caching
-* **Cache-Control Immutable**: Prevents unnecessary revalidation of static assets
-* **CORS Headers for Fonts**: Full CDN compatibility for web fonts
-* **Extended MIME Types**: Video, audio, and manifest files now properly cached
-
-**LCP Optimizations:**
-* **Automatic Logo Preload**: Site logo is automatically preloaded with high priority
-* **fetchpriority Attribute**: First image gets `fetchpriority="high"` for faster LCP
-* **Improved First Image Detection**: Better handling of hero images and logos
+**Core Compatibility Refactoring:**
+* **Image module rebuilt** - Now works as a safety net that complements WordPress core. Only adds lazy loading, decoding, and fetchpriority attributes when core hasn't already handled them (covers images from themes, page builders, widgets, and custom templates that bypass core's pipeline)
+* **NEW: fetchpriority="low"** for non-critical images, which WordPress core does NOT add. Frees bandwidth for critical resources
 
 **Bug Fixes:**
-* **Clean .htaccess Removal**: Fixed issue where plugin markers remained after deactivation
-* **Legacy Marker Cleanup**: Automatically removes old "WPO Tweaks" markers on upgrade
+* Fixed Gravatar avatars broken by aggressive query string removal
+* Fixed Critical CSS broken by incorrect HTML escaping of CSS selectors
+* Removed deprecated JSON/REST API filters that could interfere with Gutenberg and WooCommerce
+* Fixed compatibility with CusRev and other review plugins
+* Automatic cleanup of ghost plugin entries from previous versions
+
+**Other:**
+* Tested up to WordPress 7.0
 
 ### INCLUDED OPTIMIZATIONS
 
 **Frontend Optimizations:**
 * Automatic Critical CSS generation and injection
 * Deferred CSS Loading with noscript fallback
-* Native Lazy Loading with `loading="lazy"` and `decoding="async"`
-* fetchpriority attribute for LCP optimization
+* Image lazy loading safety net (catches images that bypass WordPress core pipeline)
+* fetchpriority="low" for non-critical images (complements core LCP detection)
 * Automatic preconnect for Google Fonts, Analytics, etc.
 * Smart DNS Prefetch for external resources including Gravatar
 * Automatic image dimensions for better CLS scores
 * Google Fonts display=swap optimization
 * JavaScript defer parsing
-* Logo and first image preload
+* Logo preload with high priority
 
 **Server Optimizations:**
 * Browser cache rules with immutable flag
@@ -66,10 +61,8 @@ With this plugin you can safely disable those annoying services, unnecessary cod
 * Query optimizations
 * Heartbeat API control (60s interval)
 * Post revisions limited to 3
-* Trash retention reduced to 7 days
 * jQuery Migrate removal when not needed
 * Self-pingback prevention
-* Gravatar query string removal for better caching
 * Dashboard widgets cleanup
 
 ### HOW TO VERIFY OPTIMIZATIONS ARE WORKING
@@ -78,7 +71,7 @@ You can check each optimization individually to ensure Zero Config Performance O
 
 **Logo Preload:** View page source (Ctrl+U) and look for `<link rel="preload" ... fetchpriority="high">` pointing to your logo image.
 
-**fetchpriority:** Inspect the first image in your content (F12 > Elements). It should have `fetchpriority="high"` attribute.
+**fetchpriority:** Inspect images below the fold (F12 > Elements). Non-critical images should have `fetchpriority="low"` (added by ZCP). The first content image should have `fetchpriority="high"` (added by WordPress core or ZCP as fallback).
 
 **Brotli/GZIP Compression:** Test at [giftofspeed.com/gzip-test](https://www.giftofspeed.com/gzip-test/) - should show compression enabled.
 
@@ -87,8 +80,6 @@ You can check each optimization individually to ensure Zero Config Performance O
 **Critical CSS:** View page source and look for `<style id="ayudawp-wpotweaks-critical-css">` in the head section.
 
 **Deferred CSS:** In source code, look for `<link>` tags with `rel="preload" as="style"` instead of `rel="stylesheet"`.
-
-**Lazy Loading:** Inspect images (F12) - they should have `loading="lazy"` and `decoding="async"` attributes.
 
 **Keep-Alive:** Use browser dev tools (F12 > Network) and check response headers for `Connection: keep-alive`.
 
@@ -99,6 +90,7 @@ Use tools like Google PageSpeed, GTMetrix, Pingdom Tools, and WebPageTest to mea
 The plugin includes multiple filters for developers:
 
 * `ayudawp_wpotweaks_critical_css` - Customize critical CSS
+* `ayudawp_wpotweaks_critical_css_handles` - Customize which CSS handles are considered critical
 * `ayudawp_wpotweaks_preconnect_hints` - Add custom preconnect
 * `ayudawp_wpotweaks_dns_prefetch_domains` - Customize DNS prefetch domains
 * `ayudawp_wpotweaks_critical_fonts` - Define critical fonts for preload
@@ -207,8 +199,17 @@ Yes. The plugin includes CORS headers for fonts and proper Vary headers that ens
 
 == Changelog ==
 
-= 2.2.2 =
-Tested up to WordPress 7.0
+= 2.3.0 =
+* **MAJOR: Image module refactored to complement WordPress core** - Rebuilt to work as a safety net instead of duplicating core. WordPress 5.5+/6.1+/6.3+ handles lazy loading, decoding, and fetchpriority for images in its standard pipeline, but images injected by themes, page builders, widgets or custom code may bypass it. The module now checks if each attribute is already present before adding it, so it only fills the gaps core didn't reach
+* **NEW: fetchpriority="low" for non-critical images** - Deprioritizes below-the-fold images so the browser allocates bandwidth to critical resources first. WordPress core does NOT do this
+* **FIX: Gravatar avatars broken by query string removal** - Previous version stripped all query parameters from Gravatar URLs, including functional ones (size, default image, rating). Function removed entirely since Gravatar params are not cache-busting
+* **FIX: Critical CSS broken by esc_html()** - CSS selectors using `>` (child combinator) and other special characters were escaped to HTML entities, breaking the CSS. Now uses wp_strip_all_tags() only
+* **FIX: Deprecated JSON/REST API filters removed** - `json_enabled` and `json_jsonp_enabled` were legacy filters from the old WP-API plugin (pre WP 4.7) that could interfere with Gutenberg, WooCommerce and other plugins depending on the REST API
+* **FIX: CusRev and review plugins compatibility** - Comments query optimization now only applies to standard comments, not custom comment types used by review plugins (CusRev, WooCommerce Reviews, etc.)
+* **FIX: Ghost plugin entries cleanup** - Automatically removes orphaned entries in active_plugins from renamed or incorrectly registered plugin paths on activation
+* IMPROVED: Removed dns-prefetch hint for s.w.org (only used by emoji scripts already disabled by the plugin)
+* IMPROVED: Reduced code footprint in image optimization module, cleaner logic with no duplication
+* Tested up to WordPress 7.0
 
 = 2.2.1 =
 * **FIX: Critical wp-config.php compatibility issue** - Plugin no longer modifies wp-config.php, fixing 500 errors on activation caused by conflicts with existing configurations
@@ -440,6 +441,9 @@ Tested up to WordPress 7.0
 
 == Upgrade Notice ==
 
+= 2.3.0 =
+Image module refactored as safety net (complements WordPress core instead of duplicating it). New fetchpriority="low" for non-critical images. Fixes Gravatar avatars, CSS escaping, REST API filters, and CusRev compatibility. Tested up to WordPress 7.0.
+
 = 2.2.1 =
 CRITICAL FIX: Resolves 500 errors on activation caused by wp-config.php conflicts. Plugin no longer modifies wp-config.php. Trash cleanup now handled safely via cron. Immediate update recommended.
 
@@ -483,4 +487,4 @@ Love the plugin? Please leave us a 5-star review and help spread the word!
 
 == About AyudaWP ==
 
-We are specialists in WordPress security, SEO, and performance optimization plugins. We create tools that solve real problems for WordPress site owners while maintaining the highest coding standards and accessibility requirements.
+We are specialists in WordPress security, SEO, AI and performance optimization plugins. We create tools that solve real problems for WordPress site owners while maintaining the highest coding standards and accessibility requirements.

@@ -36,8 +36,8 @@ class AyudaWP_WPO_Cache_Optimization {
         // Self-pingback prevention (reduces unnecessary HTTP requests)
         add_action('pre_ping', array($this, 'ayudawp_wpotweaks_no_self_ping'));
         
-        // Gravatar query string removal (improves caching)
-        add_filter('get_avatar_url', array($this, 'ayudawp_wpotweaks_avatar_remove_querystring'));
+        // Gravatar query string removal removed in v2.2.2
+        // Gravatar params (s, d, r) are functional, not cache-busting
     }
     
     /**
@@ -208,16 +208,4 @@ class AyudaWP_WPO_Cache_Optimization {
         }
     }
     
-    /**
-     * Remove query strings from Gravatar URLs
-     * Improves browser and CDN caching of avatar images
-     * 
-     * @since 2.2.0 Moved from Security Tweaks module
-     * @param string $url Gravatar URL
-     * @return string URL without query string
-     */
-    public function ayudawp_wpotweaks_avatar_remove_querystring($url) {
-        $url_parts = explode('?', $url);
-        return $url_parts[0];
-    }
 }
