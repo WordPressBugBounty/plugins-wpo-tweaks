@@ -4,7 +4,7 @@ Tags: performance, optimization, speed, pagespeed, core-web-vitals
 Requires at least: 5.0
 Requires PHP: 7.4
 Tested up to: 7.0
-Stable tag: 2.3.0
+Stable tag: 2.3.1
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -199,6 +199,10 @@ Yes. The plugin includes CORS headers for fonts and proper Vary headers that ens
 
 == Changelog ==
 
+= 2.3.1 =
+* **FIX: JavaScript defer breaking scripts with inline "after" code** - Fixed "wp is not defined" errors on scripts using `wp_add_inline_script()` with 'after' position (wp-i18n) and scripts registered with `wp_set_script_translations()` (Contact Form 7 translations, etc.). The defer filter now skips scripts with attached inline code to prevent execution order issues
+* **IMPROVED: Changelog history moved to separate file** - Full changelog history now lives in [changelog.txt](https://plugins.svn.wordpress.org/wpo-tweaks/trunk/changelog.txt) following WordPress.org best practices. The readme.txt now only contains the latest versions for lighter maintenance and cleaner translations
+
 = 2.3.0 =
 * **MAJOR: Image module refactored to complement WordPress core** - Rebuilt to work as a safety net instead of duplicating core. WordPress 5.5+/6.1+/6.3+ handles lazy loading, decoding, and fetchpriority for images in its standard pipeline, but images injected by themes, page builders, widgets or custom code may bypass it. The module now checks if each attribute is already present before adding it, so it only fills the gaps core didn't reach
 * **NEW: fetchpriority="low" for non-critical images** - Deprioritizes below-the-fold images so the browser allocates bandwidth to critical resources first. WordPress core does NOT do this
@@ -211,268 +215,12 @@ Yes. The plugin includes CORS headers for fonts and proper Vary headers that ens
 * IMPROVED: Reduced code footprint in image optimization module, cleaner logic with no duplication
 * Tested up to WordPress 7.0
 
-= 2.2.1 =
-* **FIX: Critical wp-config.php compatibility issue** - Plugin no longer modifies wp-config.php, fixing 500 errors on activation caused by conflicts with existing configurations
-* **NEW: Safe trash cleanup via cron** - Trash retention (7 days) now handled via scheduled task instead of modifying wp-config.php
-* **NEW: Legacy wp-config.php cleanup** - Automatically removes modifications added by previous versions on upgrade
-* IMPROVED: Safer activation process with no risk of breaking site configuration
-* REMOVED: wp-config.php backup/restore system (no longer needed)
-
-= 2.2.0 =
-* **REBRANDING: Plugin renamed to Zero Config Performance Optimization**
-* **NEW: Brotli compression support** - Modern compression for servers that support it
-* **NEW: Keep-Alive connections** - Enables connection reuse for faster requests
-* **NEW: Vary Accept-Encoding header** - Better CDN and proxy caching
-* **NEW: Cache-Control immutable flag** - Prevents unnecessary revalidation
-* **NEW: CORS headers for fonts** - Full CDN compatibility
-* **NEW: Extended MIME types** - Video, audio, manifest files properly cached
-* **NEW: Automatic logo preload** - Site logo preloaded with high priority for LCP
-* **NEW: fetchpriority attribute** - First image gets `fetchpriority="high"` for faster LCP
-* **FIX: Clean .htaccess removal** - Plugin markers now fully removed on deactivation
-* **FIX: Legacy marker cleanup** - Old "WPO Tweaks" markers automatically cleaned
-* IMPROVED: Better first image detection for LCP optimization
-* IMPROVED: More comprehensive browser caching rules
-* IMPROVED: Updated admin notice with new branding
-* REMOVED: Security tweaks module (use dedicated security plugins instead)
-
-= 2.1.3 =
-* **FIX: Divi 5 Visual Builder compatibility**
-* JavaScript defer is now disabled when Divi Visual Builder is active
-* Fixes issue where Divi 5 builder would get stuck loading infinitely
-* Frontend performance remains optimized (defer only disabled during editing)
-
-= 2.1.2 =
-* Tested up to WordPress 6.9
-
-= 2.1.1 =
-* **CRITICAL FIX: Admin bar display for Editor and Author roles**
-* Fixed bug where users with Editor and Author roles couldn't see the admin bar correctly
-* Dashicons now only removed for non-logged users (ALL logged-in users, regardless of role, can see admin bar)
-* Improved logic in Script Optimization module
-* Improved logic in Critical CSS module
-* Better compatibility with all WordPress user roles
-* Fixed: Admin notice footer text now fully translatable
-
-= 2.1.0 =
-* **NEW MAJOR REFACTORING: Modular architecture for better maintainability**
-* NEW: **Missing Image Dimensions** - Automatically adds width/height attributes to img and picture elements for better Cumulative Layout Shift (CLS) scores
-* NEW: **Picture Element Support** - First plugin to automatically add dimensions to picture elements (more comprehensive than most optimization plugins)
-* NEW: **Enhanced File Management System** - Automatic backup and restoration of wp-config.php and .htaccess files
-* NEW: **Direct wp-config.php Management** - Guaranteed trash retention settings by modifying wp-config.php directly
-* NEW: **Admin Activation Notice** - Informative welcome message showing all applied optimizations
-* IMPROVED: Code completely refactored into modular architecture with separated components
-* IMPROVED: Better performance with optimized module loading system
-* IMPROVED: Enhanced debugging capabilities with isolated modules
-* IMPROVED: Conflict resolution system for existing configurations
-* IMPROVED: Complete cleanup system on plugin deactivation
-* IMPROVED: Enhanced Gravatar lazy loading support
-* IMPROVED: All filter names updated to `ayudawp_wpotweaks_*` for better specificity
-* IMPROVED: Each optimization now has its own dedicated module for easier maintenance
-
-= 2.0.3 =
-* Removed: Admin Footer Credits (absolutely not necessary)
-* Removed: Deactivation of WordPress file editor (better handle with a security plugin)
-* Fixed: Better selection of dashboard widgets to remove (maintaining security related)
-
-= 2.0.2 =
-* Fixed: Pagination issues with Twenty Twenty and other themes
-* Improved: Query optimization logic to preserve pagination functionality
-* Enhanced: Better compatibility with various theme pagination systems
-* Added: Better error handling for transient cleanup
-* Improved: Memory usage optimization
-
-= 2.0.1 =
-* Fixed bug with WooCommerce not showing products in taxonomy and archive pages
-
-= 2.0.0 =
-* **NEW MAJOR VERSION with advanced optimizations**
-* NEW: **Automatic Critical CSS**: Above-the-fold critical CSS generation and injection
-* NEW: **Deferred CSS Loading**: Non-critical CSS loads asynchronously with noscript fallback
-* NEW: **Automatic Preconnect**: Automatic hints for Google Fonts, Analytics and other critical resources
-* NEW: **Smart DNS Prefetch**: DNS preloading for common external resources
-* NEW: **Native Lazy Loading**: Automatic lazy loading for all images with decoding=async
-* NEW: **Database Optimizations**: Automatic cleanup of expired transients and query optimization
-* NEW: **Resource Preloading**: Automatic preload for theme CSS and critical fonts
-* NEW: **Smart jQuery Migrate Removal**: Only removes when not needed
-* NEW: **Dashboard Cleanup**: Removes unnecessary widgets from administration area
-* NEW: **Revisions Management**: Limits automatic revisions to 3 and reduces trash retention to 7 days
-* NEW: **Google Fonts Optimization**: Automatically adds display=swap
-* IMPROVED: **Multiple Developer Filters**: Allows advanced customization via hooks
-* IMPROVED: **Smart Cache**: Enhanced cache system for critical CSS and other resources
-* IMPROVED: **Scheduled Tasks**: Automatic daily cleanup of expired transients
-* IMPROVED: **Improved Architecture**: Code restructured following WordPress best practices
-* IMPROVED: **Enhanced Security**: All functions carry ayudawp_ prefix following standards
-* IMPROVED: **Translation Ready**: Updated text domain and strings prepared for i18n
-* IMPROVED: **Better Performance**: Significant optimizations in loading time and server resources
-* IMPROVED: **Better Metrics**: Specific optimizations for Core Web Vitals and measurement tools
-
-= 1.0.7 =
-* Tested up to WordPress 6.7.1
-
-= 1.0.6 =
-* Tested up to WordPress 6.6.1
-
-= 1.0.5 =
-* Tested up to WordPress 6.5.2
-* Added support for PHP 8.2 (props @dbase66)
-
-= 1.0.4 =
-* Tested up to WordPress 6.4
-
-= 1.0.3 =
-* Tested up to WordPress 6.2
-
-= 1.0.2 =
-* Tested up to WordPress 6.1
-* Updated requirements for WP and PHP
-
-= 1.0.1 =
-* Tested up to WordPress 6.0.2
-
-= 1.0 =
-* Tested up to WordPress 6.0
-* Yes! It was time to change to version 1.x
-
-= 0.9.31 =
-* Change PageSpeed URL
-
-= 0.9.30 =
-* Tested up to WordPress 5.9
-
-= 0.9.29 =
-* Tested up to WordPress 5.8
-
-= 0.9.28 =
-* Tested up to WordPress 5.6
-
-= 0.9.26 =
-* Removed jQuery Migrate option because it's not needed since WordPress 5.5
-
-= 0.9.25 =
-* Tested up to WordPress 5.5
-
-= 0.9.24 =
-* Regression to previous method for defer parsing of JavaScript due to support issues with Divi theme
-
-= 0.9.23 =
-* Tested up to WordPress 5.4.1
-
-= 0.9.22 =
-* New method for defer parsing of JavaScript. Especially useful with YouTube iframes and other external video sources
-
-= 0.9.21 =
-* Tested up to WordPress 5.3.2
-
-= 0.9.20 =
-* Changes in jQuery Migrate code to resolve support of latest Elementor version
-
-= 0.9.19 =
-* Tested up to WordPress 5.3
-
-= 0.9.18 =
-* Tested up to WordPress 5.2.2
-
-= 0.9.17 =
-* Tested up to WordPress 5.2
-
-= 0.9.16 =
-* Tested up to WordPress 5.1
-
-= 0.9.15 =
-* Added conditionals to deflate lines in .htaccess file to prevent 500 error on some hostings (Props to frayca)
-
-= 0.9.14 =
-* Added tested up to WordPress 5.0 tag
-
-= 0.9.13 =
-* Tested up to WordPress 4.9.8
-
-= 0.9.12 =
-* Added functions to disable internal self pingbacks
-
-= 0.9.11 =
-* Added line to check if "expires" module is active to prevent 500 error on some servers where module is not active
-
-= 0.9.10 =
-* Tested up to WordPress 4.9.6
-
-= 0.9.9 =
-* Added browser cache expiration rules to main WordPress .htaccess file
-* Added GZIP compression rules to main WordPress .htaccess file
-* This is the first version with version tags
-* Props to @carloslongarela for .htaccess improvements
-
-= 0.9.8 =
-* Tested up to WordPress 4.9.5
-
-= 0.9.7 =
-* Added exception in Dashicons removal to show them in Customizer
-
-= 0.9.6 =
-* Changed method for Heartbeat API - now controls interval to 60 seconds instead of default 15 seconds
-* Added credits to admin footer
-* Plugin tested up to WordPress 4.9 RC
-
-= 0.9.5 =
-* Added link to WebPageTest in readme.txt to measure results
-* Changed to `script_loader_tag` filter method for Defer Parsing of JavaScript
-
-= 0.9.4 =
-* Changed method for Defer Parsing of JavaScript to resolve AMP issues with Google CDN
-* Changed donation URL
-
-= 0.9.3 =
-* Changed minimum WP version from 4.0 to 4.1
-* Added filter to remove capital_p_dangit filter
-* Added functions to disable PDF thumbnails previews
-* Added multiple actions to clean header (props @carloslongarela)
-* Better code standards and functions ordering
-* Changes in readme.txt
-
-= 0.9.2 =
-* Added multiple actions to clean WordPress header
-* Added function to remove jquery_migrate
-
-= 0.9.1 =
-* Fixed Text Domain to be ready for translation
-
-= 0.9 =
-* Initial version
+For older changelog entries, please check the [changelog.txt](https://plugins.svn.wordpress.org/wpo-tweaks/trunk/changelog.txt) file.
 
 == Upgrade Notice ==
 
-= 2.3.0 =
-Image module refactored as safety net (complements WordPress core instead of duplicating it). New fetchpriority="low" for non-critical images. Fixes Gravatar avatars, CSS escaping, REST API filters, and CusRev compatibility. Tested up to WordPress 7.0.
-
-= 2.2.1 =
-CRITICAL FIX: Resolves 500 errors on activation caused by wp-config.php conflicts. Plugin no longer modifies wp-config.php. Trash cleanup now handled safely via cron. Immediate update recommended.
-
-= 2.2.0 =
-REBRANDING + NEW FEATURES: Plugin renamed to Zero Config Performance Optimization. New Brotli compression, Keep-Alive, immutable cache headers, logo preload, and fetchpriority for LCP. Security tweaks removed (use dedicated plugins). Fixed .htaccess cleanup on deactivation.
-
-= 2.1.3 =
-FIX: Resolves Divi 5 Visual Builder compatibility issue. Recommended update for Divi users.
-
-= 2.1.2 =
-Plugin tested with WordPress 6.9 (and it works)
-
-= 2.1.1 =
-CRITICAL FIX: Resolves admin bar display issue for Editor and Author roles. Immediate update recommended for multi-user sites.
-
-= 2.1.0 =
-MAJOR UPDATE: New modular architecture with enhanced file management system. Automatic backups, missing image dimensions feature, and improved reliability. Fully backward compatible.
-
-= 2.0.3 =
-NEW: First Image Preload Optimization for better LCP performance and smart first image detection.
-
-= 2.0.2 =
-Important fix for pagination issues. Update recommended for all users experiencing pagination problems.
-
-= 2.0.1 =
-Fixed: WooCommerce compatibility improvements.
-
-= 2.0.x =
-NEW MAJOR VERSION! Includes advanced optimizations like automatic critical CSS, deferred CSS loading, automatic preconnect, native lazy loading, database optimizations and much more. Fully backward compatible. Update for maximum performance!
+= 2.3.1 =
+FIX: Resolves "wp is not defined" errors caused by deferring scripts with inline translations code (wp-i18n, Contact Form 7, etc.). Recommended update for all users.
 
 == Support ==
 

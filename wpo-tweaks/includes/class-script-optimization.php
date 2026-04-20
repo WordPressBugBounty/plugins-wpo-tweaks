@@ -14,6 +14,16 @@ if (!defined('ABSPATH')) {
 class AyudaWP_WPO_Script_Optimization {
     
     /**
+     * Memoization cache for the defer eligibility check.
+     * Scoped per request to avoid recomputing the same handle multiple times
+     * across filter calls for different scripts.
+     *
+     * @since 2.3.1
+     * @var array
+     */
+    private $defer_eligibility_cache = array();
+    
+    /**
      * Constructor
      */
     public function __construct() {
@@ -90,6 +100,7 @@ class AyudaWP_WPO_Script_Optimization {
      * Defer JavaScript parsing
      * 
      * @since 2.1.3
+     * @since 2.3.1 Skip scripts whose dependency chain requires immediate execution (inline "after" code, translations, or transitive dependents with either). Prevents "wp is not defined" and related ReferenceError failures caused by partially-deferred dependency chains.
      */
     public function ayudawp_wpotweaks_defer_parsing_of_js($tag, $handle) {
         if (is_admin()) {
@@ -124,6 +135,27 @@ class AyudaWP_WPO_Script_Optimization {
             return $tag;
         }
         
+        // Don't defer scripts whose dependency chain requires immediate
+        // execution. A script must run immediately (not deferred) when:
+        // - It has inline "after" code attached via wp_add_inline_script()
+        // - It is registered with wp_set_script_translations()
+        // - Any script that transitively depends on it has either of the above
+        //
+        // The third case is the important one: if script X can't be deferred
+        // and X depends on Y, then deferring Y breaks X because Y would not
+        // be available when X runs inline. Classic example: wp-i18n has inline
+        // "after" code that calls wp.i18n.setLocaleData(). wp-i18n depends on
+        // wp-hooks. Deferring wp-hooks while running wp-i18n immediately
+        // causes "Cannot read properties of undefined (reading 'hooks')"
+        // inside wp-i18n itself, and "wp is not defined" in every downstream
+        // script that expects the wp.* globals to exist.
+        global $wp_scripts;
+        if (isset($wp_scripts->registered[$handle])) {
+            if ($this->ayudawp_wpotweaks_script_must_execute_immediately($handle, $wp_scripts)) {
+                return $tag;
+            }
+        }
+        
         // Check user agent for IE9 compatibility
         $user_agent = ayudawp_wpotweaks_get_user_agent();
         if (!empty($user_agent) && strpos($user_agent, 'MSIE 9.') !== false) {
@@ -132,6 +164,70 @@ class AyudaWP_WPO_Script_Optimization {
         
         // Add defer attribute
         return str_replace(' src', ' defer src', $tag);
+    }
+    
+    /**
+     * Check whether a script requires immediate execution (cannot be deferred).
+     *
+     * A script requires immediate execution if it has inline "after" code or
+     * registered translations, OR if any script that transitively depends on
+     * it has either. The transitive check is what preserves dependency chains
+     * when some member of the chain can't be deferred.
+     *
+     * Results are memoized per-request in $this->defer_eligibility_cache to
+     * avoid redundant work across multiple filter invocations.
+     *
+     * @since 2.3.1
+     * @param string     $handle     Script handle to evaluate
+     * @param WP_Scripts $wp_scripts The global scripts registry
+     * @return bool True if the script must execute immediately
+     */
+    private function ayudawp_wpotweaks_script_must_execute_immediately($handle, $wp_scripts) {
+        // Return memoized result when available
+        if (array_key_exists($handle, $this->defer_eligibility_cache)) {
+            return $this->defer_eligibility_cache[$handle];
+        }
+        
+        // Unknown handle: nothing to defer, safe default
+        if (!isset($wp_scripts->registered[$handle])) {
+            $this->defer_eligibility_cache[$handle] = false;
+            return false;
+        }
+        
+        $script_obj = $wp_scripts->registered[$handle];
+        
+        // Direct reasons this script cannot be deferred:
+        // - extra['after'] contains inline code that runs right after the
+        //   script tag and would execute before the deferred main script
+        // - textdomain indicates wp_set_script_translations() was called,
+        //   which injects a locale data inline "after" block at print time
+        if (!empty($script_obj->extra['after']) || !empty($script_obj->textdomain)) {
+            $this->defer_eligibility_cache[$handle] = true;
+            return true;
+        }
+        
+        // Tentatively mark as deferrable to break potential recursion cycles
+        // (circular dependencies shouldn't exist but this is defensive)
+        $this->defer_eligibility_cache[$handle] = false;
+        
+        // Transitive check: walk the dependents. If any script that depends
+        // on $handle (directly or transitively through another dependent)
+        // needs immediate execution, $handle also needs immediate execution
+        // to keep the dependency chain intact at load time.
+        foreach ($wp_scripts->registered as $other_handle => $other_script) {
+            if (!is_array($other_script->deps) || empty($other_script->deps)) {
+                continue;
+            }
+            if (!in_array($handle, $other_script->deps, true)) {
+                continue;
+            }
+            if ($this->ayudawp_wpotweaks_script_must_execute_immediately($other_handle, $wp_scripts)) {
+                $this->defer_eligibility_cache[$handle] = true;
+                return true;
+            }
+        }
+        
+        return false;
     }
     
     /**
