@@ -120,8 +120,23 @@ class AyudaWP_WPO_Script_Optimization {
             'jquery-migrate',
             'customize-support'
         );
-        
-        if (in_array($handle, $excluded_handles)) {
+
+        /**
+         * Filter the list of script handles excluded from the defer pass.
+         *
+         * Other plugins can opt their own handles out of the defer
+         * transformation here when their code depends on running before
+         * DOMContentLoaded (e.g. inline event handlers attached without
+         * jQuery.ready, or scripts that bootstrap critical UI features
+         * the visitor interacts with immediately).
+         *
+         * @since 2.3.2
+         * @param array  $excluded_handles Handles that should not be deferred.
+         * @param string $handle           Handle of the script currently being filtered.
+         */
+        $excluded_handles = (array) apply_filters('ayudawp_wpotweaks_skip_defer_script_handles', $excluded_handles, $handle);
+
+        if (in_array($handle, $excluded_handles, true)) {
             return $tag;
         }
         
@@ -232,32 +247,57 @@ class AyudaWP_WPO_Script_Optimization {
     
     /**
      * Remove version strings from scripts and styles
+     *
+     * Cache-busting query strings are aggressively stripped from the URLs
+     * of WordPress core, theme assets, and `wp-includes/` resources — those
+     * change rarely and the saved bytes / cleaner audits are worth it.
+     *
+     * Plugins are LEFT ALONE on purpose. Combined with the immutable
+     * `Cache-Control` headers this module emits in `.htaccess`, removing
+     * the `?ver=` from a plugin asset would freeze it in browser caches
+     * for one year — any update the plugin author ships would never reach
+     * existing visitors until they manually hard-refreshed.
+     *
+     * @since 2.3.2 Plugin asset URLs preserve their `?ver=` for cache busting.
      */
     public function ayudawp_wpotweaks_remove_script_version($src) {
         if (is_admin()) {
             return $src;
         }
-        
+
         // Keep versions for critical scripts that need them
         $keep_versions = array(
             'jquery',
             'jquery-core',
             'jquery-migrate'
         );
-        
+
         foreach ($keep_versions as $script) {
             if (strpos($src, $script) !== false) {
                 return $src;
             }
         }
-        
+
+        // Preserve `?ver=` on URLs that point at /wp-content/plugins/ —
+        // plugins ship updates regularly and this query string is the only
+        // mechanism that invalidates the long-cached file in the browser.
+        //
+        // Filterable so site owners or other plugins can override the
+        // detection (e.g. to also keep `?ver=` on theme assets, or to
+        // strip it from a specific misbehaving plugin).
+        $content_url = content_url('plugins/');
+        $is_plugin_asset = (strpos($src, $content_url) !== false);
+        if (apply_filters('ayudawp_wpotweaks_preserve_plugin_version', $is_plugin_asset, $src)) {
+            return $src;
+        }
+
         // Remove version parameters
         $src = remove_query_arg('ver', $src);
-        
+
         // Remove other version-like parameters
         $patterns = array('/\?ver=[^&]*/', '/&ver=[^&]*/', '/\?v=[^&]*/', '/&v=[^&]*/');
         $src = preg_replace($patterns, '', $src);
-        
+
         return $src;
     }
     

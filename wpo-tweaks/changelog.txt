@@ -1,9 +1,29 @@
 === Zero Config Performance Optimization ===
 
-== Archived Changelog Entries ==
+== Full Changelog ==
 
-This file contains older changelog entries, so we can keep the size of the standard WordPress readme.txt file reasonable.
-For the latest changes, please see the "Changelog" section of the [readme.txt file](https://plugins.svn.wordpress.org/wpo-tweaks/trunk/readme.txt).
+Complete history of all releases. The latest versions also appear in the "Changelog" section of [readme.txt](https://plugins.svn.wordpress.org/wpo-tweaks/trunk/readme.txt); this file is the authoritative archive that never gets trimmed.
+
+= 2.3.2 =
+* **IMPROVED: new `ayudawp_wpotweaks_skip_defer_script_handles` filter** so plugins can opt their own JavaScript out of the defer pass when their scripts must run before DOMContentLoaded
+* **IMPROVED: new `ayudawp_wpotweaks_skip_defer_style_handles` filter** so plugins can opt their own stylesheets out of the `rel="preload"` defer when their UI would render visually broken until the deferred CSS finishes loading
+* **FIX: plugin asset cache-busting was being neutralized** — the previous combination of stripping `?ver=` from every URL plus the `Cache-Control: immutable, max-age=31536000` header in `.htaccess` froze plugin assets in browser caches for a year. Any plugin update silently failed to reach existing visitors. URLs under `/wp-content/plugins/` now keep their `?ver=` query string so the cache-busting works as intended; WordPress core, `wp-includes/` and theme assets still get stripped. Filterable with `ayudawp_wpotweaks_preserve_plugin_version`
+
+= 2.3.1 =
+* **FIX: JavaScript defer breaking scripts with inline "after" code** - Fixed "wp is not defined" errors on scripts using `wp_add_inline_script()` with 'after' position (wp-i18n) and scripts registered with `wp_set_script_translations()` (Contact Form 7 translations, etc.). The defer filter now skips scripts with attached inline code to prevent execution order issues
+* **IMPROVED: Changelog history moved to separate file** - Full changelog history now lives in [changelog.txt](https://plugins.svn.wordpress.org/wpo-tweaks/trunk/changelog.txt) following WordPress.org best practices. The readme.txt now only contains the latest versions for lighter maintenance and cleaner translations
+
+= 2.3.0 =
+* **MAJOR: Image module refactored to complement WordPress core** - Rebuilt to work as a safety net instead of duplicating core. WordPress 5.5+/6.1+/6.3+ handles lazy loading, decoding, and fetchpriority for images in its standard pipeline, but images injected by themes, page builders, widgets or custom code may bypass it. The module now checks if each attribute is already present before adding it, so it only fills the gaps core didn't reach
+* **NEW: fetchpriority="low" for non-critical images** - Deprioritizes below-the-fold images so the browser allocates bandwidth to critical resources first. WordPress core does NOT do this
+* **FIX: Gravatar avatars broken by query string removal** - Previous version stripped all query parameters from Gravatar URLs, including functional ones (size, default image, rating). Function removed entirely since Gravatar params are not cache-busting
+* **FIX: Critical CSS broken by esc_html()** - CSS selectors using `>` (child combinator) and other special characters were escaped to HTML entities, breaking the CSS. Now uses wp_strip_all_tags() only
+* **FIX: Deprecated JSON/REST API filters removed** - `json_enabled` and `json_jsonp_enabled` were legacy filters from the old WP-API plugin (pre WP 4.7) that could interfere with Gutenberg, WooCommerce and other plugins depending on the REST API
+* **FIX: CusRev and review plugins compatibility** - Comments query optimization now only applies to standard comments, not custom comment types used by review plugins (CusRev, WooCommerce Reviews, etc.)
+* **FIX: Ghost plugin entries cleanup** - Automatically removes orphaned entries in active_plugins from renamed or incorrectly registered plugin paths on activation
+* IMPROVED: Removed dns-prefetch hint for s.w.org (only used by emoji scripts already disabled by the plugin)
+* IMPROVED: Reduced code footprint in image optimization module, cleaner logic with no duplication
+* Tested up to WordPress 7.0
 
 = 2.2.1 =
 * **FIX: Critical wp-config.php compatibility issue** - Plugin no longer modifies wp-config.php, fixing 500 errors on activation caused by conflicts with existing configurations

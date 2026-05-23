@@ -88,10 +88,28 @@ class AyudaWP_WPO_Critical_CSS {
         if (is_admin() || $this->ayudawp_wpotweaks_is_critical_css_handle($handle)) {
             return $tag;
         }
-        
+
+        /**
+         * Filter handles that should be excluded from the CSS defer pass.
+         *
+         * Other plugins can opt their own stylesheets out when the rel=preload
+         * + onload technique would leave their UI visually broken until the
+         * stylesheet finishes loading (e.g. collapsible widgets, interactive
+         * cards), or when they have a hard CSP that blocks inline event
+         * handlers.
+         *
+         * @since 2.3.2
+         * @param array  $skip   List of handles that must keep rel="stylesheet".
+         * @param string $handle Handle currently being filtered.
+         */
+        $skip = (array) apply_filters('ayudawp_wpotweaks_skip_defer_style_handles', array(), $handle);
+        if (in_array($handle, $skip, true)) {
+            return $tag;
+        }
+
         $deferred_tag = str_replace('rel="stylesheet"', 'rel="preload" as="style" onload="this.onload=null;this.rel=\'stylesheet\'"', $tag);
         $noscript = '<noscript>' . $tag . '</noscript>';
-        
+
         return $deferred_tag . $noscript;
     }
     

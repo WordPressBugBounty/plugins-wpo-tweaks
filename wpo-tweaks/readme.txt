@@ -4,7 +4,7 @@ Tags: performance, optimization, speed, pagespeed, core-web-vitals
 Requires at least: 5.0
 Requires PHP: 7.4
 Tested up to: 7.0
-Stable tag: 2.3.1
+Stable tag: 2.3.2
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -199,6 +199,11 @@ Yes. The plugin includes CORS headers for fonts and proper Vary headers that ens
 
 == Changelog ==
 
+= 2.3.2 =
+* **IMPROVED: new `ayudawp_wpotweaks_skip_defer_script_handles` filter** so plugins can opt their own JavaScript out of the defer pass when their scripts must run before DOMContentLoaded
+* **IMPROVED: new `ayudawp_wpotweaks_skip_defer_style_handles` filter** so plugins can opt their own stylesheets out of the `rel="preload"` defer when their UI would render visually broken until the deferred CSS finishes loading
+* **FIX: plugin asset cache-busting was being neutralized** — the previous combination of stripping `?ver=` from every URL plus the `Cache-Control: immutable, max-age=31536000` header in `.htaccess` froze plugin assets in browser caches for a year. Any plugin update silently failed to reach existing visitors. URLs under `/wp-content/plugins/` now keep their `?ver=` query string so the cache-busting works as intended; WordPress core, `wp-includes/` and theme assets still get stripped. Filterable with `ayudawp_wpotweaks_preserve_plugin_version`
+
 = 2.3.1 =
 * **FIX: JavaScript defer breaking scripts with inline "after" code** - Fixed "wp is not defined" errors on scripts using `wp_add_inline_script()` with 'after' position (wp-i18n) and scripts registered with `wp_set_script_translations()` (Contact Form 7 translations, etc.). The defer filter now skips scripts with attached inline code to prevent execution order issues
 * **IMPROVED: Changelog history moved to separate file** - Full changelog history now lives in [changelog.txt](https://plugins.svn.wordpress.org/wpo-tweaks/trunk/changelog.txt) following WordPress.org best practices. The readme.txt now only contains the latest versions for lighter maintenance and cleaner translations
@@ -219,8 +224,8 @@ For older changelog entries, please check the [changelog.txt](https://plugins.sv
 
 == Upgrade Notice ==
 
-= 2.3.1 =
-FIX: Resolves "wp is not defined" errors caused by deferring scripts with inline translations code (wp-i18n, Contact Form 7, etc.). Recommended update for all users.
+= 2.3.2 =
+FIX: plugin assets (JS/CSS) were getting frozen in browser caches between updates because the version query string was stripped while immutable cache headers were applied. Plugin URLs now keep their cache-buster. Adds opt-out filters for plugins that need to skip defer.
 
 == Support ==
 
