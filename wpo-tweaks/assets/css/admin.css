@@ -1,0 +1,823 @@
+/**
+ * DietPress admin styles.
+ *
+ * Unified design: consistent card patterns, spacing, and border-radius.
+ * Two-column layout: settings form on left, promo sidebar on right.
+ */
+
+/* ==========================================================================
+   Design tokens
+   ========================================================================== */
+
+:root {
+	--dp-radius: 6px;
+	--dp-border: #dcdcde;
+	--dp-border-strong: #c3c4c7;
+	--dp-bg-subtle: #f6f7f7;
+	--dp-text: #1d2327;
+	--dp-text-muted: #646970;
+	--dp-text-secondary: #50575e;
+	--dp-accent: #2271b1;
+	--dp-accent-dark: #135e96;
+	--dp-success: #00a32a;
+	--dp-warning: #dba617;
+	--dp-danger: #d63638;
+	--dp-card-pad: 20px;
+	--dp-section-gap: 32px;
+}
+
+/* ==========================================================================
+   Page layout
+   ========================================================================== */
+
+.core-diet-wrap {
+	max-width: 1200px;
+}
+
+.core-diet-title-icon {
+	font-size: 36px;
+	width: 36px;
+	height: 36px;
+	vertical-align: baseline;
+	margin-right: 6px;
+	position: relative;
+	top: 3px;
+	color: var(--dp-text);
+}
+
+.core-diet-layout {
+	display: flex;
+	gap: 24px;
+	align-items: flex-start;
+	margin-top: 10px;
+}
+
+.core-diet-main {
+	flex: 1;
+	min-width: 0;
+}
+
+.core-diet-sidebar {
+	width: 280px;
+	flex-shrink: 0;
+	margin-top: 54px; /* Align with tab panel content (below nav-tab-wrapper) */
+}
+
+/* ==========================================================================
+   Tabs — WordPress native nav-tab-wrapper, panels below
+   ========================================================================== */
+
+.core-diet-tab-panel {
+	display: none;
+}
+
+.core-diet-tab-panel.core-diet-tab-active {
+	display: block;
+}
+
+/* Inner breathing room for all tab content */
+.core-diet-tab-panel {
+	padding: 4px 2px 0;
+}
+
+/* Tab description — consistent across settings + tools */
+.core-diet-tab-description {
+	font-size: 13px;
+	color: var(--dp-text-muted);
+	margin: 12px 0 20px;
+	line-height: 1.5;
+}
+
+/* ==========================================================================
+   Option cards grid — settings tabs
+   ========================================================================== */
+
+.core-diet-cards-grid {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 10px;
+	align-items: start;
+	margin-bottom: 20px;
+}
+
+/* Section titles span the full grid row */
+.core-diet-section-title {
+	grid-column: 1 / -1;
+	font-size: 14px;
+	font-weight: 600;
+	margin: 14px 0 0;
+	padding-bottom: 0;
+	color: var(--dp-text);
+}
+
+.core-diet-section-title:first-child {
+	margin-top: 0;
+}
+
+.core-diet-section-header {
+	grid-column: 1 / -1;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin: 14px 0 0;
+}
+
+.core-diet-section-header:first-child {
+	margin-top: 0;
+}
+
+.core-diet-section-header .core-diet-section-title {
+	margin: 0;
+}
+
+.core-diet-toggle-all {
+	background: none;
+	border: 1px solid var(--dp-border-strong);
+	border-radius: var(--dp-radius);
+	padding: 3px 10px;
+	font-size: 12px;
+	color: var(--dp-text-secondary);
+	cursor: pointer;
+	white-space: nowrap;
+	transition: color .15s, border-color .15s;
+}
+
+.core-diet-toggle-all:hover {
+	color: var(--dp-accent);
+	border-color: var(--dp-accent);
+}
+
+.core-diet-subsection-label {
+	grid-column: 1 / -1;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--dp-text-secondary);
+	margin: 8px 0 0;
+}
+
+/* Individual option card */
+.core-diet-option-card {
+	background: #fff;
+	border: 1px solid var(--dp-border);
+	border-radius: var(--dp-radius);
+	padding: 14px 16px;
+}
+
+/* Header: label left, toggle right */
+.core-diet-option-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.core-diet-option-label {
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--dp-text);
+	line-height: 1.4;
+}
+
+/* Description below header */
+.core-diet-option-desc {
+	margin: 8px 0 0;
+	font-size: 12px;
+	line-height: 1.5;
+	color: var(--dp-text-muted);
+}
+
+/* Select fields inside cards */
+.core-diet-option-card select {
+	margin-top: 10px;
+	width: 100%;
+	max-width: 100%;
+}
+
+/* Conditional fields (shown/hidden by JS) */
+.core-diet-conditional {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 8px;
+}
+
+.core-diet-conditional .description {
+	font-size: 12px;
+	color: var(--dp-text-muted);
+	font-style: normal;
+}
+
+.core-diet-conditional.core-diet-hidden,
+.core-diet-hidden {
+	display: none;
+}
+
+/* Submit wrap: save button + restore defaults */
+.core-diet-submit-wrap {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.core-diet-submit-wrap.core-diet-hidden {
+	display: none !important;
+}
+
+.core-diet-submit-wrap .submit {
+	margin: 0;
+	padding: 0;
+}
+
+#core-diet-restore-defaults {
+	font-size: 13px;
+}
+
+/* ==========================================================================
+   Toggle switch
+   ========================================================================== */
+
+.core-diet-toggle {
+	position: relative;
+	display: inline-block;
+	width: 44px;
+	height: 24px;
+	flex-shrink: 0;
+	vertical-align: middle;
+}
+
+.core-diet-toggle input {
+	opacity: 0;
+	width: 0;
+	height: 0;
+	position: absolute;
+}
+
+.core-diet-toggle-slider {
+	position: absolute;
+	cursor: pointer;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background-color: var(--dp-border-strong);
+	border-radius: 24px;
+	transition: background-color 0.2s ease;
+}
+
+.core-diet-toggle-slider::before {
+	content: "";
+	position: absolute;
+	height: 18px;
+	width: 18px;
+	left: 3px;
+	bottom: 3px;
+	background-color: #fff;
+	border-radius: 50%;
+	transition: transform 0.2s ease;
+}
+
+.core-diet-toggle input:checked + .core-diet-toggle-slider {
+	background-color: var(--dp-accent);
+}
+
+.core-diet-toggle input:checked + .core-diet-toggle-slider::before {
+	transform: translateX(20px);
+}
+
+.core-diet-toggle input:focus + .core-diet-toggle-slider {
+	box-shadow: 0 0 0 2px var(--dp-accent);
+}
+
+/* ==========================================================================
+   Tools tab — section structure
+   ========================================================================== */
+
+.core-diet-tools-sections {
+	padding-top: 4px;
+}
+
+.core-diet-tools-section {
+	margin-bottom: var(--dp-section-gap);
+}
+
+.core-diet-tools-section:last-child {
+	margin-bottom: 0;
+}
+
+.core-diet-tools-section > h2 {
+	font-size: 15px;
+	font-weight: 600;
+	margin: 0 0 4px;
+	color: var(--dp-text);
+}
+
+/* ==========================================================================
+   Savings indicator
+   ========================================================================== */
+
+.core-diet-savings-section {
+	background: var(--dp-bg-subtle);
+	border: 1px solid var(--dp-border);
+	border-radius: var(--dp-radius);
+	padding: var(--dp-card-pad);
+}
+
+.core-diet-savings-section > h2 {
+	margin-top: 0;
+}
+
+.core-diet-savings-grid {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 12px;
+}
+
+.core-diet-savings-card {
+	background: #fff;
+	border: 1px solid var(--dp-border);
+	border-radius: var(--dp-radius);
+	padding: 16px 14px;
+	text-align: center;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.core-diet-savings-value {
+	font-size: 26px;
+	font-weight: 700;
+	color: var(--dp-accent-dark);
+	line-height: 1.2;
+}
+
+.core-diet-savings-value small {
+	font-size: 14px;
+	font-weight: 400;
+	color: var(--dp-text-secondary);
+}
+
+.core-diet-savings-label {
+	font-size: 12px;
+	color: var(--dp-text-secondary);
+	line-height: 1.4;
+}
+
+/* ==========================================================================
+   Quick profiles
+   ========================================================================== */
+
+.core-diet-profiles-grid {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 12px;
+	margin-top: 12px;
+}
+
+.core-diet-profile-card {
+	background: #fff;
+	border: 1px solid var(--dp-border);
+	border-radius: var(--dp-radius);
+	padding: var(--dp-card-pad);
+	display: flex;
+	flex-direction: column;
+}
+
+.core-diet-profile-card > .dashicons {
+	font-size: 22px;
+	width: 22px;
+	height: 22px;
+	color: var(--dp-accent);
+	margin-bottom: 8px;
+}
+
+.core-diet-profile-card h3 {
+	margin: 0 0 6px;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--dp-text);
+}
+
+.core-diet-profile-card p {
+	margin: 0 0 14px;
+	color: var(--dp-text-secondary);
+	font-size: 13px;
+	line-height: 1.5;
+	flex-grow: 1;
+}
+
+.core-diet-profile-card .button {
+	align-self: flex-start;
+	min-height: auto;
+	height: auto;
+	line-height: 1.4;
+	padding: 6px 12px;
+}
+
+/* Reset to defaults */
+.core-diet-reset-wrap {
+	margin-top: 14px;
+	padding-top: 14px;
+	border-top: 1px solid var(--dp-border);
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.core-diet-reset-btn {
+	color: #b32d2e;
+	border-color: #b32d2e;
+}
+
+.core-diet-reset-btn:hover,
+.core-diet-reset-btn:focus {
+	color: #fff;
+	background: #b32d2e;
+	border-color: #b32d2e;
+}
+
+.core-diet-reset-wrap .description {
+	font-style: normal;
+	color: var(--dp-text-muted);
+	font-size: 13px;
+}
+
+/* ==========================================================================
+   Recommendations
+   ========================================================================== */
+
+.core-diet-recommendations-results {
+	margin-top: 16px;
+}
+
+/* Quick-enable bar */
+.core-diet-rec-filters {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-bottom: 16px;
+	flex-wrap: wrap;
+}
+
+.core-diet-rec-filters-label {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--dp-text-secondary);
+	margin-right: 4px;
+}
+
+.core-diet-rec-filter {
+	font-size: 12px;
+	padding: 4px 12px;
+	min-height: auto;
+	height: auto;
+	line-height: 1.4;
+}
+
+.core-diet-rec-counter {
+	font-size: 12px;
+	color: var(--dp-text-muted);
+	margin-left: 8px;
+}
+
+/* Group titles */
+.core-diet-rec-group-title {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--dp-text-secondary);
+	margin: 20px 0 6px;
+	padding: 0;
+}
+
+.core-diet-rec-group-title:first-of-type {
+	margin-top: 0;
+}
+
+/* Risk badges (inline with label) */
+.core-diet-risk-badge {
+	font-size: 10px;
+	padding: 1px 7px;
+	border-radius: 3px;
+	font-weight: 600;
+	white-space: nowrap;
+	vertical-align: middle;
+	margin-left: 6px;
+}
+
+.core-diet-risk-badge.core-diet-risk-safe {
+	background: #edfaef;
+	color: var(--dp-success);
+}
+
+.core-diet-risk-badge.core-diet-risk-recommended {
+	background: #f0f6fc;
+	color: var(--dp-accent-dark);
+}
+
+.core-diet-risk-badge.core-diet-risk-moderate {
+	background: #fcf9e8;
+	color: #996800;
+}
+
+/* Info-only cards (for select-type recommendations) */
+.core-diet-rec-info-cards {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 16px;
+}
+
+.core-diet-rec-info-card {
+	background: var(--dp-bg-subtle);
+	border: 1px solid var(--dp-border);
+	border-radius: var(--dp-radius);
+	padding: 12px 16px;
+	font-size: 13px;
+	color: var(--dp-text-secondary);
+	line-height: 1.5;
+}
+
+.core-diet-rec-info-card strong {
+	color: var(--dp-text);
+}
+
+.core-diet-rec-info-card em {
+	color: var(--dp-text-muted);
+	font-size: 12px;
+}
+
+/* Save button */
+.core-diet-rec-save-wrap {
+	margin-top: 20px;
+	padding-top: 16px;
+	border-top: 1px solid var(--dp-border);
+}
+
+/* No recommendations (all optimized) */
+.core-diet-no-recommendations {
+	background: #edfaef;
+	border: 1px solid var(--dp-success);
+	border-radius: var(--dp-radius);
+	padding: var(--dp-card-pad);
+	text-align: center;
+}
+
+.core-diet-no-recommendations .dashicons {
+	font-size: 28px;
+	width: 28px;
+	height: 28px;
+	color: var(--dp-success);
+	display: block;
+	margin: 0 auto 8px;
+}
+
+.core-diet-no-recommendations p {
+	margin: 0;
+	color: var(--dp-text);
+	font-size: 13px;
+}
+
+.core-diet-notice-error {
+	color: var(--dp-danger);
+	font-size: 13px;
+}
+
+/* Spinner animation for analyze button */
+@keyframes core-diet-spin {
+	from { transform: rotate(0deg); }
+	to   { transform: rotate(360deg); }
+}
+
+.core-diet-spin {
+	animation: core-diet-spin 1s linear infinite;
+	display: inline-block;
+}
+
+/* ==========================================================================
+   Import / Export
+   ========================================================================== */
+
+.core-diet-import-export-grid {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 12px;
+	margin-top: 12px;
+}
+
+.core-diet-ie-card {
+	background: #fff;
+	border: 1px solid var(--dp-border);
+	border-radius: var(--dp-radius);
+	padding: var(--dp-card-pad);
+}
+
+.core-diet-ie-card h3 {
+	margin: 0 0 6px;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--dp-text);
+}
+
+.core-diet-ie-card p {
+	margin: 0 0 14px;
+	color: var(--dp-text-secondary);
+	font-size: 13px;
+	line-height: 1.5;
+}
+
+/* Hidden file input inside label */
+#core-diet-import-label {
+	cursor: pointer;
+}
+
+#core-diet-import-file {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+	overflow: hidden;
+}
+
+.core-diet-import-status {
+	display: inline-block;
+	margin-left: 10px;
+	font-size: 13px;
+}
+
+.core-diet-status-success {
+	color: var(--dp-success);
+}
+
+.core-diet-status-error {
+	color: var(--dp-danger);
+}
+
+/* ==========================================================================
+   Button icon alignment (dashicons inside buttons)
+   WP 7.0 applies min-height: 40px and line-height: 2.92 to .button,
+   which misaligns inline dashicons. Use inline-flex to center them.
+   ========================================================================== */
+
+.core-diet-btn-icon {
+	font-size: 16px;
+	width: 16px;
+	height: 16px;
+	vertical-align: middle;
+	margin-right: 4px;
+	line-height: 1;
+}
+
+/* Buttons with dashicons: override WP 7.0 aggressive sizing. */
+.core-diet-tools-section .button,
+.core-diet-profiles-grid .button,
+.core-diet-import-export-grid .button,
+.core-diet-reset-wrap .button,
+.core-diet-rec-save-wrap .button,
+#core-diet-analyze-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	min-height: auto;
+	height: auto;
+	line-height: 1.4;
+	padding: 6px 12px;
+}
+
+/* Ensure dashicons inside these buttons are properly sized. */
+.core-diet-tools-section .button .dashicons,
+.core-diet-profiles-grid .button .dashicons,
+.core-diet-import-export-grid .button .dashicons,
+.core-diet-reset-wrap .button .dashicons,
+#core-diet-analyze-btn .dashicons {
+	font-size: 16px;
+	width: 16px;
+	height: 16px;
+	line-height: 1;
+}
+
+/* ==========================================================================
+   Promotional sidebar
+   ========================================================================== */
+
+.core-diet-promo-notice {
+	background: var(--dp-bg-subtle);
+	border: 1px solid var(--dp-border);
+	border-radius: var(--dp-radius);
+	padding: var(--dp-card-pad);
+}
+
+.core-diet-promo-notice > h4 {
+	margin: 0 0 14px;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--dp-text);
+}
+
+.core-diet-promo-columns {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.core-diet-promo-column {
+	background: #fff;
+	border: 1px solid var(--dp-border);
+	border-radius: var(--dp-radius);
+	padding: 16px;
+	display: flex;
+	flex-direction: column;
+}
+
+.core-diet-promo-column > .dashicons {
+	font-size: 22px;
+	width: 22px;
+	height: 22px;
+	color: var(--dp-accent);
+	margin-bottom: 8px;
+}
+
+.core-diet-promo-column h5 {
+	margin: 0 0 6px;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--dp-text);
+	line-height: 1.4;
+}
+
+.core-diet-promo-column p {
+	margin: 0 0 12px;
+	color: var(--dp-text-secondary);
+	font-size: 12px;
+	line-height: 1.5;
+	flex-grow: 1;
+}
+
+.core-diet-promo-notice .core-diet-promo-column .button {
+	align-self: flex-start;
+	margin-top: auto;
+	white-space: normal;
+	height: auto;
+	min-height: auto;
+	line-height: 1.4;
+	padding: 6px 12px;
+	text-align: center;
+	font-size: 12px;
+}
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+
+/* Below ~1100px: stack sidebar below main */
+@media screen and (max-width: 1100px) {
+	.core-diet-layout {
+		flex-direction: column;
+	}
+
+	.core-diet-sidebar {
+		width: 100%;
+		max-width: 700px;
+		margin-top: 0;
+	}
+
+	.core-diet-promo-columns {
+		flex-direction: row;
+	}
+
+	.core-diet-promo-column {
+		flex: 1;
+	}
+}
+
+/* Narrow screens */
+@media screen and (max-width: 782px) {
+	.core-diet-cards-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.core-diet-promo-columns {
+		flex-direction: column;
+	}
+
+	.core-diet-promo-column {
+		flex: none;
+	}
+
+	.core-diet-conditional {
+		display: block;
+		margin: 8px 0 0;
+	}
+
+	.core-diet-savings-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+
+	.core-diet-profiles-grid,
+	.core-diet-import-export-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.core-diet-reset-wrap {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+}

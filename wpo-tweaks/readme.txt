@@ -1,231 +1,148 @@
-=== Zero Config Performance Optimization ===
+=== DietPress ===
 Contributors: fernandot, ayudawp
-Tags: performance, optimization, speed, pagespeed, core-web-vitals
-Requires at least: 5.0
+Tags: performance, optimization, cleanup, speed, bloat
+Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 7.0
-Stable tag: 2.3.2
+Stable tag: 3.0.0
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
-Advanced performance optimizations for WordPress. Improves speed, reduces server resources and optimizes PageSpeed.
+Put your WordPress on a diet and speed it up. Disable the bloat you do not need and enable performance optimizations, all fully configurable.
 
 == Description ==
 
-Zero Config Performance Optimization is the most complete performance optimization plugin for WordPress. It combines the best WPO (Web Performance Optimization) practices in a single easy-to-use tool. No configuration needed: activate and enjoy a faster WordPress.
+DietPress puts your WordPress on a diet and speeds it up. It pairs a complete set of performance optimizations (the ones that used to ship in "Zero Config Performance Optimization") with a clean, risk-based interface to disable the WordPress features you do not use. Everything is configurable, and the performance optimizations are already on by default, so you can simply activate and enjoy a faster site, or fine-tune every detail.
 
-By default, WordPress loads several functions, services and scripts that are not mandatory and usually slow down your installation and consume hosting resources. For years I have been testing tweaks to save hosting resources and improve WordPress performance and loading times. After thousands of tests, this plugin includes my best speed and performance optimizations with a single click.
+> **Coming from "Zero Config Performance Optimization"?** This is the same plugin, now called DietPress and fully configurable. All your previous optimizations stay active by default; you just gained a settings page and a whole new set of WordPress-diet options.
 
-With this plugin you can safely disable those annoying services, unnecessary codes and scripts to save resources and hosting costs, and speed up WordPress to get better results in tools like Google PageSpeed, Pingdom Tools, GTMetrix, WebPageTest and others.
+By default WordPress loads functions, services and scripts that most sites do not need. They slow down loading times and consume hosting resources. DietPress lets you trim that fat and apply battle-tested performance tweaks, with a clear description of what each option does and what might break, organized by risk level so you always know what is safe.
 
-### NEW IN V2.3.0
+### TWO THINGS IN ONE PLUGIN
 
-**Core Compatibility Refactoring:**
-* **Image module rebuilt** - Now works as a safety net that complements WordPress core. Only adds lazy loading, decoding, and fetchpriority attributes when core hasn't already handled them (covers images from themes, page builders, widgets, and custom templates that bypass core's pipeline)
-* **NEW: fetchpriority="low"** for non-critical images, which WordPress core does NOT add. Frees bandwidth for critical resources
+**1. Performance optimizations (on by default)**
 
-**Bug Fixes:**
-* Fixed Gravatar avatars broken by aggressive query string removal
-* Fixed Critical CSS broken by incorrect HTML escaping of CSS selectors
-* Removed deprecated JSON/REST API filters that could interfere with Gutenberg and WooCommerce
-* Fixed compatibility with CusRev and other review plugins
-* Automatic cleanup of ghost plugin entries from previous versions
+* Automatic Critical CSS inlined in the head (optional experimental deferral of non-critical CSS)
+* JavaScript defer parsing with smart dependency handling
+* Image loading attributes safety net: lazy loading, decoding=async and fetchpriority for images that bypass core
+* Automatic image dimensions for better CLS scores (including picture elements)
+* Resource hints: preconnect and DNS prefetch for common third-party origins
+* Theme stylesheet, critical fonts and logo preloading for a faster LCP
+* Google Fonts display=swap
+* RSS feed optimization (cache headers and item limit)
+* Server rules in .htaccess: browser caching, GZIP and Brotli compression, immutable cache headers, CORS for fonts and keep-alive (master switch plus per-feature toggles)
+* Database maintenance: daily expired-transient cleanup and safe query optimizations
 
-**Other:**
-* Tested up to WordPress 7.0
+**2. Put WordPress on a diet (risk-based, opt-in)**
 
-### INCLUDED OPTIMIZATIONS
+* **Light** (safe for any site): emojis, RSD/WLW tags, shortlinks, self-pingbacks, comment pagination, admin email check, and more
+* **Moderate** (evaluate first): oEmbed, jQuery Migrate, Dashicons on the frontend, Global Styles and Duotone, remote block patterns, avatars and Gravatar, comment threading, and more
+* **Strict** (site-specific): granular RSS feed control, Heartbeat API mode, post revisions and autosave, REST API access, disable comments, XML sitemap, native lazy loading/fetchpriority, content types, and more
+* **Widgets**: dashboard widgets (including third-party ones from Yoast, WooCommerce, Elementor, Jetpack, Wordfence, Rank Math, Gravity Forms), classic sidebar widgets, block-editor widgets and the Customizer
 
-**Frontend Optimizations:**
-* Automatic Critical CSS generation and injection
-* Deferred CSS Loading with noscript fallback
-* Image lazy loading safety net (catches images that bypass WordPress core pipeline)
-* fetchpriority="low" for non-critical images (complements core LCP detection)
-* Automatic preconnect for Google Fonts, Analytics, etc.
-* Smart DNS Prefetch for external resources including Gravatar
-* Automatic image dimensions for better CLS scores
-* Google Fonts display=swap optimization
-* JavaScript defer parsing
-* Logo preload with high priority
+### SCALE, PROFILES AND ANALYZER
 
-**Server Optimizations:**
-* Browser cache rules with immutable flag
-* GZIP and Brotli compression
-* Keep-Alive connections
-* Vary Accept-Encoding headers
-* CORS headers for fonts (CDN compatibility)
-* Extended MIME type coverage
-
-**Backend Optimizations:**
-* Database transients cleanup
-* Query optimizations
-* Heartbeat API control (60s interval)
-* Post revisions limited to 3
-* jQuery Migrate removal when not needed
-* Self-pingback prevention
-* Dashboard widgets cleanup
-
-### HOW TO VERIFY OPTIMIZATIONS ARE WORKING
-
-You can check each optimization individually to ensure Zero Config Performance Optimization is working correctly:
-
-**Logo Preload:** View page source (Ctrl+U) and look for `<link rel="preload" ... fetchpriority="high">` pointing to your logo image.
-
-**fetchpriority:** Inspect images below the fold (F12 > Elements). Non-critical images should have `fetchpriority="low"` (added by ZCP). The first content image should have `fetchpriority="high"` (added by WordPress core or ZCP as fallback).
-
-**Brotli/GZIP Compression:** Test at [giftofspeed.com/gzip-test](https://www.giftofspeed.com/gzip-test/) - should show compression enabled.
-
-**Cache Headers:** Check your `.htaccess` file for a section marked "BEGIN Zero Config Performance" with `immutable` in Cache-Control headers.
-
-**Critical CSS:** View page source and look for `<style id="ayudawp-wpotweaks-critical-css">` in the head section.
-
-**Deferred CSS:** In source code, look for `<link>` tags with `rel="preload" as="style"` instead of `rel="stylesheet"`.
-
-**Keep-Alive:** Use browser dev tools (F12 > Network) and check response headers for `Connection: keep-alive`.
-
-Use tools like Google PageSpeed, GTMetrix, Pingdom Tools, and WebPageTest to measure overall performance improvements. Always test twice to account for caching effects.
+* Savings indicator: HTTP requests removed, CSS/JS saved and active optimizations at a glance
+* Quick profiles: Personal Blog, WooCommerce Store, Landing Page and Maximum Cleanup
+* Site analyzer: personalized recommendations based on your active plugins and content
+* Import and export your whole configuration as a JSON file
 
 ### COMPATIBILITY AND EXTENSIBILITY
 
-The plugin includes multiple filters for developers:
+The plugin includes filters for developers:
 
-* `ayudawp_wpotweaks_critical_css` - Customize critical CSS
-* `ayudawp_wpotweaks_critical_css_handles` - Customize which CSS handles are considered critical
-* `ayudawp_wpotweaks_preconnect_hints` - Add custom preconnect
-* `ayudawp_wpotweaks_dns_prefetch_domains` - Customize DNS prefetch domains
-* `ayudawp_wpotweaks_critical_fonts` - Define critical fonts for preload
+* `dietpress_critical_css` - Customize the inline critical CSS
+* `dietpress_critical_css_handles` - Define which CSS handles are critical
+* `dietpress_skip_defer_script_handles` - Opt scripts out of the JavaScript defer
+* `dietpress_skip_defer_style_handles` - Opt stylesheets out of the CSS deferral
+* `dietpress_preconnect_hints` - Customize preconnect origins
+* `dietpress_dns_prefetch_domains` - Customize DNS prefetch domains
+* `dietpress_critical_fonts` - Define critical fonts to preload
 
 **Compatible with:**
 
-* All well-coded themes
-* Cache plugins (W3 Total Cache, WP Rocket, LiteSpeed Cache, etc.)
-* Security plugins (no conflicts, focused only on performance)
+* Well-coded themes and page builders (Divi, Elementor, Beaver Builder, Gutenberg)
+* Cache plugins (WP Rocket, LiteSpeed Cache, W3 Total Cache, WP Super Cache, etc.)
+* Security plugins (DietPress focuses on performance and deliberately leaves security to them; we recommend our free Vigilant)
+* CDNs (Cloudflare, StackPath, KeyCDN, etc.) thanks to CORS and Vary headers
 * WordPress Multisite
-* Page Builders (Divi, Elementor, Beaver Builder, Gutenberg)
-* CDNs (Cloudflare, StackPath, KeyCDN, etc.)
 
-### INSTALLATION AND USE
+### HOW TO VERIFY THE OPTIMIZATIONS
 
-**No options**. Just activate the plugin and test your site speed in your favorite tool (GTMetrix, Pingdom Tools, Google PageSpeed, etc.)
+* **Cache rules:** check your `.htaccess` for a block marked `# BEGIN DietPress` with `immutable` Cache-Control headers
+* **Logo preload:** view page source and look for `<link rel="preload" ... fetchpriority="high">` pointing to your logo
+* **Critical CSS:** view source and look for `<style id="core-diet-critical-css">` in the head
+* **Compression:** test at [giftofspeed.com/gzip-test](https://www.giftofspeed.com/gzip-test/)
 
-The plugin is completely automatic and applies optimizations safely without breaking functionality.
-
-### MEASURING RESULTS
-
-**Recommended tools:**
-
-* [Google PageSpeed Insights](https://pagespeed.web.dev/)
-* [GTMetrix](https://gtmetrix.com/)
-* [WebPageTest](https://www.webpagetest.org/)
-
-**Best measurement practices:**
-
-* Run at least 2 tests (first one may not show cache)
-* Always use the same tool for comparison
-* Measure performance over time, not just once
-* Remember that no tool can replace human perception
+Always measure with tools like Google PageSpeed, GTMetrix or WebPageTest, and run each test at least twice to account for caching.
 
 == Installation ==
 
-1. Go to your WP Dashboard > Plugins and search for 'zero config performance' or...
-2. Download the plugin from WP repository
-3. Upload the 'wpo-tweaks' folder to '/wp-content/plugins/' directory
-4. Activate the plugin through the 'Plugins' menu in WordPress
+1. Go to your WP Dashboard > Plugins > Add New and search for 'DietPress', or upload the `wpo-tweaks` folder to `/wp-content/plugins/`.
+2. Activate the plugin through the 'Plugins' menu in WordPress.
+3. Open the **DietPress** menu to review the settings. Performance optimizations are already on; the diet options are off until you enable them.
 
 == Frequently Asked Questions ==
 
-= What does Zero Config mean? =
+= I was using "Zero Config Performance Optimization". What changed? =
 
-Zero Config means you don't need to configure anything. Just activate the plugin and all optimizations are applied automatically. No settings page, no options to tweak, no learning curve.
+It is the same plugin, now called DietPress. All the performance optimizations you had are still active by default, so nothing breaks on update. On top of that you now get a settings page, individual control over every optimization, and a complete set of options to disable unused WordPress features.
 
-= What does WPO mean? =
+= Is it still zero-config? =
 
-WPO stands for Web Performance Optimization. It measures a set of various improvements in optimization and improvement of performance and loading times of web pages.
+Yes, if you want it to be. The performance optimizations are on by default, so you can just activate and go. The difference is that now you can fine-tune everything and, optionally, put WordPress on a diet by disabling features you do not use.
 
-= Where can I test my site performance? =
+= I also have the standalone "DietPress" (core-diet) plugin installed. What do I do? =
 
-* Go to [Google PageSpeed](https://pagespeed.web.dev/) and test your site
-* Go to [GTMetrix](https://gtmetrix.com/) and test your site
-* Go to [WebPageTest](https://www.webpagetest.org/) and test your site
+Nothing needs to be done by hand. When this plugin is active it detects the old "core-diet" plugin and deactivates it automatically (and core-diet 1.0.4 also steps aside on its own). Your settings are preserved because both plugins store them in the same place. The only thing left for you to do is delete the "core-diet" plugin whenever you like.
 
-= What is the best way to test my site performance? =
+= Where are the security options the standalone DietPress had? =
 
-Use one of the tools above and run at least two tests to measure your site performance. This is because cache systems don't load the first time your site is tested with these tools. Always test your site with the same tool and measure your site performance over time, not just once.
+They were intentionally left out. The standalone DietPress (core-diet) included a few security toggles (disable XML-RPC, hide login errors, disable Application Passwords, hide the WordPress version, close pingbacks). Security belongs in a security plugin, where those protections are implemented properly and maintained as such; we recommend our free [Vigilant](https://wordpress.org/plugins/vigilante/). If you migrate with any of those toggles enabled, DietPress shows you a one-time notice listing them, and those features simply return to the default WordPress behavior.
 
-And always remember that no tool can replace human perception. If you see that your web loads faster than ever, no tool is going to tell you what you and your visitors feel in real life.
+= Will it break my site? =
 
-Don't go crazy with tools, they are machines and, for example, Google PageSpeed can show you a measure of 100/100 when your site is broken, and that's far from being an optimized web, right?
+The performance optimizations are designed to be safe and are tested across many sites. The diet options only change something when you explicitly enable each toggle, and every option has a description of what might break. If something fails, turn the toggle off; deactivating the plugin restores default WordPress behavior.
 
-= How can I verify that the optimizations are working? =
+= Is it compatible with caching plugins and CDNs? =
 
-Please check the "HOW TO VERIFY OPTIMIZATIONS ARE WORKING" section in the Description for detailed instructions on how to verify each optimization individually.
+Yes. DietPress works alongside caching plugins and includes CORS and Vary headers for full CDN compatibility.
 
 = Something went wrong after activation =
 
-This plugin is compatible with all WordPress JavaScript functions (`wp_localize_script()`, js in header, in footer...) and works with all well-coded plugins and themes. If a plugin or theme is not enqueuing scripts correctly, your site may not work. If your hosting doesn't support some of the tweaks, usually due to server restrictions, something may fail.
+If a plugin or theme does not enqueue scripts correctly, the JavaScript defer may affect it; you can turn that option off or use the `dietpress_skip_defer_script_handles` filter. If you get a 500 error, edit your `.htaccess` and remove the block that starts with `# BEGIN DietPress` (or `# BEGIN Zero Config Performance` if you updated from 2.x and the rules have not been rewritten yet), or disable the ".htaccess server rules" option.
 
-If something fails, please access your `/wp-content/plugins/wpo-tweaks/` directory via your favorite FTP client or hosting panel (cPanel, Plesk, etc.) and rename the plugin folder to deactivate it.
+= Can I customize the optimizations as a developer? =
 
-If you get a 500 Error (server error), then go to your hosting panel and edit the .htaccess file to remove the lines added by the plugin (they start with 'Zero Config Performance') and save changes, or delete the file and create it again from Dashboard > Settings > Permalinks > Save changes.
-
-= What's next? =
-
-I will be including in next updates every new performance tweak I test for better results in order to speed up WordPress.
-
-= Do you plan to include a settings panel? =
-
-No. Zero Config Performance Optimization plugin is intended for users who want to get optimizations and speed safely with one click. If you are a developer and know what you are doing, then please check out [Machete plugin by my friend Nilo Velez](https://wordpress.org/plugins/machete/), a complete suite to decide how to solve common WordPress problems and annoyances. And yes, it has a huge settings page!
-
-= Can I customize the optimizations? =
-
-Yes, the plugin includes multiple WordPress filters for developers that allow customizing plugin behavior according to specific site needs.
-
-= Is it compatible with caching plugins? =
-
-Yes! Zero Config Performance Optimization plugin is designed to work alongside caching plugins. We recommend using it with Cache Enabler, WP Super Cache, W3 Total Cache, LiteSpeed Cache, or WP Rocket for maximum performance.
-
-= Is it compatible with security plugins? =
-
-Yes! This plugin focuses exclusively on performance optimizations and does not include any security features, so it won't conflict with your security plugins.
-
-= Does it work with CDNs? =
-
-Yes. The plugin includes CORS headers for fonts and proper Vary headers that ensure full compatibility with CDNs like Cloudflare, StackPath, KeyCDN, and others.
+Yes. See the filters listed in the description (the `dietpress_*` hooks).
 
 == Screenshots ==
 
-1. Pingdom Tools results before plugin activation
-2. Pingdom Tools results after plugin activation
+1. Scale tab: savings indicator, quick profiles and site analyzer.
+2. Light tab: safe optimizations and cleanup, organized by section.
+3. Moderate tab: image, database and editor options to evaluate.
+4. Strict tab: frontend performance, server .htaccess rules and site-specific settings.
+5. Widgets tab: dashboard, block editor, Customizer and classic sidebar widgets.
 
 == Changelog ==
 
-= 2.3.2 =
-* **IMPROVED: new `ayudawp_wpotweaks_skip_defer_script_handles` filter** so plugins can opt their own JavaScript out of the defer pass when their scripts must run before DOMContentLoaded
-* **IMPROVED: new `ayudawp_wpotweaks_skip_defer_style_handles` filter** so plugins can opt their own stylesheets out of the `rel="preload"` defer when their UI would render visually broken until the deferred CSS finishes loading
-* **FIX: plugin asset cache-busting was being neutralized** — the previous combination of stripping `?ver=` from every URL plus the `Cache-Control: immutable, max-age=31536000` header in `.htaccess` froze plugin assets in browser caches for a year. Any plugin update silently failed to reach existing visitors. URLs under `/wp-content/plugins/` now keep their `?ver=` query string so the cache-busting works as intended; WordPress core, `wp-includes/` and theme assets still get stripped. Filterable with `ayudawp_wpotweaks_preserve_plugin_version`
-
-= 2.3.1 =
-* **FIX: JavaScript defer breaking scripts with inline "after" code** - Fixed "wp is not defined" errors on scripts using `wp_add_inline_script()` with 'after' position (wp-i18n) and scripts registered with `wp_set_script_translations()` (Contact Form 7 translations, etc.). The defer filter now skips scripts with attached inline code to prevent execution order issues
-* **IMPROVED: Changelog history moved to separate file** - Full changelog history now lives in [changelog.txt](https://plugins.svn.wordpress.org/wpo-tweaks/trunk/changelog.txt) following WordPress.org best practices. The readme.txt now only contains the latest versions for lighter maintenance and cleaner translations
-
-= 2.3.0 =
-* **MAJOR: Image module refactored to complement WordPress core** - Rebuilt to work as a safety net instead of duplicating core. WordPress 5.5+/6.1+/6.3+ handles lazy loading, decoding, and fetchpriority for images in its standard pipeline, but images injected by themes, page builders, widgets or custom code may bypass it. The module now checks if each attribute is already present before adding it, so it only fills the gaps core didn't reach
-* **NEW: fetchpriority="low" for non-critical images** - Deprioritizes below-the-fold images so the browser allocates bandwidth to critical resources first. WordPress core does NOT do this
-* **FIX: Gravatar avatars broken by query string removal** - Previous version stripped all query parameters from Gravatar URLs, including functional ones (size, default image, rating). Function removed entirely since Gravatar params are not cache-busting
-* **FIX: Critical CSS broken by esc_html()** - CSS selectors using `>` (child combinator) and other special characters were escaped to HTML entities, breaking the CSS. Now uses wp_strip_all_tags() only
-* **FIX: Deprecated JSON/REST API filters removed** - `json_enabled` and `json_jsonp_enabled` were legacy filters from the old WP-API plugin (pre WP 4.7) that could interfere with Gutenberg, WooCommerce and other plugins depending on the REST API
-* **FIX: CusRev and review plugins compatibility** - Comments query optimization now only applies to standard comments, not custom comment types used by review plugins (CusRev, WooCommerce Reviews, etc.)
-* **FIX: Ghost plugin entries cleanup** - Automatically removes orphaned entries in active_plugins from renamed or incorrectly registered plugin paths on activation
-* IMPROVED: Removed dns-prefetch hint for s.w.org (only used by emoji scripts already disabled by the plugin)
-* IMPROVED: Reduced code footprint in image optimization module, cleaner logic with no duplication
-* Tested up to WordPress 7.0
+= 3.0.0 =
+* New: the plugin is now DietPress (formerly "Zero Config Performance Optimization"), fully configurable from a new top-level "DietPress" admin menu with its own settings page.
+* New: a complete, risk-based set of options to put WordPress on a diet (Light, Moderate, Strict and Widgets), covering emojis, RSD/WLW, shortlinks, self-pingbacks, oEmbed, jQuery Migrate, Dashicons, REST API control, granular RSS feeds, comments, Heartbeat, revisions, autosave, content types, and dashboard/sidebar/block/Customizer widgets. Security-related toggles (XML-RPC, pingbacks, login errors, Application Passwords, version hiding) are intentionally not included: they belong in a security plugin, like our free Vigilant, and DietPress tells you once if you had any of them enabled.
+* New: Scale tab with a savings indicator, quick profiles (Personal Blog, WooCommerce, Landing Page, Maximum Cleanup) and a site analyzer with recommendations.
+* New: import and export your configuration as a JSON file.
+* Improved: every performance optimization from the previous "Zero Config" version is now an individual setting you can fine-tune (JavaScript defer, Critical CSS, image loading attributes, image dimensions, resource hints, asset and logo preloading, RSS feed optimization, .htaccess browser caching/GZIP/Brotli/headers, transient cleanup and query optimizations). They all stay ON by default, so updating sites keep their current behavior.
+* Improved: the Critical CSS deferral of non-critical stylesheets (the part that can cause a flash of unstyled content) is now a separate, opt-in "experimental" toggle, while the safe inline critical CSS stays on by default.
+* Improved: the .htaccess server rules are now applied when you save settings, with a master switch plus per-feature toggles (browser caching, GZIP, Brotli, cache headers, CORS for fonts, keep-alive), and are removed cleanly on deactivation. The block is now labeled "# BEGIN DietPress"; the old "Zero Config Performance" block is replaced automatically.
+* Improved: developer filters renamed to the `dietpress_` prefix (`dietpress_critical_css`, `dietpress_critical_css_handles`, `dietpress_skip_defer_script_handles`, `dietpress_skip_defer_style_handles`, `dietpress_preconnect_hints`, `dietpress_dns_prefetch_domains`, `dietpress_critical_fonts`). The former `ayudawp_wpotweaks_*` filters keep working through a compatibility bridge, but are deprecated: please update your snippets to the new names.
+* Fix: the retired standalone DietPress ("core-diet") plugin is detected and deactivated automatically, preventing fatal conflicts while both are installed; its settings carry over.
 
 For older changelog entries, please check the [changelog.txt](https://plugins.svn.wordpress.org/wpo-tweaks/trunk/changelog.txt) file.
 
 == Upgrade Notice ==
 
-= 2.3.2 =
-FIX: plugin assets (JS/CSS) were getting frozen in browser caches between updates because the version query string was stripped while immutable cache headers were applied. Plugin URLs now keep their cache-buster. Adds opt-out filters for plugins that need to skip defer.
+= 3.0.0 =
+Major release: Zero Config Performance Optimization becomes DietPress, fully configurable from its new settings page. All performance optimizations stay ON by default. The standalone DietPress (core-diet) plugin is deactivated automatically; you can delete it, your settings carry over.
 
 == Support ==
 

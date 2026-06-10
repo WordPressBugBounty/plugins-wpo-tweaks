@@ -1,8 +1,18 @@
-=== Zero Config Performance Optimization ===
+DietPress — Full changelog
 
-== Full Changelog ==
+For each release, see the entries below. The latest version is always at the top.
+The current release notes also live in readme.txt under "== Changelog ==".
 
-Complete history of all releases. The latest versions also appear in the "Changelog" section of [readme.txt](https://plugins.svn.wordpress.org/wpo-tweaks/trunk/readme.txt); this file is the authoritative archive that never gets trimmed.
+= 3.0.0 =
+* New: the plugin is now DietPress (formerly "Zero Config Performance Optimization"), fully configurable from a new top-level "DietPress" admin menu with its own settings page.
+* New: a complete, risk-based set of options to put WordPress on a diet (Light, Moderate, Strict and Widgets), covering emojis, RSD/WLW, shortlinks, self-pingbacks, oEmbed, jQuery Migrate, Dashicons, REST API control, granular RSS feeds, comments, Heartbeat, revisions, autosave, content types, and dashboard/sidebar/block/Customizer widgets. Security-related toggles (XML-RPC, pingbacks, login errors, Application Passwords, version hiding) are intentionally not included: they belong in a security plugin, like our free Vigilant, and DietPress tells you once if you had any of them enabled.
+* New: Scale tab with a savings indicator, quick profiles (Personal Blog, WooCommerce, Landing Page, Maximum Cleanup) and a site analyzer with recommendations.
+* New: import and export your configuration as a JSON file.
+* Improved: every performance optimization from the previous "Zero Config" version is now an individual setting you can fine-tune (JavaScript defer, Critical CSS, image loading attributes, image dimensions, resource hints, asset and logo preloading, RSS feed optimization, .htaccess browser caching/GZIP/Brotli/headers, transient cleanup and query optimizations). They all stay ON by default, so updating sites keep their current behavior.
+* Improved: the Critical CSS deferral of non-critical stylesheets (the part that can cause a flash of unstyled content) is now a separate, opt-in "experimental" toggle, while the safe inline critical CSS stays on by default.
+* Improved: the .htaccess server rules are now applied when you save settings, with a master switch plus per-feature toggles (browser caching, GZIP, Brotli, cache headers, CORS for fonts, keep-alive), and are removed cleanly on deactivation. The block is now labeled "# BEGIN DietPress"; the old "Zero Config Performance" block is replaced automatically.
+* Improved: developer filters renamed to the `dietpress_` prefix (`dietpress_critical_css`, `dietpress_critical_css_handles`, `dietpress_skip_defer_script_handles`, `dietpress_skip_defer_style_handles`, `dietpress_preconnect_hints`, `dietpress_dns_prefetch_domains`, `dietpress_critical_fonts`). The former `ayudawp_wpotweaks_*` filters keep working through a compatibility bridge, but are deprecated: please update your snippets to the new names.
+* Fix: the retired standalone DietPress ("core-diet") plugin is detected and deactivated automatically, preventing fatal conflicts while both are installed; its settings carry over.
 
 = 2.3.2 =
 * **IMPROVED: new `ayudawp_wpotweaks_skip_defer_script_handles` filter** so plugins can opt their own JavaScript out of the defer pass when their scripts must run before DOMContentLoaded

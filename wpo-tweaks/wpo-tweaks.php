@@ -1,191 +1,129 @@
 <?php
 /**
- * Plugin Name: Zero Config Performance Optimization
- * Plugin URI: https://servicios.ayudawp.com/
- * Description: Advanced performance optimizations for WordPress. Improves speed, reduces server resources and optimizes PageSpeed.
- * Version: 2.3.2
- * Author: Fernando Tellado
- * Author URI: https://ayudawp.com/
- * Text Domain: wpo-tweaks
- * Requires at least: 5.0
- * Tested up to: 7.0
- * Requires PHP: 7.4
- * License: GPL v2 or later
- * License URI: https://www.gnu.org/licenses/gpl-2.0.html
+ * Plugin Name:       DietPress
+ * Plugin URI:        https://servicios.ayudawp.com
+ * Description:       Put your WordPress on a diet and speed it up. Disable unnecessary core features and enable performance optimizations, fully configurable.
+ * Version:           3.0.0
+ * Requires at least: 6.3
+ * Requires PHP:      7.4
+ * Author:            Fernando Tellado
+ * Author URI:        https://ayudawp.com
+ * License:           GPL-2.0-or-later
+ * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain:       wpo-tweaks
+ *
+ * Note: the plugin slug and text domain remain "wpo-tweaks" to preserve the
+ * existing WordPress.org listing, install base and translations. The public
+ * brand is "DietPress" (formerly the "core-diet" codebase merged in here).
  */
 
-// Prevent direct access
-if (!defined('ABSPATH')) {
-    exit;
+// Prevent direct file access.
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
 }
 
-// Define plugin constants
-define('AYUDAWP_WPOTWEAKS_VERSION', '2.3.2');
-define('AYUDAWP_WPOTWEAKS_PLUGIN_URL', plugin_dir_url(__FILE__));
-define('AYUDAWP_WPOTWEAKS_PLUGIN_PATH', plugin_dir_path(__FILE__));
-define('AYUDAWP_WPOTWEAKS_INCLUDES_PATH', AYUDAWP_WPOTWEAKS_PLUGIN_PATH . 'includes/');
+/*
+ * Conflict guard for the legacy standalone DietPress (the retired "core-diet"
+ * plugin). Both codebases share the Core_Diet_* class names, so loading both in
+ * the same request would fatal on a duplicate class declaration.
+ *
+ * Two constraints shape this guard, both caused by PHP binding unconditional
+ * top-level functions at include time, BEFORE any statement (guards included)
+ * runs:
+ *
+ * 1. No function declared in this file may reuse a core_diet_* name: the clash
+ *    would fatal before this guard could ever execute. Hence the dietpress_
+ *    prefix below.
+ * 2. The check must be class_exists() only, without autoload. The legacy 1.0.4
+ *    plugin leaves its top-level core_diet_*() functions declared even when its
+ *    own transition guard stands down, so function_exists() would report it as
+ *    "running" when it has already stepped aside. Its class is only declared
+ *    when it really runs.
+ *
+ * When the legacy plugin is the one running, stand down for this request,
+ * deactivate it and let the next request load DietPress normally.
+ */
+if ( class_exists( 'Core_Diet', false ) ) {
+	add_action(
+		'admin_init',
+		function () {
+			if ( ! current_user_can( 'activate_plugins' ) ) {
+				return;
+			}
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+			deactivate_plugins( 'core-diet/core-diet.php' );
+		}
+	);
+	add_action(
+		'admin_notices',
+		function () {
+			if ( ! current_user_can( 'activate_plugins' ) ) {
+				return;
+			}
+			echo '<div class="notice notice-warning"><p>';
+			echo esc_html__( 'DietPress detected the older standalone "core-diet" plugin and has deactivated it: they share the same code and cannot run together. DietPress already includes all of its features and your settings are kept, so you can safely delete the "core-diet" plugin.', 'wpo-tweaks' );
+			echo '</p></div>';
+		}
+	);
+	return;
+}
+
+// Plugin constants.
+define( 'CORE_DIET_VERSION', '3.0.0' );
+define( 'CORE_DIET_FILE', __FILE__ );
+define( 'CORE_DIET_DIR', plugin_dir_path( __FILE__ ) );
+define( 'CORE_DIET_URL', plugin_dir_url( __FILE__ ) );
+define( 'CORE_DIET_BASENAME', plugin_basename( __FILE__ ) );
 
 /**
- * Main Zero Config Performance Plugin Class
+ * Check minimum requirements.
+ *
+ * @return bool True if requirements are met.
  */
-class AyudaWP_WPO_Tweaks {
-    
-    /**
-     * Plugin modules
-     */
-    public $modules = array();
-    
-    /**
-     * Constructor
-     */
-    public function __construct() {
-        // Load modules immediately
-        $this->ayudawp_wpotweaks_load_modules();
-        
-        // Activation and deactivation hooks
-        register_activation_hook(__FILE__, array($this, 'ayudawp_wpotweaks_on_activation'));
-        register_deactivation_hook(__FILE__, array($this, 'ayudawp_wpotweaks_on_deactivation'));
-    }
-    
-    /**
-     * Load all optimization modules
-     */
-    public function ayudawp_wpotweaks_load_modules() {
-        $modules = array(
-            'file-management'       => 'File_Management',
-            'admin-notice'          => 'Admin_Notice',
-            'critical-css'          => 'Critical_CSS',
-            'image-optimization'    => 'Image_Optimization', 
-            'image-dimensions'      => 'Image_Dimensions',
-            'database-optimization' => 'Database_Optimization',
-            'script-optimization'   => 'Script_Optimization',
-            'admin-optimization'    => 'Admin_Optimization',
-            'cache-optimization'    => 'Cache_Optimization'
-        );
-        
-        foreach ($modules as $file => $class) {
-            $this->ayudawp_wpotweaks_load_module($file, $class);
-        }
-    }
-    
-    /**
-     * Load individual module
-     */
-    private function ayudawp_wpotweaks_load_module($file, $class) {
-        $file_path = AYUDAWP_WPOTWEAKS_INCLUDES_PATH . 'class-' . $file . '.php';
-        
-        if (file_exists($file_path)) {
-            require_once $file_path;
-            
-            $class_name = 'AyudaWP_WPO_' . $class;
-            
-            if (class_exists($class_name)) {
-                $this->modules[$file] = new $class_name();
-            }
-        }
-    }
-    
-    /**
-     * Plugin activation
-     */
-    public function ayudawp_wpotweaks_on_activation() {
-        // Check PHP version compatibility
-        if (version_compare(PHP_VERSION, '7.4', '<')) {
-            deactivate_plugins(plugin_basename(__FILE__));
-            wp_die(esc_html__('This plugin requires PHP 7.4 or higher.', 'wpo-tweaks'));
-        }
-        
-        // Clean ghost entries from previous versions
-        $this->ayudawp_wpotweaks_clean_ghost_entries();
-        
-        // Let modules handle their own activation tasks
-        foreach ($this->modules as $module) {
-            if (method_exists($module, 'on_activation')) {
-                $module->on_activation();
-            }
-        }
-        
-        // Flush cache if available
-        if (function_exists('wp_cache_flush')) {
-            wp_cache_flush();
-        }
-    }
-    
-    /**
-     * Plugin deactivation
-     */
-    public function ayudawp_wpotweaks_on_deactivation() {
-        // Let modules handle their own deactivation tasks
-        foreach ($this->modules as $module) {
-            if (method_exists($module, 'on_deactivation')) {
-                $module->on_deactivation();
-            }
-        }
-        
-        if (function_exists('wp_cache_flush')) {
-            wp_cache_flush();
-        }
-    }
-    
-    /**
-     * Clean ghost entries from active_plugins option
-     * 
-     * Removes entries for plugin files that no longer exist on disk.
-     * Fixes persistent admin notices from renamed or incorrectly 
-     * registered plugin paths in previous versions.
-     * 
-     * @since 2.2.2
-     */
-    private function ayudawp_wpotweaks_clean_ghost_entries() {
-        $active_plugins = get_option('active_plugins', array());
-        $current_plugin = plugin_basename(__FILE__);
-        $cleaned = false;
-        
-        foreach ($active_plugins as $key => $plugin) {
-            // Skip the current valid entry
-            if ($plugin === $current_plugin) {
-                continue;
-            }
-            
-            // Check if it's a ghost entry from our plugin (old paths)
-            if (strpos($plugin, 'wpo-tweaks/') === 0 && !file_exists(WP_PLUGIN_DIR . '/' . $plugin)) {
-                unset($active_plugins[$key]);
-                $cleaned = true;
-            }
-        }
-        
-        if ($cleaned) {
-            update_option('active_plugins', array_values($active_plugins));
-        }
-    }
-    
-    /**
-     * Get module instance
-     */
-    public function ayudawp_wpotweaks_get_module($module_name) {
-        return isset($this->modules[$module_name]) ? $this->modules[$module_name] : false;
-    }
+function dietpress_meets_requirements() {
+	if ( version_compare( PHP_VERSION, '7.4', '<' ) ) {
+		return false;
+	}
+	if ( version_compare( get_bloginfo( 'version' ), '6.3', '<' ) ) {
+		return false;
+	}
+	return true;
+}
+
+if ( ! dietpress_meets_requirements() ) {
+	add_action( 'admin_notices', 'dietpress_requirements_notice' );
+	return;
 }
 
 /**
- * Helper function to get user agent safely
+ * Display requirements notice.
  */
-function ayudawp_wpotweaks_get_user_agent() {
-    if (!isset($_SERVER['HTTP_USER_AGENT'])) {
-        return '';
-    }
-    return sanitize_text_field(wp_unslash($_SERVER['HTTP_USER_AGENT']));
+function dietpress_requirements_notice() {
+	echo '<div class="notice notice-error"><p>';
+	echo esc_html__( 'DietPress requires PHP 7.4+ and WordPress 6.3+.', 'wpo-tweaks' );
+	echo '</p></div>';
 }
 
 /**
- * Check if current page is login page
+ * Get the current request user agent, sanitized.
+ *
+ * Ported from the former wpo-tweaks codebase. Used by the script defer logic.
+ *
+ * @return string
  */
-function ayudawp_wpotweaks_is_login_page() {
-    if (!isset($GLOBALS['pagenow'])) {
-        return false;
-    }
-    return in_array($GLOBALS['pagenow'], array('wp-login.php', 'wp-register.php'));
+function dietpress_get_user_agent() {
+	if ( ! isset( $_SERVER['HTTP_USER_AGENT'] ) ) {
+		return '';
+	}
+	return sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) );
 }
 
-// Initialize the plugin
-new AyudaWP_WPO_Tweaks();
+// Load the plugin.
+require_once CORE_DIET_DIR . 'includes/class-core-diet.php';
+
+// Lifecycle hooks (must be in the main file).
+register_activation_hook( CORE_DIET_FILE, array( 'Core_Diet', 'activate' ) );
+register_deactivation_hook( CORE_DIET_FILE, array( 'Core_Diet', 'deactivate' ) );
+
+// Initialize.
+Core_Diet::get_instance();
