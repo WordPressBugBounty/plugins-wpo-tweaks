@@ -246,7 +246,6 @@ class Core_Diet_Tools {
 					'disable_feed_all'       => true,
 					'revisions_mode'         => 'limit',
 					'revisions_limit'        => 5,
-					'rest_api_mode'          => 'default',
 					'disable_sitemap'        => false,
 					// Widgets: safe cleanup.
 					'disable_welcome_panel'         => true,
@@ -292,7 +291,6 @@ class Core_Diet_Tools {
 					'revisions_mode'         => 'limit',
 					'revisions_limit'        => 3,
 					'autosave_interval'      => 300,
-					'rest_api_mode'          => 'authenticated',
 					'disable_sitemap'        => false,
 					'disable_lazy_loading'   => false,
 					// Widgets: aggressive cleanup.
@@ -349,7 +347,6 @@ class Core_Diet_Tools {
 					'disable_feed_all'       => true,
 					'revisions_mode'         => 'disable',
 					'autosave_interval'      => 0,
-					'rest_api_mode'          => 'authenticated',
 					'disable_sitemap'        => true,
 					'disable_lazy_loading'   => true,
 					'disable_fetchpriority'  => true,
@@ -1018,12 +1015,6 @@ class Core_Diet_Tools {
 			$totals['active_count']++;
 		} elseif ( 'limit' === $revisions_mode ) {
 			$totals['queries'] += 1;
-			$totals['active_count']++;
-		}
-		$totals['total_count']++;
-
-		$rest_api_mode = $settings->get( 'rest_api_mode' );
-		if ( 'default' !== $rest_api_mode ) {
 			$totals['active_count']++;
 		}
 		$totals['total_count']++;

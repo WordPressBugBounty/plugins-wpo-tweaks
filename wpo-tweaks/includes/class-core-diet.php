@@ -248,6 +248,11 @@ class Core_Diet {
 	 * if any of them was enabled, a flag is queued so admin_notices can
 	 * explain once that the protection reverted to the WordPress default and
 	 * point to Vigilant.
+	 *
+	 * DietPress 3.0.1 additionally retired the REST API access control
+	 * (rest_api_mode); it is pruned and reported here the same way, but as a
+	 * select it only counts as "enabled" when it was 'authenticated' or
+	 * 'disable'.
 	 */
 	private static function migrate_removed_security_settings() {
 		$removed = array(
@@ -276,6 +281,19 @@ class Core_Diet {
 				unset( $settings[ $key ] );
 				$changed = true;
 			}
+		}
+
+		// rest_api_mode (retired in 3.0.1) is a select, not a boolean: it only
+		// restricted access when set to 'authenticated' or 'disable', never the
+		// 'default' value. Handle it apart from the boolean toggles above so a
+		// stored 'default' does not trigger a false "you had this enabled" line.
+		if ( array_key_exists( 'rest_api_mode', $settings ) ) {
+			$mode = $settings['rest_api_mode'];
+			if ( 'authenticated' === $mode || 'disable' === $mode ) {
+				$active[] = __( 'Restrict REST API access', 'wpo-tweaks' );
+			}
+			unset( $settings['rest_api_mode'] );
+			$changed = true;
 		}
 
 		if ( $changed ) {

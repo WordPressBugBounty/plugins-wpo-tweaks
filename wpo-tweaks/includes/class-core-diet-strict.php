@@ -30,7 +30,6 @@ class Core_Diet_Strict {
 		$this->handle_heartbeat();
 		$this->handle_revisions();
 		$this->handle_autosave();
-		$this->handle_rest_api();
 
 		if ( $this->settings->is_enabled( 'disable_comments' ) ) {
 			$this->disable_comments();
@@ -592,73 +591,6 @@ class Core_Diet_Strict {
 			$settings['autosaveInterval'] = $interval;
 			return $settings;
 		} );
-	}
-
-	/**
-	 * Handle REST API access restrictions.
-	 */
-	private function handle_rest_api() {
-		$mode = $this->settings->get( 'rest_api_mode' );
-
-		if ( 'default' === $mode ) {
-			return;
-		}
-
-		if ( 'authenticated' === $mode ) {
-			add_filter( 'rest_authentication_errors', array( $this, 'restrict_rest_to_authenticated' ) );
-			return;
-		}
-
-		if ( 'disable' === $mode ) {
-			add_filter( 'rest_authentication_errors', array( $this, 'disable_rest_api' ) );
-		}
-	}
-
-	/**
-	 * Restrict REST API to authenticated users only.
-	 *
-	 * @param WP_Error|null|true $result Current auth result.
-	 * @return WP_Error|null|true
-	 */
-	public function restrict_rest_to_authenticated( $result ) {
-		if ( true === $result || is_wp_error( $result ) ) {
-			return $result;
-		}
-
-		if ( ! is_user_logged_in() ) {
-			return new WP_Error(
-				'rest_not_logged_in',
-				__( 'You must be logged in to access the REST API.', 'wpo-tweaks' ),
-				array( 'status' => 401 )
-			);
-		}
-
-		return $result;
-	}
-
-	/**
-	 * Disable REST API for non-administrator users.
-	 *
-	 * Administrators retain access so the block editor can function.
-	 *
-	 * @param WP_Error|null|true $result Current auth result.
-	 * @return WP_Error|null|true
-	 */
-	public function disable_rest_api( $result ) {
-		if ( true === $result || is_wp_error( $result ) ) {
-			return $result;
-		}
-
-		// Allow administrators to keep the block editor working.
-		if ( is_user_logged_in() && current_user_can( 'manage_options' ) ) {
-			return $result;
-		}
-
-		return new WP_Error(
-			'rest_disabled',
-			__( 'The REST API is disabled on this site.', 'wpo-tweaks' ),
-			array( 'status' => 403 )
-		);
 	}
 
 	/**

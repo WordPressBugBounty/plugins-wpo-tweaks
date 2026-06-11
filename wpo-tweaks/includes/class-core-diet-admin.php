@@ -544,18 +544,6 @@ class Core_Diet_Admin {
 			__( 'How often WordPress auto-saves post drafts in the editor. Disabling it stops auto-saves entirely.', 'wpo-tweaks' )
 		);
 
-		// REST API.
-		$this->render_select_card(
-			'rest_api_mode',
-			__( 'REST API access', 'wpo-tweaks' ),
-			array(
-				'default'       => __( 'Default (public access)', 'wpo-tweaks' ),
-				'authenticated' => __( 'Require authentication', 'wpo-tweaks' ),
-				'disable'       => __( 'Disable completely (not recommended)', 'wpo-tweaks' ),
-			),
-			__( 'Restricting access improves security but may break Gutenberg, contact forms, or headless setups.', 'wpo-tweaks' )
-		);
-
 		// --- Advanced section (toggles only, with toggle-all) ---
 		$this->render_section_title( __( 'Advanced', 'wpo-tweaks' ) );
 

@@ -118,7 +118,6 @@ class Core_Diet_Settings {
 			'revisions_limit'           => 3,
 			'autosave_interval'         => 60,
 			'enable_classic_widgets'    => false,
-			'rest_api_mode'             => 'default',
 			'disable_sitemap'           => false,
 			'disable_lazy_loading'      => false,
 			'disable_fetchpriority'     => false,
@@ -324,12 +323,6 @@ class Core_Diet_Settings {
 			$sanitized['autosave_interval'] = in_array( $interval, $autosave_allowed, true ) ? $interval : 60;
 		}
 
-		// --- REST API mode (safelist) ---
-		$rest_allowed = array( 'default', 'authenticated', 'disable' );
-		if ( isset( $input['rest_api_mode'] ) && in_array( $input['rest_api_mode'], $rest_allowed, true ) ) {
-			$sanitized['rest_api_mode'] = $input['rest_api_mode'];
-		}
-
 		// --- Third-party dashboard widgets (array of IDs) ---
 		if ( isset( $input['disable_dashboard_third_party'] ) && is_array( $input['disable_dashboard_third_party'] ) ) {
 			$sanitized['disable_dashboard_third_party'] = array_map( 'sanitize_key', $input['disable_dashboard_third_party'] );
@@ -423,7 +416,6 @@ class Core_Diet_Settings {
 					'revisions_limit',
 					'autosave_interval',
 					'enable_classic_widgets',
-					'rest_api_mode',
 					'disable_sitemap',
 					'disable_lazy_loading',
 					'disable_fetchpriority',
@@ -502,7 +494,6 @@ class Core_Diet_Settings {
 			'revisions_mode'            => __( 'Post revisions', 'wpo-tweaks' ),
 			'autosave_interval'         => __( 'Autosave interval', 'wpo-tweaks' ),
 			'enable_classic_widgets'    => __( 'Restore classic widget editor', 'wpo-tweaks' ),
-			'rest_api_mode'             => __( 'REST API access', 'wpo-tweaks' ),
 			'disable_sitemap'           => __( 'Disable WordPress XML sitemap', 'wpo-tweaks' ),
 			'disable_lazy_loading'      => __( 'Disable native lazy loading', 'wpo-tweaks' ),
 			'disable_fetchpriority'     => __( 'Disable fetchpriority attribute', 'wpo-tweaks' ),

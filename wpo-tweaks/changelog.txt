@@ -3,6 +3,9 @@ DietPress — Full changelog
 For each release, see the entries below. The latest version is always at the top.
 The current release notes also live in readme.txt under "== Changelog ==".
 
+= 3.0.1 =
+* Fix: removed the "REST API access" control from the Strict tab. Restricting the REST API is a security feature, not a performance one, and it overlapped with dedicated security plugins, with which it could also clash on the same `rest_authentication_errors` filter. REST API access now follows default WordPress behavior; manage it from your security plugin instead, such as our free Vigilant. If you had set it to "Require authentication" or "Disable", that restriction no longer applies after updating, and DietPress shows a one-time notice pointing you to Vigilant.
+
 = 3.0.0 =
 * New: the plugin is now DietPress (formerly "Zero Config Performance Optimization"), fully configurable from a new top-level "DietPress" admin menu with its own settings page.
 * New: a complete, risk-based set of options to put WordPress on a diet (Light, Moderate, Strict and Widgets), covering emojis, RSD/WLW, shortlinks, self-pingbacks, oEmbed, jQuery Migrate, Dashicons, REST API control, granular RSS feeds, comments, Heartbeat, revisions, autosave, content types, and dashboard/sidebar/block/Customizer widgets. Security-related toggles (XML-RPC, pingbacks, login errors, Application Passwords, version hiding) are intentionally not included: they belong in a security plugin, like our free Vigilant, and DietPress tells you once if you had any of them enabled.

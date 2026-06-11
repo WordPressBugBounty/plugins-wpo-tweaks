@@ -61,7 +61,7 @@ class Core_Diet_Promo_Banner {
 				'icon'        => 'dashicons-shield',
 				'title'       => __( 'Complete WordPress security', 'wpo-tweaks' ),
 				'description' => __( 'All-in-one security plugin: firewall, login protection, security headers, 2FA, file integrity monitoring, and activity logging.', 'wpo-tweaks' ),
-				'button'      => __( 'Install Vigilante', 'wpo-tweaks' ),
+				'button'      => __( 'Install Vigilant', 'wpo-tweaks' ),
 			),
 			'gozer'              => array(
 				'icon'        => 'dashicons-admin-network',
@@ -88,10 +88,10 @@ class Core_Diet_Promo_Banner {
 				'button'      => __( 'Install AI Content Signals', 'wpo-tweaks' ),
 			),
 			'wpo-tweaks'         => array(
-				'icon'        => 'dashicons-performance',
-				'title'       => __( 'Speed up your WordPress', 'wpo-tweaks' ),
-				'description' => __( 'Comprehensive performance optimizations: critical CSS, lazy loading, cache rules, and 30+ tweaks with zero configuration.', 'wpo-tweaks' ),
-				'button'      => __( 'Install Zero Config Performance', 'wpo-tweaks' ),
+				'icon'        => 'dashicons-food',
+				'title'       => __( 'Put WordPress on a diet', 'wpo-tweaks' ),
+				'description' => __( 'Disable bloat and apply 30+ performance tweaks (critical CSS, lazy loading, cache rules) with zero configuration for a leaner, faster site.', 'wpo-tweaks' ),
+				'button'      => __( 'Install DietPress', 'wpo-tweaks' ),
 			),
 			'no-gutenberg'       => array(
 				'icon'        => 'dashicons-edit-page',
@@ -117,11 +117,11 @@ class Core_Diet_Promo_Banner {
 				'description' => __( 'Remove millions of completed, failed, and old actions from WooCommerce Action Scheduler. Reduce database size instantly.', 'wpo-tweaks' ),
 				'button'      => __( 'Install Scheduler Cleaner', 'wpo-tweaks' ),
 			),
-			'native-sitemap-customizer' => array(
-				'icon'        => 'dashicons-networking',
-				'title'       => __( 'Customize your sitemap', 'wpo-tweaks' ),
-				'description' => __( 'Control WordPress native sitemap: exclude post types, taxonomies, specific posts, and authors. No bloat, just options.', 'wpo-tweaks' ),
-				'button'      => __( 'Install Sitemap Customizer', 'wpo-tweaks' ),
+			'native-aeo-pack'    => array(
+				'icon'        => 'dashicons-embed-generic',
+				'title'       => __( 'All-in-one native SEO', 'wpo-tweaks' ),
+				'description' => __( 'Meta tags, Open Graph, JSON-LD schema, robots directives and native sitemap control in one lightweight plugin built on WordPress core features.', 'wpo-tweaks' ),
+				'button'      => __( 'Install Native SEO Pack', 'wpo-tweaks' ),
 			),
 			'post-visibility-control' => array(
 				'icon'        => 'dashicons-hidden',
@@ -183,17 +183,17 @@ class Core_Diet_Promo_Banner {
 				'description' => __( 'Add your own custom feeds and links to the news and events dashboard widget and replace WordPress default one.', 'wpo-tweaks' ),
 				'button'      => __( 'Install Periscope', 'wpo-tweaks' ),
 			),
-			'noindexer'          => array(
-				'icon'        => 'dashicons-editor-unlink',
-				'title'       => __( 'Control search indexing', 'wpo-tweaks' ),
-				'description' => __( 'Tell search engines what not to index. Apply noindex per post, page, or entire post types with simple override controls.', 'wpo-tweaks' ),
-				'button'      => __( 'Install NoIndexer', 'wpo-tweaks' ),
+			'eu-withdrawal-compliance' => array(
+				'icon'        => 'dashicons-undo',
+				'title'       => __( 'EU withdrawal compliance', 'wpo-tweaks' ),
+				'description' => __( 'Add the EU online withdrawal function required by Directive 2023/2673 from June 2026. Public form, My Account button, email notice and SHA-256 receipt hash.', 'wpo-tweaks' ),
+				'button'      => __( 'Install EU Withdrawal', 'wpo-tweaks' ),
 			),
-			'core-diet'          => array(
-				'icon'        => 'dashicons-food',
-				'title'       => __( 'Reduce WordPress Fat', 'wpo-tweaks' ),
-				'description' => __( 'Put your WordPress on a diet. Disable unnecessary default features to improve performance and reduce bloat.', 'wpo-tweaks' ),
-				'button'      => __( 'Install DietPress', 'wpo-tweaks' ),
+			'terms-conditions-consent-log' => array(
+				'icon'        => 'dashicons-yes-alt',
+				'title'       => __( 'Tamper-evident consent log', 'wpo-tweaks' ),
+				'description' => __( 'GDPR art. 7.1 audit trail for any acceptance checkbox: WooCommerce checkout, CF7, WPForms, comments and shortcode. Timestamp, IP, version and SHA-256 sealed text.', 'wpo-tweaks' ),
+				'button'      => __( 'Install Consent Log', 'wpo-tweaks' ),
 			),
 		);
 	}
