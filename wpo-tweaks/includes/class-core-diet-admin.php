@@ -50,7 +50,7 @@ class Core_Diet_Admin {
 	}
 
 	/**
-	 * Register the admin menu page under Tools.
+	 * Register the top-level DietPress admin menu page.
 	 */
 	public function add_admin_menu() {
 		add_menu_page(

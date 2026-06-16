@@ -68,6 +68,12 @@ class Core_Diet_Perf_Images {
 	 * @since 2.3.0 Added existence checks to avoid conflicts with core
 	 */
 	public function core_diet_optimize_attachment_image( $attr, $attachment, $size ) {
+		// Leave images untouched inside page builder editors and previews,
+		// where the builder manipulates the DOM and our attributes interfere.
+		if ( $this->core_diet_is_builder_or_preview() ) {
+			return $attr;
+		}
+
 		// First image: high priority, no lazy loading
 		if ( ! $this->first_image_found ) {
 			$this->first_image_found = true;
@@ -115,7 +121,7 @@ class Core_Diet_Perf_Images {
 	 * @since 2.3.0 Added existence checks to avoid conflicts with core
 	 */
 	public function core_diet_optimize_content_images( $content ) {
-		if ( is_admin() || is_feed() ) {
+		if ( is_admin() || is_feed() || $this->core_diet_is_builder_or_preview() ) {
 			return $content;
 		}
 
@@ -127,8 +133,13 @@ class Core_Diet_Perf_Images {
 				$image_count++;
 				$attrs = $matches[1];
 
-				$is_logo = ( strpos( $attrs, 'site-logo' ) !== false ) ||
-						  ( strpos( $attrs, 'custom-logo' ) !== false );
+				$is_logo = false;
+				foreach ( $this->core_diet_get_logo_class_patterns() as $logo_pattern ) {
+					if ( '' !== $logo_pattern && strpos( $attrs, $logo_pattern ) !== false ) {
+						$is_logo = true;
+						break;
+					}
+				}
 
 				// First image or logo: no lazy loading, high priority
 				if ( ( $image_count === 1 && ! $this->first_image_found ) || $is_logo ) {
@@ -145,6 +156,12 @@ class Core_Diet_Perf_Images {
 					// Remove lazy loading if present on first image
 					$attrs = preg_replace( '/\s*loading=["\'][^"\']*["\']/', '', $attrs );
 
+					return '<img' . $attrs . '>';
+				}
+
+				// Leave images already handled by another lazy-load solution
+				// (sliders, captchas, WC placeholder, skip-lazy markers) alone.
+				if ( $this->core_diet_img_skips_lazy( $attrs ) ) {
 					return '<img' . $attrs . '>';
 				}
 
@@ -230,13 +247,17 @@ class Core_Diet_Perf_Images {
 					return $img_tag;
 				}
 
-				// Skip external images and SVGs
-				if ( ! $this->core_diet_is_local_image( $src ) || $this->core_diet_is_svg_image( $src ) ) {
+				// Skip external images.
+				if ( ! $this->core_diet_is_local_image( $src ) ) {
 					return $img_tag;
 				}
 
-				// Get image dimensions
-				$dimensions = $this->core_diet_get_image_dimensions( $src );
+				// Read dimensions: SVG from its markup, raster from metadata/file.
+				if ( $this->core_diet_is_svg_image( $src ) ) {
+					$dimensions = $this->core_diet_get_svg_dimensions( $src );
+				} else {
+					$dimensions = $this->core_diet_get_image_dimensions( $src );
+				}
 
 				if ( ! $dimensions ) {
 					return $img_tag;
@@ -266,13 +287,17 @@ class Core_Diet_Perf_Images {
 			return $img_tag;
 		}
 
-		// Skip external images and SVGs
-		if ( ! $this->core_diet_is_local_image( $src ) || $this->core_diet_is_svg_image( $src ) ) {
+		// Skip external images.
+		if ( ! $this->core_diet_is_local_image( $src ) ) {
 			return $img_tag;
 		}
 
-		// Get image dimensions
-		$dimensions = $this->core_diet_get_image_dimensions( $src );
+		// Read dimensions: SVG from its markup, raster from metadata/file.
+		if ( $this->core_diet_is_svg_image( $src ) ) {
+			$dimensions = $this->core_diet_get_svg_dimensions( $src );
+		} else {
+			$dimensions = $this->core_diet_get_image_dimensions( $src );
+		}
 
 		if ( ! $dimensions ) {
 			return $img_tag;
@@ -368,6 +393,215 @@ class Core_Diet_Perf_Images {
 				'width'  => $image_info[0],
 				'height' => $image_info[1],
 			);
+		}
+
+		return false;
+	}
+
+	/**
+	 * Whether the current request is a page builder editor or a preview.
+	 *
+	 * Builders rewrite the DOM as the user edits, so injecting lazy/priority
+	 * attributes there causes flicker or broken previews.
+	 *
+	 * @since 3.1.0
+	 * @return bool
+	 */
+	private function core_diet_is_builder_or_preview() {
+		if ( function_exists( 'is_preview' ) && is_preview() ) {
+			return true;
+		}
+
+		// Read-only detection of the active page builder; no form is processed.
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( isset( $_GET['fl_builder'] ) ) {
+			return true;
+		}
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( isset( $_GET['ct_builder'] ) ) {
+			return true;
+		}
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( isset( $_GET['et_fb'] ) && ! empty( $_GET['et_fb'] ) ) {
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Substrings used to detect the site logo image in content.
+	 *
+	 * The logo is treated like the first image (high priority, never lazy).
+	 *
+	 * @since 3.1.0
+	 * @return array
+	 */
+	private function core_diet_get_logo_class_patterns() {
+		/**
+		 * Filter the substrings used to detect the site logo image.
+		 *
+		 * @since 3.1.0
+		 * @param array $patterns Substrings matched against the <img> attributes.
+		 */
+		return (array) apply_filters( 'dietpress_logo_class_patterns', array( 'site-logo', 'custom-logo' ) );
+	}
+
+	/**
+	 * Whether an <img> is already managed by another lazy-load solution.
+	 *
+	 * Mirrors the markers used by popular sliders, captchas and lazy-load
+	 * plugins so we never double-process those images. Covers the de facto
+	 * `skip-lazy` / `data-skip-lazy` opt-out attributes too.
+	 *
+	 * @since 3.1.0
+	 * @param string $attrs The inner attributes of the <img> tag.
+	 * @return bool
+	 */
+	private function core_diet_img_skips_lazy( $attrs ) {
+		$markers = array(
+			'data-src=',
+			'data-no-lazy',
+			'data-lazy-original',
+			'data-lazy-src',
+			'data-lazysrc',
+			'data-lazyload',
+			'data-bgposition',
+			'data-envira-src',
+			'data-srcset',
+			'fullurl=',
+			'lazy-slider-img',
+			'skip-lazy',
+			'class="ls-l',
+			'class="ls-bg',
+			'soliloquy-image',
+			'loading="eager"',
+			"loading='eager'",
+			'swatch-img',
+			'data-height-percentage',
+			'data-large_image',
+			'avia-bg-style-fixed',
+			'image-compare__',
+			'/wpcf7_captcha/',
+			'timthumb.php?src',
+			'woocommerce/assets/images/placeholder.png',
+		);
+
+		foreach ( $markers as $marker ) {
+			if ( strpos( $attrs, $marker ) !== false ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Read intrinsic dimensions from a local SVG file.
+	 *
+	 * Parses the opening <svg> tag for width/height, falling back to viewBox
+	 * and computing the missing side from the aspect ratio. getimagesize()
+	 * does not support SVG, so these would otherwise be skipped.
+	 *
+	 * @since 3.1.0
+	 * @param string $src Image URL.
+	 * @return array|false { width, height } or false when undeterminable.
+	 */
+	private function core_diet_get_svg_dimensions( $src ) {
+		$cache_key   = 'core_diet_svg_dims_' . md5( $src );
+		$cached_dims = wp_cache_get( $cache_key );
+
+		if ( $cached_dims !== false ) {
+			return $cached_dims;
+		}
+
+		$dimensions = false;
+		$file_path  = $this->core_diet_resolve_local_path( $src );
+
+		if ( $file_path ) {
+			global $wp_filesystem;
+
+			if ( empty( $wp_filesystem ) ) {
+				require_once ABSPATH . 'wp-admin/includes/file.php';
+				WP_Filesystem();
+			}
+
+			if ( $wp_filesystem && $wp_filesystem->exists( $file_path ) && $wp_filesystem->is_readable( $file_path ) ) {
+				$contents = $wp_filesystem->get_contents( $file_path );
+
+				if ( $contents && preg_match( '/<svg\b[^>]*>/is', $contents, $svg_tag ) ) {
+					$tag    = $svg_tag[0];
+					$width  = 0.0;
+					$height = 0.0;
+
+					if ( preg_match( '/\bwidth=["\']\s*([\d.]+)(?:px)?\s*["\']/i', $tag, $w ) ) {
+						$width = (float) $w[1];
+					}
+					if ( preg_match( '/\bheight=["\']\s*([\d.]+)(?:px)?\s*["\']/i', $tag, $h ) ) {
+						$height = (float) $h[1];
+					}
+
+					if ( ( $width <= 0 || $height <= 0 ) && preg_match( '/\bviewBox=["\']\s*[\d.-]+\s+[\d.-]+\s+([\d.]+)\s+([\d.]+)\s*["\']/i', $tag, $vb ) ) {
+						$vb_w = (float) $vb[1];
+						$vb_h = (float) $vb[2];
+
+						if ( $vb_w > 0 && $vb_h > 0 ) {
+							if ( $width > 0 && $height <= 0 ) {
+								$height = $width * ( $vb_h / $vb_w );
+							} elseif ( $height > 0 && $width <= 0 ) {
+								$width = $height * ( $vb_w / $vb_h );
+							} else {
+								$width  = $vb_w;
+								$height = $vb_h;
+							}
+						}
+					}
+
+					if ( $width > 0 && $height > 0 ) {
+						$dimensions = array(
+							'width'  => (int) round( $width ),
+							'height' => (int) round( $height ),
+						);
+					}
+				}
+			}
+		}
+
+		wp_cache_set( $cache_key, $dimensions, '', DAY_IN_SECONDS );
+
+		return $dimensions;
+	}
+
+	/**
+	 * Resolve a local image URL to an absolute, readable file path.
+	 *
+	 * @since 3.1.0
+	 * @param string $src Image URL.
+	 * @return string|false Absolute path or false when not a local file.
+	 */
+	private function core_diet_resolve_local_path( $src ) {
+		$upload_dir = wp_upload_dir();
+
+		if ( strpos( $src, $upload_dir['baseurl'] ) === 0 ) {
+			$file_path = str_replace( $upload_dir['baseurl'], $upload_dir['basedir'], $src );
+		} elseif ( strpos( $src, '/wp-content/' ) === 0 ) {
+			$file_path = ABSPATH . ltrim( $src, '/' );
+		} else {
+			return false;
+		}
+
+		// Confine the resolved path to the WordPress install or uploads dir, so
+		// a crafted src (e.g. "/wp-content/../../secret") cannot escape upward.
+		$real = realpath( $file_path );
+		if ( false === $real ) {
+			return false;
+		}
+
+		$bases = array_filter( array( realpath( ABSPATH ), realpath( $upload_dir['basedir'] ) ) );
+		foreach ( $bases as $base ) {
+			if ( strpos( $real, $base ) === 0 ) {
+				return $real;
+			}
 		}
 
 		return false;

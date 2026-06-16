@@ -24,6 +24,15 @@ class Core_Diet_Perf_Scripts {
 	private $defer_eligibility_cache = array();
 
 	/**
+	 * Compiled regex matching the URL patterns excluded from defer, or an
+	 * empty string when there are no patterns. Built once per request from
+	 * the default list plus the `dietpress_skip_defer_script_patterns` filter.
+	 *
+	 * @var string|null
+	 */
+	private $defer_skip_regex = null;
+
+	/**
 	 * @param Core_Diet_Settings $settings Settings instance.
 	 */
 	public function __construct( $settings ) {
@@ -90,6 +99,17 @@ class Core_Diet_Perf_Scripts {
 		// Don't defer inline scripts
 		if ( strpos( $tag, 'src=' ) === false ) {
 			return $tag;
+		}
+
+		// Don't defer scripts whose source URL matches a known-problematic
+		// pattern. The dependency-chain analysis below catches scripts WordPress
+		// knows about; this covers third-party widgets that must run before
+		// DOMContentLoaded (reCAPTCHA, Typekit, HubSpot forms, payment SDKs, etc.)
+		// whose handles are unpredictable but whose URLs are stable.
+		if ( preg_match( '/\ssrc=["\']([^"\']+)["\']/', $tag, $src_match ) ) {
+			if ( $this->core_diet_src_matches_skip_pattern( $src_match[1] ) ) {
+				return $tag;
+			}
 		}
 
 		// Don't defer scripts that are already async
@@ -190,6 +210,105 @@ class Core_Diet_Perf_Scripts {
 		}
 
 		return false;
+	}
+
+	/**
+	 * Whether a script source URL matches a pattern that must not be deferred.
+	 *
+	 * @since 3.1.0
+	 * @param string $src Script source URL.
+	 * @return bool
+	 */
+	private function core_diet_src_matches_skip_pattern( $src ) {
+		$regex = $this->core_diet_get_defer_skip_regex();
+
+		if ( '' === $regex ) {
+			return false;
+		}
+
+		return 1 === preg_match( $regex, $src );
+	}
+
+	/**
+	 * Build (and cache per request) the combined regex of URL patterns that
+	 * must never be deferred.
+	 *
+	 * @since 3.1.0
+	 * @return string Regex with delimiters, or '' when there are no patterns.
+	 */
+	private function core_diet_get_defer_skip_regex() {
+		if ( null !== $this->defer_skip_regex ) {
+			return $this->defer_skip_regex;
+		}
+
+		/**
+		 * Filter the URL patterns excluded from the defer pass.
+		 *
+		 * Each entry is a regular expression fragment (without delimiters)
+		 * matched, case-insensitively, against the script's `src`. Use it to
+		 * stop deferring third-party scripts that must execute before
+		 * DOMContentLoaded but whose handles are unpredictable.
+		 *
+		 * @since 3.1.0
+		 * @param array $patterns Regex fragments matched against the script src.
+		 */
+		$patterns = (array) apply_filters( 'dietpress_skip_defer_script_patterns', $this->core_diet_get_default_defer_skip_patterns() );
+
+		$patterns = array_filter( array_map( 'trim', $patterns ) );
+
+		$this->defer_skip_regex = empty( $patterns ) ? '' : '#(?:' . implode( '|', $patterns ) . ')#i';
+
+		return $this->defer_skip_regex;
+	}
+
+	/**
+	 * Default list of script-src URL patterns that must not be deferred.
+	 *
+	 * Curated from real-world third-party scripts that break when deferred
+	 * (widgets, captchas, payment SDKs) plus the WordPress dependency scripts
+	 * the chain analysis already protects, kept here as a belt-and-braces net.
+	 *
+	 * @since 3.1.0
+	 * @return array
+	 */
+	private function core_diet_get_default_defer_skip_patterns() {
+		return array(
+			'gist\.github\.com',
+			'content\.jwplatform\.com',
+			'js\.hsforms\.net',
+			'js-eu1\.hsforms\.net',
+			'www\.uplaunch\.com',
+			'google\.com/recaptcha',
+			'widget\.reviews\.co\.uk',
+			'widget\.reviews\.io',
+			'verify\.authorize\.net/anetseal',
+			'webfont(\.min)?\.js',
+			'app\.mailerlite\.com',
+			'static\.mailerlite\.com/data/(.*)\.js',
+			'simplybook\.(.*)/v2/widget/widget\.js',
+			'cdn\.voxpow\.com/static/libs/v1/(.*)\.js',
+			'cdn\.voxpow\.com/media/trackers/js/(.*)\.js',
+			'use\.typekit\.net',
+			'use\.typekit\.com',
+			'www\.idxhome\.com',
+			'www\.paypal\.com/sdk/js',
+			'yanovis(.*)\.js',
+			'glide\.min\.js',
+			'kirki/assets/webfont\.js',
+			'/api/scripts/lb_cs\.js',
+			'js\.hscta\.net/cta/current\.js',
+			'widget\.refari\.co',
+			'player\.vdocipher\.com',
+			'check-webp(\.min)?\.js',
+			'/wp-includes/js/dist/i18n(\.min)?\.js',
+			'/wp-includes/js/dist/hooks(\.min)?\.js',
+			'/wp-includes/js/dist/url(\.min)?\.js',
+			'/wp-includes/js/dist/api-fetch(\.min)?\.js',
+			'/wp-includes/js/dist/vendor/lodash(\.min)?\.js',
+			'/wp-includes/js/dist/vendor/wp-polyfill(\.min)?\.js',
+			'wpfront-notification-bar(.*)\.js',
+			'oxygen/component-framework/vendor/aos/aos\.js',
+		);
 	}
 
 	/**

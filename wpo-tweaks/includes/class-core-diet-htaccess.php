@@ -295,6 +295,23 @@ class Core_Diet_Htaccess {
 	private function core_diet_get_htaccess_rules() {
 		$lines = array();
 
+		// MIME types and charset. Always emitted with the master toggle on:
+		// without an explicit AddType, older Apache builds serve AVIF as
+		// application/octet-stream (so the ExpiresByType rule below never
+		// applies). The charset is taken from the site option, defaulting to
+		// UTF-8, and restricted to a safe token.
+		$lines[] = '# MIME types and charset';
+		$lines[] = '<IfModule mod_mime.c>';
+		$lines[] = 'AddType image/avif .avif';
+		$lines[] = 'AddType image/avif-sequence .avifs';
+		$lines[] = '</IfModule>';
+		$charset = preg_replace( '/[^A-Za-z0-9_-]/', '', (string) get_bloginfo( 'charset' ) );
+		if ( '' === $charset ) {
+			$charset = 'UTF-8';
+		}
+		$lines[] = 'AddDefaultCharset ' . $charset;
+		$lines[] = '';
+
 		// Expires Headers.
 		if ( $this->settings->is_enabled( 'htaccess_expires' ) ) {
 			$lines[] = '# Browser Caching with Expires Headers';

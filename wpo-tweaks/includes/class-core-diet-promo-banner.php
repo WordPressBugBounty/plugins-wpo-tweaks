@@ -118,10 +118,10 @@ class Core_Diet_Promo_Banner {
 				'button'      => __( 'Install Scheduler Cleaner', 'wpo-tweaks' ),
 			),
 			'native-aeo-pack'    => array(
-				'icon'        => 'dashicons-embed-generic',
-				'title'       => __( 'All-in-one native SEO', 'wpo-tweaks' ),
-				'description' => __( 'Meta tags, Open Graph, JSON-LD schema, robots directives and native sitemap control in one lightweight plugin built on WordPress core features.', 'wpo-tweaks' ),
-				'button'      => __( 'Install Native SEO Pack', 'wpo-tweaks' ),
+				'icon'        => 'dashicons-visibility',
+				'title'       => __( 'All-in-one SEO, AEO & GEO', 'wpo-tweaks' ),
+				'description' => __( 'Meta tags, Open Graph, JSON-LD schema, robots and native sitemap control: the clean metadata search engines and AI assistants read, built on WordPress core.', 'wpo-tweaks' ),
+				'button'      => __( 'Install Visibility', 'wpo-tweaks' ),
 			),
 			'post-visibility-control' => array(
 				'icon'        => 'dashicons-hidden',

@@ -397,10 +397,31 @@ class Core_Diet_Settings {
 	public static function get_tab_keys( $tab ) {
 		switch ( $tab ) {
 			case 'light':
-				return array_keys( self::get_fields( 'light' ) );
+				// Diet fields plus the performance toggles rendered in this tab,
+				// so per-tab "Restore defaults" resets them too.
+				return array_merge(
+					array_keys( self::get_fields( 'light' ) ),
+					array(
+						'optimize_google_fonts',
+						'resource_hints',
+						'preload_assets',
+						'preload_logo',
+						'optimize_feeds',
+						'disable_pdf_previews',
+						'clean_transients',
+					)
+				);
 
 			case 'moderate':
-				return array_keys( self::get_fields( 'moderate' ) );
+				return array_merge(
+					array_keys( self::get_fields( 'moderate' ) ),
+					array(
+						'enhance_images',
+						'add_image_dimensions',
+						'optimize_comment_queries',
+						'optimize_main_queries',
+					)
+				);
 
 			case 'strict':
 				return array(
@@ -424,6 +445,16 @@ class Core_Diet_Settings {
 					'disable_internal_search',
 					'disable_posts_content_type',
 					'disable_pages_content_type',
+					'defer_js',
+					'critical_css_inline',
+					'critical_css_defer',
+					'htaccess_rules',
+					'htaccess_expires',
+					'htaccess_gzip',
+					'htaccess_brotli',
+					'htaccess_cache_headers',
+					'htaccess_cors_fonts',
+					'htaccess_keepalive',
 				);
 
 			case 'widgets':
@@ -504,6 +535,30 @@ class Core_Diet_Settings {
 			'disable_posts_content_type' => __( 'Disable Posts content type', 'wpo-tweaks' ),
 			'disable_pages_content_type' => __( 'Disable Pages content type', 'wpo-tweaks' ),
 			'disable_customizer_widgets' => __( 'Disable Widgets panel in Customizer', 'wpo-tweaks' ),
+
+			// Performance options (rendered across the Light, Moderate and
+			// Strict tabs). Labels match the toggle cards in the admin UI.
+			'optimize_google_fonts'      => __( 'Optimize Google Fonts loading', 'wpo-tweaks' ),
+			'resource_hints'             => __( 'Add resource hints (preconnect and dns-prefetch)', 'wpo-tweaks' ),
+			'preload_assets'             => __( 'Preload theme stylesheet and critical fonts', 'wpo-tweaks' ),
+			'preload_logo'               => __( 'Preload the site logo (LCP)', 'wpo-tweaks' ),
+			'optimize_feeds'             => __( 'Optimize RSS feeds', 'wpo-tweaks' ),
+			'disable_pdf_previews'       => __( 'Disable PDF thumbnail previews', 'wpo-tweaks' ),
+			'clean_transients'           => __( 'Clean expired transients daily', 'wpo-tweaks' ),
+			'enhance_images'             => __( 'Enhance image loading attributes', 'wpo-tweaks' ),
+			'add_image_dimensions'       => __( 'Add missing image dimensions (CLS)', 'wpo-tweaks' ),
+			'optimize_comment_queries'   => __( 'Optimize comment queries', 'wpo-tweaks' ),
+			'optimize_main_queries'      => __( 'Optimize main queries', 'wpo-tweaks' ),
+			'defer_js'                   => __( 'Defer JavaScript parsing', 'wpo-tweaks' ),
+			'critical_css_inline'        => __( 'Inline critical CSS in head', 'wpo-tweaks' ),
+			'critical_css_defer'         => __( 'Defer non-critical stylesheets (experimental)', 'wpo-tweaks' ),
+			'htaccess_rules'             => __( 'Write server performance rules to .htaccess', 'wpo-tweaks' ),
+			'htaccess_expires'           => __( 'Browser caching (mod_expires)', 'wpo-tweaks' ),
+			'htaccess_gzip'              => __( 'GZIP compression (mod_deflate)', 'wpo-tweaks' ),
+			'htaccess_brotli'            => __( 'Brotli compression (mod_brotli)', 'wpo-tweaks' ),
+			'htaccess_cache_headers'     => __( 'Cache-Control, Vary and ETag headers (mod_headers)', 'wpo-tweaks' ),
+			'htaccess_cors_fonts'        => __( 'Cross-origin font loading (CORS)', 'wpo-tweaks' ),
+			'htaccess_keepalive'         => __( 'Keep-alive connections', 'wpo-tweaks' ),
 		);
 
 		$all_labels = array_merge( $all_labels, $extra_labels );

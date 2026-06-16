@@ -43,7 +43,7 @@ class Core_Diet_Tools {
 		$settings = get_option( Core_Diet_Settings::OPTION_NAME, Core_Diet_Settings::get_defaults() );
 
 		$export = array(
-			'plugin'   => 'core-diet',
+			'plugin'   => 'dietpress',
 			'version'  => CORE_DIET_VERSION,
 			'exported' => current_time( 'c' ),
 			'settings' => $settings,
@@ -95,8 +95,11 @@ class Core_Diet_Tools {
 			wp_send_json_error( __( 'Invalid JSON format.', 'wpo-tweaks' ) );
 		}
 
-		// Validate it's a DietPress export.
-		if ( ! isset( $data['plugin'] ) || 'core-diet' !== $data['plugin'] || ! isset( $data['settings'] ) ) {
+		// Validate it's a DietPress export. The legacy 'core-diet' id (used by
+		// exports made before 3.1.0 and by the retired standalone plugin) is
+		// still accepted for backward compatibility.
+		$valid_ids = array( 'dietpress', 'core-diet' );
+		if ( ! isset( $data['plugin'] ) || ! in_array( $data['plugin'], $valid_ids, true ) || ! isset( $data['settings'] ) ) {
 			wp_send_json_error( __( 'This file is not a valid DietPress export.', 'wpo-tweaks' ) );
 		}
 
@@ -449,6 +452,31 @@ class Core_Diet_Tools {
 			'disable_internal_search' => array( 0, 0, 2 ),
 			'disable_posts_content_type' => array( 0, 0, 0 ),
 			'disable_pages_content_type' => array( 0, 0, 0 ),
+
+			// Performance options (on by default). Conservative estimates:
+			// values only where there is a real per-page reduction; the rest
+			// reorder or speed up delivery without changing request/query counts.
+			'optimize_google_fonts'      => array( 0, 0, 0 ),
+			'resource_hints'             => array( 0, 0, 0 ),
+			'preload_assets'             => array( 0, 0, 0 ),
+			'preload_logo'               => array( 0, 0, 0 ),
+			'optimize_feeds'             => array( 0, 0, 0 ),
+			'disable_pdf_previews'       => array( 0, 0, 0 ),
+			'clean_transients'           => array( 0, 0, 2 ),
+			'enhance_images'             => array( 2, 0, 0 ),
+			'add_image_dimensions'       => array( 0, 0, 0 ),
+			'optimize_comment_queries'   => array( 0, 0, 1 ),
+			'optimize_main_queries'      => array( 0, 0, 1 ),
+			'defer_js'                   => array( 0, 0, 0 ),
+			'critical_css_inline'        => array( 0, 0, 0 ),
+			'critical_css_defer'         => array( 0, 0, 0 ),
+			'htaccess_rules'             => array( 0, 0, 0 ),
+			'htaccess_expires'           => array( 0, 0, 0 ),
+			'htaccess_gzip'              => array( 0, 0, 0 ),
+			'htaccess_brotli'            => array( 0, 0, 0 ),
+			'htaccess_cache_headers'     => array( 0, 0, 0 ),
+			'htaccess_cors_fonts'        => array( 0, 0, 0 ),
+			'htaccess_keepalive'         => array( 0, 0, 0 ),
 		);
 	}
 
@@ -934,51 +962,8 @@ class Core_Diet_Tools {
 		$settings = Core_Diet_Settings::get_instance();
 
 		// Estimated savings per option: array( requests, kb, queries ).
-		$estimates = array(
-			// Light tab.
-			'disable_emojis'         => array( 2, 16.0, 0 ),
-			'disable_rsd_link'       => array( 0, 0.1, 0 ),
-			'disable_wlw_manifest'   => array( 0, 0.1, 0 ),
-			'disable_shortlink'      => array( 0, 0.1, 0 ),
-			'disable_self_pingbacks' => array( 0, 0, 1 ),
-			'disable_capital_p'      => array( 0, 0, 0 ),
-			'disable_update_notices' => array( 0, 0, 0 ),
-			'disable_email_check'    => array( 0, 0, 1 ),
-			'disable_post_by_email'  => array( 0, 0, 0 ),
-			'disable_comment_pagination' => array( 0, 0, 0 ),
-			'disable_wp_logo_admin_bar'  => array( 0, 0, 0 ),
-			'disable_image_editor'   => array( 0, 0, 0 ),
-
-			// Moderate tab.
-			'disable_oembed'          => array( 1, 3.0, 1 ),
-			'disable_rest_api_link'   => array( 0, 0.1, 0 ),
-			'disable_jquery_migrate'  => array( 1, 10.0, 0 ),
-			'disable_dashicons'       => array( 1, 36.0, 0 ),
-			'disable_adjacent_posts'  => array( 0, 0.2, 2 ),
-			'disable_block_directory' => array( 1, 5.0, 0 ),
-			'disable_remote_patterns' => array( 1, 0, 1 ),
-			'disable_global_styles'   => array( 0, 5.0, 0 ),
-			'disable_duotone'         => array( 0, 2.0, 0 ),
-			'disable_avatars'         => array( 0, 0, 1 ),
-			'disable_comment_threading' => array( 1, 2.0, 0 ),
-
-			// Strict tab (booleans only).
-			'disable_comments'        => array( 0, 0, 5 ),
-			'disable_feed_all'        => array( 0, 0.2, 0 ),
-			'disable_feed_comments'   => array( 0, 0.1, 0 ),
-			'disable_feed_taxonomies' => array( 0, 0.1, 0 ),
-			'disable_feed_authors'    => array( 0, 0.1, 0 ),
-			'disable_feed_search'     => array( 0, 0.1, 0 ),
-			'disable_feed_links_head' => array( 0, 0.2, 0 ),
-			'disable_sitemap'         => array( 0, 0, 2 ),
-			'disable_lazy_loading'    => array( 0, 0, 0 ),
-			'disable_fetchpriority'   => array( 0, 0, 0 ),
-			'disable_version_params'  => array( 0, 0, 0 ),
-			'disable_privacy_tools'   => array( 0, 0, 1 ),
-			'disable_internal_search' => array( 0, 0, 2 ),
-			'disable_posts_content_type' => array( 0, 0, 0 ),
-			'disable_pages_content_type' => array( 0, 0, 0 ),
-		);
+		// Single source of truth, shared with the analyzer (get_savings_estimates).
+		$estimates = self::get_savings_estimates();
 
 		$totals = array(
 			'requests'     => 0,

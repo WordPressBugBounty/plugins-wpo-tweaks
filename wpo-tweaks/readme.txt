@@ -4,7 +4,7 @@ Tags: performance, optimization, cleanup, speed, bloat
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 7.0
-Stable tag: 3.0.1
+Stable tag: 3.1.0
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -126,6 +126,17 @@ Yes. See the filters listed in the description (the `dietpress_*` hooks).
 
 == Changelog ==
 
+= 3.1.0 =
+* Improved: JavaScript defer now skips a built-in list of third-party scripts that must run on load (reCAPTCHA, Typekit, HubSpot forms, payment SDKs and more), matched by URL, and extendable with the new `dietpress_skip_defer_script_patterns` filter.
+* Improved: image optimization now leaves images already handled by another lazy-load solution untouched, honoring the `skip-lazy`/`data-skip-lazy` markers and the markup of common sliders (LayerSlider, Soliloquy), the Contact Form 7 captcha and the WooCommerce placeholder.
+* Improved: image optimization is skipped inside page builder editors and previews (Beaver Builder, Divi, Oxygen and WordPress previews) so layouts are not altered while editing.
+* Improved: site logo detection for image priority is now filterable via the new `dietpress_logo_class_patterns` filter.
+* Improved: missing dimensions are now added to SVG images too (read from their width/height or viewBox), reducing layout shift.
+* Improved: the .htaccess rules now declare the AVIF MIME type so AVIF images are served correctly on older Apache servers, and set the document charset from your site settings.
+* Improved: the Scale tab savings counter now also accounts for the performance optimizations (defer, critical CSS, image loading, resource hints, feeds, transient and query optimization, and .htaccess rules).
+* Fix: the per-tab "Restore defaults" button now also resets the performance options shown on that tab, which it previously skipped.
+* Fix: settings export files now use the "dietpress" identifier; imports still accept files exported by earlier versions.
+
 = 3.0.1 =
 * Fix: removed the "REST API access" control from the Strict tab. Restricting the REST API is a security feature, not a performance one, and it overlapped with dedicated security plugins, with which it could also clash on the same `rest_authentication_errors` filter. REST API access now follows default WordPress behavior; manage it from your security plugin instead, such as our free Vigilant. If you had set it to "Require authentication" or "Disable", that restriction no longer applies after updating, and DietPress shows a one-time notice pointing you to Vigilant.
 
@@ -144,8 +155,8 @@ For older changelog entries, please check the [changelog.txt](https://plugins.sv
 
 == Upgrade Notice ==
 
-= 3.0.1 =
-The Strict-tab "REST API access" control was removed: restricting the REST API belongs in a security plugin (like our free Vigilant), not in DietPress. It now follows default WordPress behavior, so any "Require authentication" or "Disable" you had set no longer applies.
+= 3.1.0 =
+Sharper JavaScript defer and image optimization: skips problematic third-party scripts, respects other lazy-load plugins and page builders, adds SVG dimensions and the AVIF MIME type. Also fixes per-tab "Restore defaults" and the savings counter for performance options.
 
 == Support ==
 
