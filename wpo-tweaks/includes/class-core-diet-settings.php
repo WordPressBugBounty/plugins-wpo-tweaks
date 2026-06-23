@@ -86,8 +86,6 @@ class Core_Diet_Settings {
 			'disable_self_pingbacks'    => true,
 			'disable_capital_p'         => true,
 			'disable_update_notices'    => false,
-			'disable_email_check'       => false,
-			'disable_post_by_email'      => false,
 			'disable_comment_pagination' => false,
 			'disable_wp_logo_admin_bar'  => false,
 			'disable_image_editor'       => false,
@@ -168,6 +166,26 @@ class Core_Diet_Settings {
 			'disable_customizer_widgets'    => false,
 			'disable_customizer'            => false,
 
+			// --- Emails tab (all OFF by default; muting an email is the user's choice) ---
+			// Updates.
+			'disable_auto_core_update_email'      => false,
+			'disable_core_update_available_email' => false,
+			'disable_auto_plugin_update_email'    => false,
+			'disable_auto_theme_update_email'     => false,
+			// Comments.
+			'disable_comment_moderation_email'    => false,
+			'disable_comment_author_email'        => false,
+			// Users & passwords.
+			'disable_new_user_admin_email'        => false,
+			'disable_new_user_email'              => false,
+			'disable_password_reset_admin_email'  => false,
+			'disable_password_change_email'       => false,
+			'disable_email_change_email'          => false,
+			'disable_admin_email_change_email'    => false,
+			// System (moved from Light).
+			'disable_email_check'                 => false,
+			'disable_post_by_email'               => false,
+
 			// --- Performance: scripts & assets ---
 			'defer_js'                  => true,
 			'optimize_google_fonts'     => true,
@@ -214,8 +232,7 @@ class Core_Diet_Settings {
 			// Light.
 			'disable_emojis', 'disable_rsd_link', 'disable_wlw_manifest',
 			'disable_shortlink', 'disable_self_pingbacks', 'disable_capital_p',
-			'disable_update_notices', 'disable_email_check',
-			'disable_post_by_email', 'disable_comment_pagination',
+			'disable_update_notices', 'disable_comment_pagination',
 			'disable_wp_logo_admin_bar', 'disable_image_editor',
 
 			// Moderate.
@@ -253,6 +270,15 @@ class Core_Diet_Settings {
 
 			// Widgets: customizer.
 			'disable_customizer_widgets', 'disable_customizer',
+
+			// Emails.
+			'disable_auto_core_update_email', 'disable_core_update_available_email',
+			'disable_auto_plugin_update_email', 'disable_auto_theme_update_email',
+			'disable_comment_moderation_email', 'disable_comment_author_email',
+			'disable_new_user_admin_email', 'disable_new_user_email',
+			'disable_password_reset_admin_email', 'disable_password_change_email',
+			'disable_email_change_email', 'disable_admin_email_change_email',
+			'disable_email_check', 'disable_post_by_email',
 
 			// Performance modules.
 			'defer_js', 'optimize_google_fonts', 'resource_hints', 'preload_assets',
@@ -358,8 +384,6 @@ class Core_Diet_Settings {
 					'disable_self_pingbacks' => __( 'Disable self-pingbacks', 'wpo-tweaks' ),
 					'disable_capital_p'      => __( 'Disable Capital P Dangit filter', 'wpo-tweaks' ),
 					'disable_update_notices' => __( 'Hide update notices for non-administrators', 'wpo-tweaks' ),
-					'disable_email_check'    => __( 'Disable admin email verification prompt', 'wpo-tweaks' ),
-					'disable_post_by_email'      => __( 'Disable post by email (wp-mail.php)', 'wpo-tweaks' ),
 					'disable_comment_pagination' => __( 'Disable comment pagination', 'wpo-tweaks' ),
 					'disable_wp_logo_admin_bar'  => __( 'Remove WordPress logo from admin bar', 'wpo-tweaks' ),
 					'disable_image_editor'       => __( 'Disable media library image editor', 'wpo-tweaks' ),
@@ -494,6 +518,24 @@ class Core_Diet_Settings {
 					'disable_customizer',
 				);
 
+			case 'emails':
+				return array(
+					'disable_auto_core_update_email',
+					'disable_core_update_available_email',
+					'disable_auto_plugin_update_email',
+					'disable_auto_theme_update_email',
+					'disable_comment_moderation_email',
+					'disable_comment_author_email',
+					'disable_new_user_admin_email',
+					'disable_new_user_email',
+					'disable_password_reset_admin_email',
+					'disable_password_change_email',
+					'disable_email_change_email',
+					'disable_admin_email_change_email',
+					'disable_email_check',
+					'disable_post_by_email',
+				);
+
 			default:
 				return array();
 		}
@@ -559,6 +601,22 @@ class Core_Diet_Settings {
 			'htaccess_cache_headers'     => __( 'Cache-Control, Vary and ETag headers (mod_headers)', 'wpo-tweaks' ),
 			'htaccess_cors_fonts'        => __( 'Cross-origin font loading (CORS)', 'wpo-tweaks' ),
 			'htaccess_keepalive'         => __( 'Keep-alive connections', 'wpo-tweaks' ),
+
+			// Emails.
+			'disable_auto_core_update_email'      => __( 'Core auto-update result email', 'wpo-tweaks' ),
+			'disable_core_update_available_email' => __( 'Core update available email', 'wpo-tweaks' ),
+			'disable_auto_plugin_update_email'    => __( 'Plugin auto-update result email', 'wpo-tweaks' ),
+			'disable_auto_theme_update_email'     => __( 'Theme auto-update result email', 'wpo-tweaks' ),
+			'disable_comment_moderation_email'    => __( 'Comment moderation email', 'wpo-tweaks' ),
+			'disable_comment_author_email'        => __( 'New comment email to post author', 'wpo-tweaks' ),
+			'disable_new_user_admin_email'        => __( 'New user email to admin', 'wpo-tweaks' ),
+			'disable_new_user_email'              => __( 'New user email to the user', 'wpo-tweaks' ),
+			'disable_password_reset_admin_email'  => __( 'Password reset email to admin', 'wpo-tweaks' ),
+			'disable_password_change_email'       => __( 'Password changed email to user', 'wpo-tweaks' ),
+			'disable_email_change_email'          => __( 'Email changed notice to user', 'wpo-tweaks' ),
+			'disable_admin_email_change_email'    => __( 'Site admin email change notice', 'wpo-tweaks' ),
+			'disable_email_check'                 => __( 'Disable admin email verification prompt', 'wpo-tweaks' ),
+			'disable_post_by_email'               => __( 'Disable post by email (wp-mail.php)', 'wpo-tweaks' ),
 		);
 
 		$all_labels = array_merge( $all_labels, $extra_labels );
@@ -635,6 +693,20 @@ class Core_Diet_Settings {
 			'htaccess_cache_headers' => __( 'Marks static assets as immutable with a one-year max-age, caches HTML for one hour, removes ETags and adds Vary Accept-Encoding (mod_headers).', 'wpo-tweaks' ),
 			'htaccess_cors_fonts' => __( 'Adds Access-Control-Allow-Origin to font files so they load from a CDN or different subdomain. Disable if your policy forbids a wildcard CORS origin.', 'wpo-tweaks' ),
 			'htaccess_keepalive' => __( 'Sends a Connection keep-alive header to encourage connection reuse. Some managed hosts manage keep-alive themselves and may ignore it.', 'wpo-tweaks' ),
+
+			// Emails.
+			'disable_auto_core_update_email' => __( 'Stops the email WordPress sends after an automatic core update. Critical failure notices are always kept.', 'wpo-tweaks' ),
+			'disable_core_update_available_email' => __( 'Stops the email warning that a new core version is available but will not auto-install. Warning: if core auto-updates are off, this is your only notice that an update (possibly a security release) is waiting.', 'wpo-tweaks' ),
+			'disable_auto_plugin_update_email' => __( 'Stops the email WordPress sends after plugins auto-update.', 'wpo-tweaks' ),
+			'disable_auto_theme_update_email' => __( 'Stops the email WordPress sends after themes auto-update.', 'wpo-tweaks' ),
+			'disable_comment_moderation_email' => __( 'Stops the email sent to moderators when a comment is held for moderation. Useful with Akismet or panel moderation.', 'wpo-tweaks' ),
+			'disable_comment_author_email' => __( 'Stops the email sent to the post author when a comment is published on their post.', 'wpo-tweaks' ),
+			'disable_new_user_admin_email' => __( 'Stops the email sent to the admin when a new user account is created.', 'wpo-tweaks' ),
+			'disable_new_user_email' => __( 'Stops the welcome email sent to a new user. Warning: this email carries the set-password link. Do not disable on sites with open registration or new accounts are left without a password.', 'wpo-tweaks' ),
+			'disable_password_reset_admin_email' => __( 'Stops the email sent to the admin when a user resets their password.', 'wpo-tweaks' ),
+			'disable_password_change_email' => __( 'Stops the email sent to a user after their password changes.', 'wpo-tweaks' ),
+			'disable_email_change_email' => __( 'Stops the email sent to a user after their account email changes.', 'wpo-tweaks' ),
+			'disable_admin_email_change_email' => __( 'Stops the notice sent to the old address when the site admin email changes. The confirmation sent to the new address is kept, as it completes the change.', 'wpo-tweaks' ),
 		);
 	}
 }

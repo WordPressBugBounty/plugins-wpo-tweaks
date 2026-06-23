@@ -4,7 +4,9 @@
  *
  * Writes server-level performance directives (browser caching, GZIP/Brotli
  * compression, cache headers, CORS for fonts, keep-alive) into the site
- * .htaccess via the WordPress markers API, with a backup and idempotent writes.
+ * .htaccess via the WordPress markers API with idempotent writes.
+ * insert_with_markers() only ever touches the plugin's own marked block, so the
+ * rest of the site .htaccess is left untouched and no backup is needed.
  *
  * @package DietPress
  */
@@ -139,73 +141,28 @@ class Core_Diet_Htaccess {
 			return;
 		}
 
-		// Back up the .htaccess before the first modification.
-		$this->core_diet_create_backup_directory();
-		$this->core_diet_backup_htaccess();
-
 		$this->core_diet_modify_htaccess();
 	}
 
 	/**
-	 * Create backup directory.
-	 */
-	private function core_diet_create_backup_directory() {
-		global $wp_filesystem;
-
-		if ( empty( $wp_filesystem ) ) {
-			require_once ABSPATH . '/wp-admin/includes/file.php';
-			WP_Filesystem();
-		}
-
-		$backup_dir = CORE_DIET_DIR . 'backup/';
-
-		if ( ! $wp_filesystem->exists( $backup_dir ) ) {
-			$wp_filesystem->mkdir( $backup_dir, 0755 );
-		}
-
-		// Prevent direct access to backup directory.
-		$htaccess_backup = $backup_dir . '.htaccess';
-		if ( ! $wp_filesystem->exists( $htaccess_backup ) ) {
-			$wp_filesystem->put_contents( $htaccess_backup, "deny from all\n" );
-		}
-	}
-
-	/**
-	 * Backup .htaccess before modification.
-	 */
-	private function core_diet_backup_htaccess() {
-		global $wp_filesystem;
-
-		if ( empty( $wp_filesystem ) ) {
-			require_once ABSPATH . '/wp-admin/includes/file.php';
-			WP_Filesystem();
-		}
-
-		if ( ! function_exists( 'get_home_path' ) ) {
-			require_once ABSPATH . 'wp-admin/includes/file.php';
-		}
-
-		$htaccess_path = get_home_path() . '.htaccess';
-		$backup_path   = CORE_DIET_DIR . 'backup/.htaccess.bak';
-
-		if ( $wp_filesystem->exists( $htaccess_path ) ) {
-			$content = $wp_filesystem->get_contents( $htaccess_path );
-			$wp_filesystem->put_contents( $backup_path, $content );
-		}
-	}
-
-	/**
-	 * Remove legacy wp-config.php modifications from previous versions.
+	 * Remove legacy on-disk artifacts left by previous versions.
 	 *
-	 * Previous versions (<= 2.2.0) added EMPTY_TRASH_DAYS to wp-config.php.
-	 * This safely removes those additions on upgrade. Trash retention is now
-	 * handled via cron in the Database Optimization module.
+	 * Two cleanups run here on upgrade:
+	 *
+	 * 1. Versions <= 2.2.0 added an EMPTY_TRASH_DAYS define to wp-config.php.
+	 *    Trash retention is now handled via cron in the Database Optimization
+	 *    module, so that block is removed.
+	 * 2. Versions up to 3.1.0 copied the site .htaccess into a backup/ folder
+	 *    inside the plugin directory, under the web root. Nothing ever restored
+	 *    from it and a misconfigured server could disclose it, so the whole
+	 *    backup/ directory is deleted.
 	 *
 	 * Public so the orchestrator can call it once from the upgrade routine.
 	 * It is NOT called automatically.
 	 */
-	public function core_diet_cleanup_legacy_wp_config() {
-		// Writing to wp-config.php is privileged. Guard against unexpected callers.
+	public function core_diet_cleanup_legacy_files() {
+		// Writing to wp-config.php and the plugin directory is privileged.
+		// Guard against unexpected callers.
 		if ( ! current_user_can( 'manage_options' ) ) {
 			return;
 		}
@@ -215,6 +172,15 @@ class Core_Diet_Htaccess {
 		if ( empty( $wp_filesystem ) ) {
 			require_once ABSPATH . '/wp-admin/includes/file.php';
 			WP_Filesystem();
+		}
+
+		// Remove the obsolete backup/ directory entirely. Earlier versions copied
+		// the site .htaccess (and, long before that, a wp-config.php fragment)
+		// into wp-content/plugins/<slug>/backup/, under the web root. Done first
+		// and unconditionally so a non-writable wp-config.php below cannot skip it.
+		$backup_dir = CORE_DIET_DIR . 'backup/';
+		if ( $wp_filesystem->exists( $backup_dir ) ) {
+			$wp_filesystem->delete( $backup_dir, true );
 		}
 
 		$wp_config_path = ABSPATH . 'wp-config.php';
@@ -240,12 +206,6 @@ class Core_Diet_Htaccess {
 		// Only write if we actually changed something.
 		if ( $content !== $original_content ) {
 			$wp_filesystem->put_contents( $wp_config_path, $content );
-		}
-
-		// Also remove old wp-config backup file if it exists.
-		$backup_path = CORE_DIET_DIR . 'backup/wp-config.php.bak';
-		if ( $wp_filesystem->exists( $backup_path ) ) {
-			$wp_filesystem->delete( $backup_path );
 		}
 	}
 

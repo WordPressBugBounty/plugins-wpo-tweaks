@@ -36,6 +36,7 @@ class Core_Diet_Admin {
 				'moderate' => __( 'Moderate', 'wpo-tweaks' ),
 				'strict'   => __( 'Strict', 'wpo-tweaks' ),
 				'widgets'  => __( 'Widgets', 'wpo-tweaks' ),
+				'emails'   => __( 'Emails', 'wpo-tweaks' ),
 				'tools'    => __( 'Tools', 'wpo-tweaks' ),
 			);
 		}
@@ -173,7 +174,7 @@ class Core_Diet_Admin {
 		}
 
 		$current_tab   = $this->get_current_tab();
-		$settings_tabs = array( 'light', 'moderate', 'strict', 'widgets' );
+		$settings_tabs = array( 'light', 'moderate', 'strict', 'widgets', 'emails' );
 		$ajax_tabs     = array( 'scale', 'tools' );
 		?>
 		<div class="wrap core-diet-wrap">
@@ -234,6 +235,9 @@ class Core_Diet_Admin {
 										break;
 									case 'widgets':
 										$this->render_tab_widgets();
+										break;
+									case 'emails':
+										$this->render_tab_emails();
 										break;
 								}
 								?>
@@ -314,7 +318,6 @@ class Core_Diet_Admin {
 
 		$security_fields = array(
 			'disable_self_pingbacks' => __( 'Disable self-pingbacks', 'wpo-tweaks' ),
-			'disable_post_by_email'  => __( 'Disable post by email (wp-mail.php)', 'wpo-tweaks' ),
 		);
 		foreach ( $security_fields as $key => $label ) {
 			$desc = isset( $descriptions[ $key ] ) ? $descriptions[ $key ] : '';
@@ -327,7 +330,6 @@ class Core_Diet_Admin {
 		$admin_fields = array(
 			'disable_capital_p'          => __( 'Disable Capital P Dangit filter', 'wpo-tweaks' ),
 			'disable_update_notices'     => __( 'Hide update notices for non-administrators', 'wpo-tweaks' ),
-			'disable_email_check'        => __( 'Disable admin email verification prompt', 'wpo-tweaks' ),
 			'disable_comment_pagination' => __( 'Disable comment pagination', 'wpo-tweaks' ),
 			'disable_wp_logo_admin_bar'  => __( 'Remove WordPress logo from admin bar', 'wpo-tweaks' ),
 			'disable_image_editor'       => __( 'Disable media library image editor', 'wpo-tweaks' ),
@@ -668,6 +670,58 @@ class Core_Diet_Admin {
 			$desc = isset( $descriptions[ $key ] ) ? $descriptions[ $key ] : '';
 			$this->render_toggle_card( $key, $label, $desc );
 		}
+
+		echo '</div>'; // End cards grid.
+	}
+
+	/**
+	 * Render the Emails tab content.
+	 *
+	 * Toggles to silence the automatic emails WordPress sends on its own,
+	 * grouped by area. Every option is OFF by default.
+	 */
+	private function render_tab_emails() {
+		$descriptions = Core_Diet_Settings::get_descriptions();
+
+		echo '<p class="core-diet-tab-description">';
+		echo esc_html__( 'Silence the automatic emails WordPress sends on its own. Every option is off by default: muting an email is always your choice. Disable only what you are sure you do not need.', 'wpo-tweaks' );
+		echo '</p>';
+
+		echo '<div class="core-diet-cards-grid">';
+
+		// Section: Updates.
+		$this->render_section_title( __( 'Updates', 'wpo-tweaks' ) );
+
+		$this->render_toggle_card( 'disable_auto_core_update_email', __( 'Core auto-update result email', 'wpo-tweaks' ), $descriptions['disable_auto_core_update_email'] );
+		$this->render_toggle_card( 'disable_core_update_available_email', __( 'New core version available email', 'wpo-tweaks' ), $descriptions['disable_core_update_available_email'] );
+		$this->render_toggle_card( 'disable_auto_plugin_update_email', __( 'Plugin auto-update result email', 'wpo-tweaks' ), $descriptions['disable_auto_plugin_update_email'] );
+		$this->render_toggle_card( 'disable_auto_theme_update_email', __( 'Theme auto-update result email', 'wpo-tweaks' ), $descriptions['disable_auto_theme_update_email'] );
+
+		// Section: Comments.
+		$this->render_section_title( __( 'Comments', 'wpo-tweaks' ) );
+
+		$this->render_toggle_card( 'disable_comment_moderation_email', __( 'Comment awaiting moderation', 'wpo-tweaks' ), $descriptions['disable_comment_moderation_email'] );
+		$this->render_toggle_card( 'disable_comment_author_email', __( 'New comment notice to the post author', 'wpo-tweaks' ), $descriptions['disable_comment_author_email'] );
+
+		// Section: Users & passwords.
+		$this->render_section_title( __( 'Users & passwords', 'wpo-tweaks' ) );
+
+		// Card order is laid out so each two-column row pairs cards of similar
+		// height. The two longest cards (the welcome email with its password-link
+		// warning and the admin email change notice) share the top row; the
+		// "to the admin" notices and the "to the user" notices follow as even rows.
+		$this->render_toggle_card( 'disable_new_user_email', __( 'New user welcome email (carries the password link)', 'wpo-tweaks' ), $descriptions['disable_new_user_email'] );
+		$this->render_toggle_card( 'disable_admin_email_change_email', __( 'Site admin email change notice', 'wpo-tweaks' ), $descriptions['disable_admin_email_change_email'] );
+		$this->render_toggle_card( 'disable_new_user_admin_email', __( 'New user notice to the admin', 'wpo-tweaks' ), $descriptions['disable_new_user_admin_email'] );
+		$this->render_toggle_card( 'disable_password_reset_admin_email', __( 'Password reset notice to the admin', 'wpo-tweaks' ), $descriptions['disable_password_reset_admin_email'] );
+		$this->render_toggle_card( 'disable_password_change_email', __( 'Password changed notice to the user', 'wpo-tweaks' ), $descriptions['disable_password_change_email'] );
+		$this->render_toggle_card( 'disable_email_change_email', __( 'Email changed notice to the user', 'wpo-tweaks' ), $descriptions['disable_email_change_email'] );
+
+		// Section: System (email-related features, not notifications).
+		$this->render_section_title( __( 'System', 'wpo-tweaks' ) );
+
+		$this->render_toggle_card( 'disable_email_check', __( 'Disable admin email verification prompt', 'wpo-tweaks' ), $descriptions['disable_email_check'] );
+		$this->render_toggle_card( 'disable_post_by_email', __( 'Disable post by email (wp-mail.php)', 'wpo-tweaks' ), $descriptions['disable_post_by_email'] );
 
 		echo '</div>'; // End cards grid.
 	}

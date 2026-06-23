@@ -49,6 +49,7 @@ class Core_Diet {
 		require_once CORE_DIET_DIR . 'includes/class-core-diet-moderate.php';
 		require_once CORE_DIET_DIR . 'includes/class-core-diet-strict.php';
 		require_once CORE_DIET_DIR . 'includes/class-core-diet-widgets.php';
+		require_once CORE_DIET_DIR . 'includes/class-core-diet-emails.php';
 		require_once CORE_DIET_DIR . 'includes/class-core-diet-promo-banner.php';
 
 		// Performance modules (ported from the former wpo-tweaks codebase).
@@ -103,11 +104,13 @@ class Core_Diet {
 		$moderate = new Core_Diet_Moderate( $settings );
 		$strict   = new Core_Diet_Strict( $settings );
 		$widgets  = new Core_Diet_Widgets( $settings );
+		$emails   = new Core_Diet_Emails( $settings );
 
 		$light->init();
 		$moderate->init();
 		$strict->init();
 		$widgets->init();
+		$emails->init();
 
 		// Performance modules.
 		$perf_scripts  = new Core_Diet_Perf_Scripts( $settings );
@@ -228,8 +231,9 @@ class Core_Diet {
 
 		$htaccess = new Core_Diet_Htaccess( Core_Diet_Settings::get_instance() );
 
-		// One-time removal of the old wp-config.php trash-retention block.
-		$htaccess->core_diet_cleanup_legacy_wp_config();
+		// One-time removal of legacy on-disk artifacts: the old wp-config.php
+		// trash-retention block and the obsolete backup/ directory.
+		$htaccess->core_diet_cleanup_legacy_files();
 
 		// (Re)write the current server-level performance rules.
 		$htaccess->on_settings_saved( array(), get_option( 'core_diet_settings', array() ) );

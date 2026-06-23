@@ -421,8 +421,6 @@ class Core_Diet_Tools {
 			'disable_self_pingbacks' => array( 0, 0, 1 ),
 			'disable_capital_p'      => array( 0, 0, 0 ),
 			'disable_update_notices' => array( 0, 0, 0 ),
-			'disable_email_check'    => array( 0, 0, 1 ),
-			'disable_post_by_email'  => array( 0, 0, 0 ),
 			'disable_comment_pagination' => array( 0, 0, 0 ),
 			'disable_wp_logo_admin_bar'  => array( 0, 0, 0 ),
 			'disable_image_editor'   => array( 0, 0, 0 ),
@@ -532,7 +530,7 @@ class Core_Diet_Tools {
 
 		$tab = isset( $_POST['tab'] ) ? sanitize_key( wp_unslash( $_POST['tab'] ) ) : '';
 
-		$allowed_tabs = array( 'light', 'moderate', 'strict', 'widgets' );
+		$allowed_tabs = array( 'light', 'moderate', 'strict', 'widgets', 'emails' );
 		if ( ! in_array( $tab, $allowed_tabs, true ) ) {
 			wp_send_json_error( __( 'Invalid tab.', 'wpo-tweaks' ) );
 		}
@@ -578,8 +576,6 @@ class Core_Diet_Tools {
 			'disable_shortlink'      => __( 'The ?p=123 shortlink is rarely used and adds nothing.', 'wpo-tweaks' ),
 			'disable_self_pingbacks' => __( 'Prevents your site from pinging itself. No downside.', 'wpo-tweaks' ),
 			'disable_capital_p'      => __( 'The auto-correction filter is cosmetic and unnecessary.', 'wpo-tweaks' ),
-			'disable_email_check'    => __( 'Disables the admin email verification prompt. Safe to remove.', 'wpo-tweaks' ),
-			'disable_post_by_email'  => __( 'Post by email is an obsolete feature. Blocking it reduces attack surface.', 'wpo-tweaks' ),
 			'disable_comment_pagination' => __( 'Comment pagination creates thin content and duplicate URLs. Safe to disable.', 'wpo-tweaks' ),
 			'disable_wp_logo_admin_bar'  => __( 'The WordPress logo in the admin bar serves no functional purpose.', 'wpo-tweaks' ),
 			'disable_image_editor'   => __( 'The media library image editor is rarely used. Frees server resources.', 'wpo-tweaks' ),

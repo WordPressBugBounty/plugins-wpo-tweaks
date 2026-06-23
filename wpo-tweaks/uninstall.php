@@ -30,8 +30,8 @@ wp_clear_scheduled_hook( 'core_diet_clean_transients' );
 
 // Defensive cleanup of the managed .htaccess block. This is normally already
 // removed on deactivation (which fires before deletion); reusing the class here
-// keeps the WordPress markers + WP_Filesystem handling. The backup/ directory
-// is intentionally kept for the user's safety.
+// keeps the WordPress markers + WP_Filesystem handling. WordPress removes the
+// whole plugin directory on uninstall, so any obsolete backup/ folder goes with it.
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-core-diet-htaccess.php';
 
 if ( class_exists( 'Core_Diet_Htaccess' ) ) {

@@ -58,16 +58,6 @@ class Core_Diet_Light {
 			add_action( 'admin_head', array( $this, 'hide_update_notices' ), 1 );
 		}
 
-		if ( $this->settings->is_enabled( 'disable_email_check' ) ) {
-			add_filter( 'admin_email_check_interval', '__return_false' );
-		}
-
-		if ( $this->settings->is_enabled( 'disable_post_by_email' ) ) {
-			add_action( 'init', array( $this, 'block_wp_mail_php' ), 1 );
-			// Hide "Post via email" section in Settings > Writing.
-			add_action( 'admin_enqueue_scripts', array( $this, 'hide_post_by_email_admin_ui' ) );
-		}
-
 		if ( $this->settings->is_enabled( 'disable_comment_pagination' ) ) {
 			// Force comment pagination off.
 			add_filter( 'pre_option_page_comments', '__return_zero' );
@@ -156,21 +146,6 @@ class Core_Diet_Light {
 	}
 
 	/**
-	 * Block access to wp-mail.php (posting by email).
-	 */
-	public function block_wp_mail_php() {
-		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotValidated -- server-set value, unslashed, sanitized and strict-compared below.
-		$script = isset( $_SERVER['SCRIPT_FILENAME'] ) ? basename( sanitize_file_name( wp_unslash( $_SERVER['SCRIPT_FILENAME'] ) ) ) : '';
-		if ( 'wp-mail.php' === $script ) {
-			wp_die(
-				esc_html__( 'Post by email is disabled.', 'wpo-tweaks' ),
-				esc_html__( 'Forbidden', 'wpo-tweaks' ),
-				array( 'response' => 403 )
-			);
-		}
-	}
-
-	/**
 	 * 301 redirect /comment-page-N/ URLs to the canonical post URL.
 	 */
 	public function redirect_comment_pages() {
@@ -187,47 +162,6 @@ class Core_Diet_Light {
 	 */
 	public function remove_wp_logo_admin_bar( $wp_admin_bar ) {
 		$wp_admin_bar->remove_node( 'wp-logo' );
-	}
-
-	/**
-	 * Hide "Post via email" section in Settings > Writing.
-	 *
-	 * @param string $hook Current admin page hook.
-	 */
-	public function hide_post_by_email_admin_ui( $hook ) {
-		if ( 'options-writing.php' !== $hook ) {
-			return;
-		}
-		// Hide the form-table containing the mailserver_url field, plus the
-		// preceding h2 ("Post via email") and descriptive paragraph (random
-		// strings). The default_email_category row uses a <select>, so it is
-		// covered by hiding the entire form-table.
-		$css  = '.form-table:has(input[name="mailserver_url"]) { display: none !important; }';
-		$css .= ' h2.title:has(+ p + .form-table input[name="mailserver_url"]),';
-		$css .= ' h2.title:has(+ p + .form-table input[name="mailserver_url"]) + p { display: none !important; }';
-		wp_add_inline_style( 'common', $css );
-
-		// JS fallback for browsers without :has() support.
-		add_action( 'admin_footer-options-writing.php', function() {
-			$js = <<<'JS'
-(function(){
-	var input = document.querySelector('input[name="mailserver_url"]');
-	if (!input) return;
-	var table = input.closest('table.form-table');
-	if (!table) return;
-	table.style.display = 'none';
-	var prev = table.previousElementSibling;
-	if (prev && prev.tagName === 'P') {
-		prev.style.display = 'none';
-		prev = prev.previousElementSibling;
-	}
-	if (prev && prev.tagName === 'H2') {
-		prev.style.display = 'none';
-	}
-})();
-JS;
-			wp_print_inline_script_tag( $js );
-		} );
 	}
 
 	/**

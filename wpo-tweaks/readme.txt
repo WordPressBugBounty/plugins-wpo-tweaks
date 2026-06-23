@@ -4,7 +4,7 @@ Tags: performance, optimization, cleanup, speed, bloat
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 7.0
-Stable tag: 3.1.0
+Stable tag: 3.2.0
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -35,10 +35,11 @@ By default WordPress loads functions, services and scripts that most sites do no
 
 **2. Put WordPress on a diet (risk-based, opt-in)**
 
-* **Light** (safe for any site): emojis, RSD/WLW tags, shortlinks, self-pingbacks, comment pagination, admin email check, and more
+* **Light** (safe for any site): emojis, RSD/WLW tags, shortlinks, self-pingbacks, comment pagination, and more
 * **Moderate** (evaluate first): oEmbed, jQuery Migrate, Dashicons on the frontend, Global Styles and Duotone, remote block patterns, avatars and Gravatar, comment threading, and more
 * **Strict** (site-specific): granular RSS feed control, Heartbeat API mode, post revisions and autosave, disable comments, XML sitemap, native lazy loading/fetchpriority, content types, and more
 * **Widgets**: dashboard widgets (including third-party ones from Yoast, WooCommerce, Elementor, Jetpack, Wordfence, Rank Math, Gravity Forms), classic sidebar widgets, block-editor widgets and the Customizer
+* **Emails**: silence the automatic emails WordPress sends on its own, grouped by area: auto-update results for core, plugins and themes (plus the new-version notice), comment moderation and new-comment notices, and new user, password and email-change notices, plus toggles for the admin email verification prompt and post-by-email. Every option is off by default, and critical notices such as a failed core update are always kept
 
 ### SCALE, PROFILES AND ANALYZER
 
@@ -123,42 +124,38 @@ Yes. See the filters listed in the description (the `dietpress_*` hooks).
 3. Moderate tab: image, database and editor options to evaluate.
 4. Strict tab: frontend performance, server .htaccess rules and site-specific settings.
 5. Widgets tab: dashboard, block editor, Customizer and classic sidebar widgets.
+6. Emails tab: silence the automatic emails WordPress sends on its own, grouped by updates, comments, users and passwords.
 
 == Changelog ==
 
+= 3.2.0 =
+* New: New "Emails" tab to control the automatic emails WordPress sends on its own: update results (core, plugins, themes), comment moderation and author notices, and new user, password and email-change notices. Every option is off by default, with a risk note where it matters.
+* Improved: The "admin email verification prompt" and "post by email" options moved from the Light tab to the new Emails tab; their saved settings carry over unchanged.
+
 = 3.1.0 =
-* Improved: JavaScript defer now skips a built-in list of third-party scripts that must run on load (reCAPTCHA, Typekit, HubSpot forms, payment SDKs and more), matched by URL, and extendable with the new `dietpress_skip_defer_script_patterns` filter.
-* Improved: image optimization now leaves images already handled by another lazy-load solution untouched, honoring the `skip-lazy`/`data-skip-lazy` markers and the markup of common sliders (LayerSlider, Soliloquy), the Contact Form 7 captcha and the WooCommerce placeholder.
-* Improved: image optimization is skipped inside page builder editors and previews (Beaver Builder, Divi, Oxygen and WordPress previews) so layouts are not altered while editing.
-* Improved: site logo detection for image priority is now filterable via the new `dietpress_logo_class_patterns` filter.
-* Improved: missing dimensions are now added to SVG images too (read from their width/height or viewBox), reducing layout shift.
-* Improved: the .htaccess rules now declare the AVIF MIME type so AVIF images are served correctly on older Apache servers, and set the document charset from your site settings.
-* Improved: the Scale tab savings counter now also accounts for the performance optimizations (defer, critical CSS, image loading, resource hints, feeds, transient and query optimization, and .htaccess rules).
+* Improved: Performance – JavaScript defer now skips a built-in list of third-party scripts that must run on load (reCAPTCHA, Typekit, HubSpot forms, payment SDKs and more), matched by URL, and extendable with the new `dietpress_skip_defer_script_patterns` filter.
+* Improved: Performance – image optimization now leaves images already handled by another lazy-load solution untouched, honoring the `skip-lazy`/`data-skip-lazy` markers and the markup of common sliders (LayerSlider, Soliloquy), the Contact Form 7 captcha and the WooCommerce placeholder.
+* Improved: Performance – image optimization is skipped inside page builder editors and previews (Beaver Builder, Divi, Oxygen and WordPress previews) so layouts are not altered while editing.
+* Improved: Performance – site logo detection for image priority is now filterable via the new `dietpress_logo_class_patterns` filter.
+* Improved: Performance – missing dimensions are now added to SVG images too (read from their width/height or viewBox), reducing layout shift.
+* Improved: Performance – the Scale tab savings counter now also accounts for the performance optimizations (defer, critical CSS, image loading, resource hints, feeds, transient and query optimization, and .htaccess rules).
+* Improved: Performance – the .htaccess rules now declare the AVIF MIME type so AVIF images are served correctly on older Apache servers, and set the document charset from your site settings.
+* Improved: Security – the .htaccess performance rules no longer keep a copy of your site .htaccess inside the plugin folder. They are written non-destructively (only their own marked block is added or removed), so that copy was never used to restore anything; any backup left by earlier versions is removed automatically on update.
 * Fix: the per-tab "Restore defaults" button now also resets the performance options shown on that tab, which it previously skipped.
 * Fix: settings export files now use the "dietpress" identifier; imports still accept files exported by earlier versions.
-
-= 3.0.1 =
-* Fix: removed the "REST API access" control from the Strict tab. Restricting the REST API is a security feature, not a performance one, and it overlapped with dedicated security plugins, with which it could also clash on the same `rest_authentication_errors` filter. REST API access now follows default WordPress behavior; manage it from your security plugin instead, such as our free Vigilant. If you had set it to "Require authentication" or "Disable", that restriction no longer applies after updating, and DietPress shows a one-time notice pointing you to Vigilant.
-
-= 3.0.0 =
-* New: the plugin is now DietPress (formerly "Zero Config Performance Optimization"), fully configurable from a new top-level "DietPress" admin menu with its own settings page.
-* New: a complete, risk-based set of options to put WordPress on a diet (Light, Moderate, Strict and Widgets), covering emojis, RSD/WLW, shortlinks, self-pingbacks, oEmbed, jQuery Migrate, Dashicons, REST API control, granular RSS feeds, comments, Heartbeat, revisions, autosave, content types, and dashboard/sidebar/block/Customizer widgets. Security-related toggles (XML-RPC, pingbacks, login errors, Application Passwords, version hiding) are intentionally not included: they belong in a security plugin, like our free Vigilant, and DietPress tells you once if you had any of them enabled.
-* New: Scale tab with a savings indicator, quick profiles (Personal Blog, WooCommerce, Landing Page, Maximum Cleanup) and a site analyzer with recommendations.
-* New: import and export your configuration as a JSON file.
-* Improved: every performance optimization from the previous "Zero Config" version is now an individual setting you can fine-tune (JavaScript defer, Critical CSS, image loading attributes, image dimensions, resource hints, asset and logo preloading, RSS feed optimization, .htaccess browser caching/GZIP/Brotli/headers, transient cleanup and query optimizations). They all stay ON by default, so updating sites keep their current behavior.
-* Improved: the Critical CSS deferral of non-critical stylesheets (the part that can cause a flash of unstyled content) is now a separate, opt-in "experimental" toggle, while the safe inline critical CSS stays on by default.
-* Improved: the .htaccess server rules are now applied when you save settings, with a master switch plus per-feature toggles (browser caching, GZIP, Brotli, cache headers, CORS for fonts, keep-alive), and are removed cleanly on deactivation. The block is now labeled "# BEGIN DietPress"; the old "Zero Config Performance" block is replaced automatically.
-* Improved: developer filters renamed to the `dietpress_` prefix (`dietpress_critical_css`, `dietpress_critical_css_handles`, `dietpress_skip_defer_script_handles`, `dietpress_skip_defer_style_handles`, `dietpress_preconnect_hints`, `dietpress_dns_prefetch_domains`, `dietpress_critical_fonts`). The former `ayudawp_wpotweaks_*` filters keep working through a compatibility bridge, but are deprecated: please update your snippets to the new names.
-* Fix: the retired standalone DietPress ("core-diet") plugin is detected and deactivated automatically, preventing fatal conflicts while both are installed; its settings carry over.
 
 For older changelog entries, please check the [changelog.txt](https://plugins.svn.wordpress.org/wpo-tweaks/trunk/changelog.txt) file.
 
 == Upgrade Notice ==
 
-= 3.1.0 =
-Sharper JavaScript defer and image optimization: skips problematic third-party scripts, respects other lazy-load plugins and page builders, adds SVG dimensions and the AVIF MIME type. Also fixes per-tab "Restore defaults" and the savings counter for performance options.
+= 3.2.0 =
+New Emails tab to silence the automatic emails WordPress sends on its own (update results, comment notices, new user and password emails). All new options are off by default. The admin email verification and post-by-email options moved there from the Light tab.
 
 == Support ==
+
+Need private support or custom development?
+
+Do you need one-on-one help, priority troubleshooting, or a custom feature, integration, or tweak built specifically for your site? I offer private support and custom development. Just [contact me](mailto:wpo-tweaks@ayudawp.com) and tell me what you need.
 
 Need help or have suggestions?
 
