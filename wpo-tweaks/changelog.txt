@@ -3,6 +3,10 @@ DietPress — Full changelog
 For each release, see the entries below. The latest version is always at the top.
 The current release notes also live in readme.txt under "== Changelog ==".
 
+= 3.2.1 =
+* Fix: prevent a fatal error (ArgumentCountError on PHP 8+) when a theme or page builder fires the `wp_get_attachment_image_attributes` filter with fewer arguments than WordPress core passes (seen with the Hub/LiquidThemes builder while saving posts). The image loading optimization now treats the attachment and size parameters as optional.
+* Fix: hardened path handling in the automatic image dimensions feature so file lookups stay within the WordPress and uploads directories, consistent with the SVG dimension reader.
+
 = 3.2.0 =
 * New: New "Emails" tab to control the automatic emails WordPress sends on its own: update results (core, plugins, themes), comment moderation and author notices, and new user, password and email-change notices. Every option is off by default, with a risk note where it matters.
 * Improved: The "admin email verification prompt" and "post by email" options moved from the Light tab to the new Emails tab; their saved settings carry over unchanged.

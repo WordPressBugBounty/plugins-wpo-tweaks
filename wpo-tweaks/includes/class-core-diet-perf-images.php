@@ -66,8 +66,15 @@ class Core_Diet_Perf_Images {
 	 *
 	 * @since 2.2.0 Added fetchpriority support
 	 * @since 2.3.0 Added existence checks to avoid conflicts with core
+	 * @since 3.2.1 $attachment and $size are optional: some page builders fire
+	 *              this filter manually with fewer arguments, which fataled on
+	 *              PHP 8+ when they were required. Neither is used here.
+	 *
+	 * @param array       $attr       Image attributes.
+	 * @param WP_Post|null $attachment Attachment post (unused; optional for resilience).
+	 * @param string|array $size       Requested size (unused; optional for resilience).
 	 */
-	public function core_diet_optimize_attachment_image( $attr, $attachment, $size ) {
+	public function core_diet_optimize_attachment_image( $attr, $attachment = null, $size = null ) {
 		// Leave images untouched inside page builder editors and previews,
 		// where the builder manipulates the DOM and our attributes interfere.
 		if ( $this->core_diet_is_builder_or_preview() ) {
@@ -369,19 +376,13 @@ class Core_Diet_Perf_Images {
 	 * Get image dimensions from file system
 	 */
 	private function core_diet_get_image_dimensions_from_file( $src ) {
-		// Convert URL to file path
-		$upload_dir = wp_upload_dir();
+		// Resolve the URL to an absolute path confined to the WordPress install
+		// or the uploads dir. This rejects a crafted src (e.g.
+		// "/wp-content/../../secret") before it can reach getimagesize() on a
+		// file outside those roots, matching the SVG path handling since 3.1.0.
+		$file_path = $this->core_diet_resolve_local_path( $src );
 
-		if ( strpos( $src, $upload_dir['baseurl'] ) === 0 ) {
-			$file_path = str_replace( $upload_dir['baseurl'], $upload_dir['basedir'], $src );
-		} elseif ( strpos( $src, '/wp-content/' ) === 0 ) {
-			$file_path = ABSPATH . ltrim( $src, '/' );
-		} else {
-			return false;
-		}
-
-		// Security check
-		if ( ! file_exists( $file_path ) || ! is_readable( $file_path ) ) {
+		if ( false === $file_path || ! is_readable( $file_path ) ) {
 			return false;
 		}
 

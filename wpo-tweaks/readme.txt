@@ -4,7 +4,7 @@ Tags: performance, optimization, cleanup, speed, bloat
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 7.0
-Stable tag: 3.2.0
+Stable tag: 3.2.1
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -128,28 +128,20 @@ Yes. See the filters listed in the description (the `dietpress_*` hooks).
 
 == Changelog ==
 
+= 3.2.1 =
+* Fix: prevent a fatal error (ArgumentCountError on PHP 8+) when a theme or page builder fires the `wp_get_attachment_image_attributes` filter with fewer arguments than WordPress core passes (seen with the Hub/LiquidThemes builder while saving posts). The image loading optimization now treats the attachment and size parameters as optional.
+* Fix: hardened path handling in the automatic image dimensions feature so file lookups stay within the WordPress and uploads directories, consistent with the SVG dimension reader.
+
 = 3.2.0 =
 * New: New "Emails" tab to control the automatic emails WordPress sends on its own: update results (core, plugins, themes), comment moderation and author notices, and new user, password and email-change notices. Every option is off by default, with a risk note where it matters.
 * Improved: The "admin email verification prompt" and "post by email" options moved from the Light tab to the new Emails tab; their saved settings carry over unchanged.
-
-= 3.1.0 =
-* Improved: Performance – JavaScript defer now skips a built-in list of third-party scripts that must run on load (reCAPTCHA, Typekit, HubSpot forms, payment SDKs and more), matched by URL, and extendable with the new `dietpress_skip_defer_script_patterns` filter.
-* Improved: Performance – image optimization now leaves images already handled by another lazy-load solution untouched, honoring the `skip-lazy`/`data-skip-lazy` markers and the markup of common sliders (LayerSlider, Soliloquy), the Contact Form 7 captcha and the WooCommerce placeholder.
-* Improved: Performance – image optimization is skipped inside page builder editors and previews (Beaver Builder, Divi, Oxygen and WordPress previews) so layouts are not altered while editing.
-* Improved: Performance – site logo detection for image priority is now filterable via the new `dietpress_logo_class_patterns` filter.
-* Improved: Performance – missing dimensions are now added to SVG images too (read from their width/height or viewBox), reducing layout shift.
-* Improved: Performance – the Scale tab savings counter now also accounts for the performance optimizations (defer, critical CSS, image loading, resource hints, feeds, transient and query optimization, and .htaccess rules).
-* Improved: Performance – the .htaccess rules now declare the AVIF MIME type so AVIF images are served correctly on older Apache servers, and set the document charset from your site settings.
-* Improved: Security – the .htaccess performance rules no longer keep a copy of your site .htaccess inside the plugin folder. They are written non-destructively (only their own marked block is added or removed), so that copy was never used to restore anything; any backup left by earlier versions is removed automatically on update.
-* Fix: the per-tab "Restore defaults" button now also resets the performance options shown on that tab, which it previously skipped.
-* Fix: settings export files now use the "dietpress" identifier; imports still accept files exported by earlier versions.
 
 For older changelog entries, please check the [changelog.txt](https://plugins.svn.wordpress.org/wpo-tweaks/trunk/changelog.txt) file.
 
 == Upgrade Notice ==
 
-= 3.2.0 =
-New Emails tab to silence the automatic emails WordPress sends on its own (update results, comment notices, new user and password emails). All new options are off by default. The admin email verification and post-by-email options moved there from the Light tab.
+= 3.2.1 =
+Fixes a fatal error on PHP 8+ that some themes and page builders (such as Hub/LiquidThemes) could trigger when saving posts or rendering images. Recommended update for all sites.
 
 == Support ==
 
