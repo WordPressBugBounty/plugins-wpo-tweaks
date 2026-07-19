@@ -3,9 +3,15 @@ DietPress — Full changelog
 For each release, see the entries below. The latest version is always at the top.
 The current release notes also live in readme.txt under "== Changelog ==".
 
+= 3.3.0 =
+* New: Google Fonts local hosting. DietPress can now download the Google Fonts your theme enqueues and serve them from your own server: no more visitor connections to Google (faster font delivery and GDPR-friendly), with a silent fallback to the Google CDN if any download fails, and automatic cleanup on theme switch or when turned off. Off by default; find it in Light > Performance next to the display=swap option, which keeps working as fallback.
+* New: Selective third-party loading, a new section in the Strict tab with three opt-in modules that stop loading assets where they are not used: WooCommerce styles and scripts outside the store (the cart fragments script is kept when a mini-cart widget is detected), Contact Form 7 assets on pages without a form, and the block library stylesheets on pages whose content uses no blocks (skipped on block themes, and Global Styles are never touched). Each module only acts when its target plugin is present, the site analyzer suggests them when they apply, the Maximum cleanup profile enables them, and escape filters cover custom setups.
+
 = 3.2.1 =
+* Improved: hardened path handling in the automatic image dimensions feature so file lookups stay within the WordPress and uploads directories, consistent with the SVG dimension reader.
+* Improved: the resource hints `dns-prefetch` list no longer duplicates the domains already covered by `preconnect` (Google Fonts and Google Analytics), which already complete the full connection setup for those origins.
+* Improved: the resource hints `dns-prefetch` list no longer includes `gravatar.com` and the numbered `0/1/2.gravatar.com` subdomains; WordPress core's `get_avatar_url()` only generates `secure.gravatar.com` today, so those entries prefetched DNS for hosts no avatar ever loads from.
 * Fix: prevent a fatal error (ArgumentCountError on PHP 8+) when a theme or page builder fires the `wp_get_attachment_image_attributes` filter with fewer arguments than WordPress core passes (seen with the Hub/LiquidThemes builder while saving posts). The image loading optimization now treats the attachment and size parameters as optional.
-* Fix: hardened path handling in the automatic image dimensions feature so file lookups stay within the WordPress and uploads directories, consistent with the SVG dimension reader.
 
 = 3.2.0 =
 * New: New "Emails" tab to control the automatic emails WordPress sends on its own: update results (core, plugins, themes), comment moderation and author notices, and new user, password and email-change notices. Every option is off by default, with a risk note where it matters.

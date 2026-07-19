@@ -705,13 +705,6 @@
 	padding: var(--dp-card-pad);
 }
 
-.core-diet-promo-notice > h4 {
-	margin: 0 0 14px;
-	font-size: 13px;
-	font-weight: 600;
-	color: var(--dp-text);
-}
-
 .core-diet-promo-columns {
 	display: flex;
 	flex-direction: column;

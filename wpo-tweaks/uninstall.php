@@ -38,3 +38,13 @@ if ( class_exists( 'Core_Diet_Htaccess' ) ) {
 	$dietpress_htaccess = new Core_Diet_Htaccess( null );
 	$dietpress_htaccess->clean_htaccess();
 }
+
+// Remove the locally hosted Google Fonts directory from uploads. Also normally
+// removed on deactivation; repeated here so deleting the plugin never leaves
+// generated files behind. Download-state transients expire on their own.
+require_once plugin_dir_path( __FILE__ ) . 'includes/class-core-diet-perf-fonts.php';
+
+if ( class_exists( 'Core_Diet_Perf_Fonts' ) ) {
+	$dietpress_fonts = new Core_Diet_Perf_Fonts( null );
+	$dietpress_fonts->core_diet_purge_local_fonts();
+}

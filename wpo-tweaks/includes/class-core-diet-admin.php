@@ -156,9 +156,6 @@ class Core_Diet_Admin {
 				'quickSelect'       => __( 'Quick select:', 'wpo-tweaks' ),
 			),
 		) );
-
-		// Thickbox for plugin install modals in promo banner.
-		add_thickbox();
 	}
 
 	/**
@@ -274,7 +271,7 @@ class Core_Diet_Admin {
 				<div class="core-diet-sidebar">
 					<?php
 					// Promotional banner in sidebar.
-					$promo_banner = new Core_Diet_Promo_Banner( 'wpo-tweaks', 'wpo-tweaks', 'core-diet' );
+					$promo_banner = new Core_Diet_Promo_Banner( 'core-diet' );
 					$promo_banner->render();
 					?>
 				</div><!-- .core-diet-sidebar -->
@@ -345,6 +342,7 @@ class Core_Diet_Admin {
 
 		$perf_fields = array(
 			'optimize_google_fonts' => __( 'Optimize Google Fonts loading', 'wpo-tweaks' ),
+			'host_google_fonts'     => __( 'Host Google Fonts locally', 'wpo-tweaks' ),
 			'resource_hints'        => __( 'Add resource hints (preconnect and dns-prefetch)', 'wpo-tweaks' ),
 			'preload_assets'        => __( 'Preload theme stylesheet and critical fonts', 'wpo-tweaks' ),
 			'preload_logo'          => __( 'Preload the site logo (LCP)', 'wpo-tweaks' ),
@@ -567,6 +565,13 @@ class Core_Diet_Admin {
 		$this->render_toggle_card( 'defer_js', __( 'Defer JavaScript parsing', 'wpo-tweaks' ), $descriptions['defer_js'] );
 		$this->render_toggle_card( 'critical_css_inline', __( 'Inline critical CSS in head', 'wpo-tweaks' ), $descriptions['critical_css_inline'] );
 		$this->render_toggle_card( 'critical_css_defer', __( 'Defer non-critical stylesheets (experimental)', 'wpo-tweaks' ), $descriptions['critical_css_defer'] );
+
+		// --- Selective third-party loading ---
+		$this->render_section_title( __( 'Selective loading', 'wpo-tweaks' ) );
+
+		$this->render_toggle_card( 'selective_woocommerce', __( 'Load WooCommerce assets only on store pages', 'wpo-tweaks' ), $descriptions['selective_woocommerce'] );
+		$this->render_toggle_card( 'selective_cf7', __( 'Load Contact Form 7 assets only on pages with forms', 'wpo-tweaks' ), $descriptions['selective_cf7'] );
+		$this->render_toggle_card( 'selective_blocks', __( 'Load block styles only on pages that use blocks', 'wpo-tweaks' ), $descriptions['selective_blocks'] );
 
 		// --- Server-level rules (.htaccess) ---
 		$this->render_section_title( __( 'Server-level rules (.htaccess)', 'wpo-tweaks' ) );

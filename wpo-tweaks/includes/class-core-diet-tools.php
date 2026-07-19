@@ -360,6 +360,12 @@ class Core_Diet_Tools {
 					'disable_feed_search'      => true,
 					'disable_feed_links_head'  => true,
 					'disable_privacy_tools'    => true,
+					// Selective loading: only this profile turns it on (its
+					// description already warns to review carefully). Each
+					// module is a no-op unless its target plugin is active.
+					'selective_woocommerce'    => true,
+					'selective_cf7'            => true,
+					'selective_blocks'         => true,
 					// Widgets: maximum cleanup.
 					'disable_welcome_panel'         => true,
 					'disable_dashboard_quick_draft' => true,
@@ -455,6 +461,7 @@ class Core_Diet_Tools {
 			// values only where there is a real per-page reduction; the rest
 			// reorder or speed up delivery without changing request/query counts.
 			'optimize_google_fonts'      => array( 0, 0, 0 ),
+			'host_google_fonts'          => array( 0, 0, 0 ),
 			'resource_hints'             => array( 0, 0, 0 ),
 			'preload_assets'             => array( 0, 0, 0 ),
 			'preload_logo'               => array( 0, 0, 0 ),
@@ -468,6 +475,11 @@ class Core_Diet_Tools {
 			'defer_js'                   => array( 0, 0, 0 ),
 			'critical_css_inline'        => array( 0, 0, 0 ),
 			'critical_css_defer'         => array( 0, 0, 0 ),
+			// Selective loading: savings only apply on the pages without the
+			// target content; estimates are a conservative per-page average.
+			'selective_woocommerce'      => array( 6, 120.0, 0 ),
+			'selective_cf7'              => array( 2, 30.0, 0 ),
+			'selective_blocks'           => array( 2, 50.0, 0 ),
 			'htaccess_rules'             => array( 0, 0, 0 ),
 			'htaccess_expires'           => array( 0, 0, 0 ),
 			'htaccess_gzip'              => array( 0, 0, 0 ),
@@ -726,6 +738,38 @@ class Core_Diet_Tools {
 				'key'    => 'disable_privacy_tools',
 				'label'  => Core_Diet_Settings::get_field_label( 'disable_privacy_tools' ),
 				'reason' => __( 'Built-in privacy tools can be removed if you handle GDPR compliance through a dedicated plugin.', 'wpo-tweaks' ),
+				'risk'   => 'moderate',
+				'tab'    => 'strict',
+			);
+		}
+
+		// Selective loading: suggest each module when its target is present.
+		if ( ! $settings->is_enabled( 'selective_woocommerce' ) && class_exists( 'WooCommerce' ) ) {
+			$recommendations[] = array(
+				'key'    => 'selective_woocommerce',
+				'label'  => Core_Diet_Settings::get_field_label( 'selective_woocommerce' ),
+				'reason' => __( 'WooCommerce loads its styles and scripts on every page. Selective loading removes them where there is no store content. Review the cart behavior if your theme has a custom header mini-cart.', 'wpo-tweaks' ),
+				'risk'   => 'moderate',
+				'tab'    => 'strict',
+			);
+		}
+
+		if ( ! $settings->is_enabled( 'selective_cf7' ) && class_exists( 'WPCF7' ) ) {
+			$recommendations[] = array(
+				'key'    => 'selective_cf7',
+				'label'  => Core_Diet_Settings::get_field_label( 'selective_cf7' ),
+				'reason' => __( 'Contact Form 7 loads its assets on every page. Selective loading keeps them only where a form is detected.', 'wpo-tweaks' ),
+				'risk'   => 'moderate',
+				'tab'    => 'strict',
+			);
+		}
+
+		if ( ! $settings->is_enabled( 'selective_blocks' )
+			&& ( ! function_exists( 'wp_is_block_theme' ) || ! wp_is_block_theme() ) ) {
+			$recommendations[] = array(
+				'key'    => 'selective_blocks',
+				'label'  => Core_Diet_Settings::get_field_label( 'selective_blocks' ),
+				'reason' => __( 'Your classic theme loads the block library styles everywhere. Selective loading removes them on pages whose content uses no blocks.', 'wpo-tweaks' ),
 				'risk'   => 'moderate',
 				'tab'    => 'strict',
 			);

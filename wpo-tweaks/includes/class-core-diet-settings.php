@@ -189,11 +189,17 @@ class Core_Diet_Settings {
 			// --- Performance: scripts & assets ---
 			'defer_js'                  => true,
 			'optimize_google_fonts'     => true,
+			'host_google_fonts'         => false,
 			'resource_hints'            => true,
 			'preload_assets'            => true,
 			'preload_logo'              => true,
 			'optimize_feeds'            => true,
 			'disable_pdf_previews'      => true,
+
+			// --- Performance: selective third-party loading (opt-in) ---
+			'selective_woocommerce'     => false,
+			'selective_cf7'             => false,
+			'selective_blocks'          => false,
 
 			// --- Performance: images ---
 			'enhance_images'            => true,
@@ -281,8 +287,10 @@ class Core_Diet_Settings {
 			'disable_email_check', 'disable_post_by_email',
 
 			// Performance modules.
-			'defer_js', 'optimize_google_fonts', 'resource_hints', 'preload_assets',
+			'defer_js', 'optimize_google_fonts', 'host_google_fonts',
+			'resource_hints', 'preload_assets',
 			'preload_logo', 'optimize_feeds', 'disable_pdf_previews',
+			'selective_woocommerce', 'selective_cf7', 'selective_blocks',
 			'enhance_images', 'add_image_dimensions',
 			'clean_transients', 'optimize_comment_queries', 'optimize_main_queries',
 			'critical_css_inline', 'critical_css_defer',
@@ -427,6 +435,7 @@ class Core_Diet_Settings {
 					array_keys( self::get_fields( 'light' ) ),
 					array(
 						'optimize_google_fonts',
+						'host_google_fonts',
 						'resource_hints',
 						'preload_assets',
 						'preload_logo',
@@ -472,6 +481,9 @@ class Core_Diet_Settings {
 					'defer_js',
 					'critical_css_inline',
 					'critical_css_defer',
+					'selective_woocommerce',
+					'selective_cf7',
+					'selective_blocks',
 					'htaccess_rules',
 					'htaccess_expires',
 					'htaccess_gzip',
@@ -581,6 +593,7 @@ class Core_Diet_Settings {
 			// Performance options (rendered across the Light, Moderate and
 			// Strict tabs). Labels match the toggle cards in the admin UI.
 			'optimize_google_fonts'      => __( 'Optimize Google Fonts loading', 'wpo-tweaks' ),
+			'host_google_fonts'          => __( 'Host Google Fonts locally', 'wpo-tweaks' ),
 			'resource_hints'             => __( 'Add resource hints (preconnect and dns-prefetch)', 'wpo-tweaks' ),
 			'preload_assets'             => __( 'Preload theme stylesheet and critical fonts', 'wpo-tweaks' ),
 			'preload_logo'               => __( 'Preload the site logo (LCP)', 'wpo-tweaks' ),
@@ -594,6 +607,9 @@ class Core_Diet_Settings {
 			'defer_js'                   => __( 'Defer JavaScript parsing', 'wpo-tweaks' ),
 			'critical_css_inline'        => __( 'Inline critical CSS in head', 'wpo-tweaks' ),
 			'critical_css_defer'         => __( 'Defer non-critical stylesheets (experimental)', 'wpo-tweaks' ),
+			'selective_woocommerce'      => __( 'Load WooCommerce assets only on store pages', 'wpo-tweaks' ),
+			'selective_cf7'              => __( 'Load Contact Form 7 assets only on pages with forms', 'wpo-tweaks' ),
+			'selective_blocks'           => __( 'Load block styles only on pages that use blocks', 'wpo-tweaks' ),
 			'htaccess_rules'             => __( 'Write server performance rules to .htaccess', 'wpo-tweaks' ),
 			'htaccess_expires'           => __( 'Browser caching (mod_expires)', 'wpo-tweaks' ),
 			'htaccess_gzip'              => __( 'GZIP compression (mod_deflate)', 'wpo-tweaks' ),
@@ -674,6 +690,7 @@ class Core_Diet_Settings {
 			'disable_pages_content_type' => __( 'Completely disables the Pages content type: removes admin menus, blocks creation and editing, hides from navigation menus and frontend. Rarely needed.', 'wpo-tweaks' ),
 			'defer_js' => __( 'Adds the defer attribute to non-critical scripts so they no longer block rendering. Skips jQuery and any script whose dependency chain must run immediately, and is bypassed inside the Divi builder and legacy IE9.', 'wpo-tweaks' ),
 			'optimize_google_fonts' => __( 'Appends display=swap to Google Fonts URLs so text stays visible with a fallback font while the web font loads.', 'wpo-tweaks' ),
+			'host_google_fonts' => __( 'Downloads the Google Fonts your theme enqueues and serves them from your own server: faster fonts, GDPR-friendly. If a download fails, fonts keep loading from Google; theme-hardcoded fonts are not covered.', 'wpo-tweaks' ),
 			'resource_hints' => __( 'Outputs preconnect and dns-prefetch link tags for common third-party origins (Google Fonts, Analytics, Tag Manager, Gravatar). Speeds up the first connection to those domains.', 'wpo-tweaks' ),
 			'preload_assets' => __( 'Adds a preload link for the active theme stylesheet plus any critical fonts registered through the dietpress_critical_fonts filter.', 'wpo-tweaks' ),
 			'preload_logo' => __( 'Preloads the custom site logo with fetchpriority high to improve Largest Contentful Paint. Skipped in admin, feeds and REST requests.', 'wpo-tweaks' ),
@@ -686,6 +703,9 @@ class Core_Diet_Settings {
 			'optimize_main_queries' => __( 'Adds no_found_rows to archive and home queries when pagination is not needed, skipping the expensive row count. Excludes WooCommerce pages.', 'wpo-tweaks' ),
 			'critical_css_inline' => __( 'Prints a small block of critical CSS inline in the head so the page can start rendering before external stylesheets load. Cached in the object cache with a transient fallback. Filterable via dietpress_critical_css.', 'wpo-tweaks' ),
 			'critical_css_defer' => __( 'Experimental: converts non-critical stylesheets to rel=preload + onload so they load asynchronously. Can cause a flash of unstyled content (FOUC) on first paint. Theme, child theme and admin-bar styles stay synchronous.', 'wpo-tweaks' ),
+			'selective_woocommerce' => __( 'Removes WooCommerce styles and scripts on pages with no store content (shop, product, cart, checkout, account, WooCommerce shortcodes and blocks are detected). The cart fragments script is kept when a mini-cart widget is detected; if your theme has a hand-coded header cart, keep it with the dietpress_selective_wc_keep_cart_fragments filter. Only acts when WooCommerce is active.', 'wpo-tweaks' ),
+			'selective_cf7' => __( 'Loads Contact Form 7 styles and scripts only on pages where a form is detected (shortcode or block in content or widgets). If a form is injected via AJAX or template code, use the dietpress_selective_cf7_has_form filter. Only acts when Contact Form 7 is active.', 'wpo-tweaks' ),
+			'selective_blocks' => __( 'Removes the block library stylesheets (wp-block-library and theme styles) on pages whose content uses no blocks. Skipped entirely on block themes, and Global Styles are never touched. If your classic theme reuses block styles in templates, turn this off or use the dietpress_selective_blocks_dequeue filter.', 'wpo-tweaks' ),
 			'htaccess_rules' => __( 'Master switch for the managed .htaccess block (browser caching, compression and cache headers). The file is backed up before the first change and the block is removed cleanly when turned off or on deactivation. Apache or LiteSpeed only.', 'wpo-tweaks' ),
 			'htaccess_expires' => __( 'Sets far-future Expires headers for images, fonts, CSS, JS and media so returning visitors reuse cached files (mod_expires).', 'wpo-tweaks' ),
 			'htaccess_gzip' => __( 'Compresses text-based responses (HTML, CSS, JS, JSON, SVG, fonts) before sending them, reducing transfer size (mod_deflate).', 'wpo-tweaks' ),

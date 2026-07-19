@@ -57,6 +57,8 @@ class Core_Diet {
 		require_once CORE_DIET_DIR . 'includes/class-core-diet-perf-images.php';
 		require_once CORE_DIET_DIR . 'includes/class-core-diet-perf-hints.php';
 		require_once CORE_DIET_DIR . 'includes/class-core-diet-perf-criticalcss.php';
+		require_once CORE_DIET_DIR . 'includes/class-core-diet-perf-selective.php';
+		require_once CORE_DIET_DIR . 'includes/class-core-diet-perf-fonts.php';
 		require_once CORE_DIET_DIR . 'includes/class-core-diet-database.php';
 		require_once CORE_DIET_DIR . 'includes/class-core-diet-htaccess.php';
 
@@ -113,17 +115,21 @@ class Core_Diet {
 		$emails->init();
 
 		// Performance modules.
-		$perf_scripts  = new Core_Diet_Perf_Scripts( $settings );
-		$perf_images   = new Core_Diet_Perf_Images( $settings );
-		$perf_hints    = new Core_Diet_Perf_Hints( $settings );
-		$perf_critical = new Core_Diet_Perf_Critical_Css( $settings );
-		$database      = new Core_Diet_Database( $settings );
-		$htaccess      = new Core_Diet_Htaccess( $settings );
+		$perf_scripts   = new Core_Diet_Perf_Scripts( $settings );
+		$perf_images    = new Core_Diet_Perf_Images( $settings );
+		$perf_hints     = new Core_Diet_Perf_Hints( $settings );
+		$perf_critical  = new Core_Diet_Perf_Critical_Css( $settings );
+		$perf_selective = new Core_Diet_Perf_Selective( $settings );
+		$perf_fonts     = new Core_Diet_Perf_Fonts( $settings );
+		$database       = new Core_Diet_Database( $settings );
+		$htaccess       = new Core_Diet_Htaccess( $settings );
 
 		$perf_scripts->init();
 		$perf_images->init();
 		$perf_hints->init();
 		$perf_critical->init();
+		$perf_selective->init();
+		$perf_fonts->init();
 		$database->init();
 		$htaccess->init();
 	}
@@ -203,6 +209,11 @@ class Core_Diet {
 		// Remove our .htaccess rules so they do not linger while inactive.
 		$htaccess = new Core_Diet_Htaccess( Core_Diet_Settings::get_instance() );
 		$htaccess->clean_htaccess();
+
+		// Remove the locally hosted Google Fonts; they are rebuilt on demand
+		// if the plugin is reactivated with the option on.
+		$fonts = new Core_Diet_Perf_Fonts( Core_Diet_Settings::get_instance() );
+		$fonts->core_diet_purge_local_fonts();
 	}
 
 	/**

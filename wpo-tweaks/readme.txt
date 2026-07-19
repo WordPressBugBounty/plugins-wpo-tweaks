@@ -4,7 +4,7 @@ Tags: performance, optimization, cleanup, speed, bloat
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 7.0
-Stable tag: 3.2.1
+Stable tag: 3.3.0
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -29,6 +29,8 @@ By default WordPress loads functions, services and scripts that most sites do no
 * Resource hints: preconnect and DNS prefetch for common third-party origins
 * Theme stylesheet, critical fonts and logo preloading for a faster LCP
 * Google Fonts display=swap
+* Google Fonts local hosting: serve the fonts your theme uses from your own server, GDPR-friendly with a silent fallback to the Google CDN (opt-in)
+* Selective third-party loading: WooCommerce, Contact Form 7 and block library assets only load where they are used (opt-in)
 * RSS feed optimization (cache headers and item limit)
 * Server rules in .htaccess: browser caching, GZIP and Brotli compression, immutable cache headers, CORS for fonts and keep-alive (master switch plus per-feature toggles)
 * Database maintenance: daily expired-transient cleanup and safe query optimizations
@@ -37,7 +39,7 @@ By default WordPress loads functions, services and scripts that most sites do no
 
 * **Light** (safe for any site): emojis, RSD/WLW tags, shortlinks, self-pingbacks, comment pagination, and more
 * **Moderate** (evaluate first): oEmbed, jQuery Migrate, Dashicons on the frontend, Global Styles and Duotone, remote block patterns, avatars and Gravatar, comment threading, and more
-* **Strict** (site-specific): granular RSS feed control, Heartbeat API mode, post revisions and autosave, disable comments, XML sitemap, native lazy loading/fetchpriority, content types, and more
+* **Strict** (site-specific): granular RSS feed control, Heartbeat API mode, post revisions and autosave, disable comments, XML sitemap, native lazy loading/fetchpriority, content types, selective loading of WooCommerce, Contact Form 7 and block assets, and more
 * **Widgets**: dashboard widgets (including third-party ones from Yoast, WooCommerce, Elementor, Jetpack, Wordfence, Rank Math, Gravity Forms), classic sidebar widgets, block-editor widgets and the Customizer
 * **Emails**: silence the automatic emails WordPress sends on its own, grouped by area: auto-update results for core, plugins and themes (plus the new-version notice), comment moderation and new-comment notices, and new user, password and email-change notices, plus toggles for the admin email verification prompt and post-by-email. Every option is off by default, and critical notices such as a failed core update are always kept
 
@@ -59,10 +61,16 @@ The plugin includes filters for developers:
 * `dietpress_preconnect_hints` - Customize preconnect origins
 * `dietpress_dns_prefetch_domains` - Customize DNS prefetch domains
 * `dietpress_critical_fonts` - Define critical fonts to preload
+* `dietpress_exclude_local_fonts` - Exclude Google Fonts stylesheets from local hosting
+* `dietpress_selective_is_wc_page` - Override the WooCommerce page detection of selective loading
+* `dietpress_selective_wc_styles` / `dietpress_selective_wc_scripts` - Adjust the WooCommerce handles removed on non-store pages
+* `dietpress_selective_wc_keep_cart_fragments` - Keep the cart fragments script when your theme has a hand-coded mini-cart
+* `dietpress_selective_cf7_has_form` - Mark pages that load a Contact Form 7 form dynamically
+* `dietpress_selective_blocks_dequeue` - Override the block library dequeue decision
 
 **Compatible with:**
 
-* Well-coded themes and page builders (Divi, Elementor, Beaver Builder, Gutenberg)
+* Well-coded themes and page builders (Divi, Elementor, Beaver Builder, Bricks Gutenberg)
 * Cache plugins (WP Rocket, LiteSpeed Cache, W3 Total Cache, WP Super Cache, etc.)
 * Security plugins (DietPress focuses on performance and deliberately leaves security to them; we recommend our free Vigilant)
 * CDNs (Cloudflare, StackPath, KeyCDN, etc.) thanks to CORS and Vary headers
@@ -105,6 +113,14 @@ They were intentionally left out. The standalone DietPress (core-diet) included 
 
 The performance optimizations are designed to be safe and are tested across many sites. The diet options only change something when you explicitly enable each toggle, and every option has a description of what might break. If something fails, turn the toggle off; deactivating the plugin restores default WordPress behavior.
 
+= How does Google Fonts local hosting work? =
+
+When you enable it (Light tab, Performance section), DietPress detects the Google Fonts stylesheets your theme enqueues, downloads the stylesheet and its font files once, stores them in your uploads folder, and serves everything from your own server. Visitors no longer connect to Google (faster fonts and GDPR-friendly, since no visitor data is sent to a third party). If any download fails, the fonts silently keep loading from the Google CDN. The local copies are refreshed when you switch themes and removed when you disable the option or deactivate the plugin. Fonts hardcoded by a theme outside the standard WordPress enqueue system are left untouched.
+
+= Selective loading removed something my site needs =
+
+Each selective loading module only removes assets where its target content is not detected, but unusual setups exist: a hand-coded header mini-cart, a form injected via AJAX, or a classic theme that reuses block styles everywhere. Turn the specific toggle off, or use the escape filters (`dietpress_selective_wc_keep_cart_fragments`, `dietpress_selective_cf7_has_form`, `dietpress_selective_blocks_dequeue`) to keep exactly what your site needs.
+
 = Is it compatible with caching plugins and CDNs? =
 
 Yes. DietPress works alongside caching plugins and includes CORS and Vary headers for full CDN compatibility.
@@ -128,20 +144,16 @@ Yes. See the filters listed in the description (the `dietpress_*` hooks).
 
 == Changelog ==
 
-= 3.2.1 =
-* Fix: prevent a fatal error (ArgumentCountError on PHP 8+) when a theme or page builder fires the `wp_get_attachment_image_attributes` filter with fewer arguments than WordPress core passes (seen with the Hub/LiquidThemes builder while saving posts). The image loading optimization now treats the attachment and size parameters as optional.
-* Fix: hardened path handling in the automatic image dimensions feature so file lookups stay within the WordPress and uploads directories, consistent with the SVG dimension reader.
-
-= 3.2.0 =
-* New: New "Emails" tab to control the automatic emails WordPress sends on its own: update results (core, plugins, themes), comment moderation and author notices, and new user, password and email-change notices. Every option is off by default, with a risk note where it matters.
-* Improved: The "admin email verification prompt" and "post by email" options moved from the Light tab to the new Emails tab; their saved settings carry over unchanged.
+= 3.3.0 =
+* New: Google Fonts local hosting. DietPress can now download the Google Fonts your theme enqueues and serve them from your own server: no more visitor connections to Google (faster font delivery and GDPR-friendly), with a silent fallback to the Google CDN if any download fails, and automatic cleanup on theme switch or when turned off. Off by default; find it in Light > Performance next to the display=swap option, which keeps working as fallback.
+* New: Selective third-party loading, a new section in the Strict tab with three opt-in modules that stop loading assets where they are not used: WooCommerce styles and scripts outside the store (the cart fragments script is kept when a mini-cart widget is detected), Contact Form 7 assets on pages without a form, and the block library stylesheets on pages whose content uses no blocks (skipped on block themes, and Global Styles are never touched). Each module only acts when its target plugin is present, the site analyzer suggests them when they apply, the Maximum cleanup profile enables them, and escape filters cover custom setups.
 
 For older changelog entries, please check the [changelog.txt](https://plugins.svn.wordpress.org/wpo-tweaks/trunk/changelog.txt) file.
 
 == Upgrade Notice ==
 
-= 3.2.1 =
-Fixes a fatal error on PHP 8+ that some themes and page builders (such as Hub/LiquidThemes) could trigger when saving posts or rendering images. Recommended update for all sites.
+= 3.3.0 =
+Adds Google Fonts local hosting (faster fonts, GDPR-friendly) and selective loading of WooCommerce, Contact Form 7 and block assets only where they are used. All new options are off by default: nothing changes until you enable them.
 
 == Support ==
 

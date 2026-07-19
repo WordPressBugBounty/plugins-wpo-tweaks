@@ -68,16 +68,9 @@ class Core_Diet_Perf_Hints {
 	 */
 	public function core_diet_add_dns_prefetch() {
 		$prefetch_domains = array(
-			'//fonts.googleapis.com',
-			'//fonts.gstatic.com',
 			'//ajax.googleapis.com',
-			'//www.google-analytics.com',
 			'//stats.wp.com',
-			'//gravatar.com',
 			'//secure.gravatar.com',
-			'//0.gravatar.com',
-			'//1.gravatar.com',
-			'//2.gravatar.com',
 			'//s.w.org',
 		);
 
