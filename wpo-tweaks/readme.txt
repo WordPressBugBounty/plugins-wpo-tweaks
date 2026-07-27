@@ -4,7 +4,7 @@ Tags: performance, optimization, cleanup, speed, bloat
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 7.0
-Stable tag: 3.3.0
+Stable tag: 3.3.1
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -144,6 +144,13 @@ Yes. See the filters listed in the description (the `dietpress_*` hooks).
 
 == Changelog ==
 
+= 3.3.1 =
+* Fix: "Disable media library image editor" no longer removes the Imagick and GD image editors site-wide. Doing so also stopped WordPress from creating thumbnails on upload and from regenerating them with WP-CLI or a regeneration plugin. The option now disables only the editor itself: its entry points, its AJAX endpoints and its script.
+* Fix: "Enhance image loading attributes" no longer produces an invalid image tag when the original tag is self-closing. The closing slash was left in the middle of the tag, before the attributes added by the plugin.
+* Fix: Featured images no longer come out with fetchpriority="high" and loading="lazy" at the same time. They travel through two filters, and the second one no longer treats an image already marked as high priority as a candidate for lazy loading, which worked against the very LCP the option aims to improve.
+* Fix: Deferred scripts no longer get a second defer attribute. WordPress 6.3 and later defers some scripts on its own, and adding another one made the tag invalid. WooCommerce was the most visible case.
+* Fix: Removed a dead loop in the daily transient cleanup. It looked up three names as transients when they are an object cache key and a prefix, so it never matched anything. The cleanup itself is unchanged.
+
 = 3.3.0 =
 * New: Google Fonts local hosting. DietPress can now download the Google Fonts your theme enqueues and serve them from your own server: no more visitor connections to Google (faster font delivery and GDPR-friendly), with a silent fallback to the Google CDN if any download fails, and automatic cleanup on theme switch or when turned off. Off by default; find it in Light > Performance next to the display=swap option, which keeps working as fallback.
 * New: Selective third-party loading, a new section in the Strict tab with three opt-in modules that stop loading assets where they are not used: WooCommerce styles and scripts outside the store (the cart fragments script is kept when a mini-cart widget is detected), Contact Form 7 assets on pages without a form, and the block library stylesheets on pages whose content uses no blocks (skipped on block themes, and Global Styles are never touched). Each module only acts when its target plugin is present, the site analyzer suggests them when they apply, the Maximum cleanup profile enables them, and escape filters cover custom setups.
@@ -152,8 +159,8 @@ For older changelog entries, please check the [changelog.txt](https://plugins.sv
 
 == Upgrade Notice ==
 
-= 3.3.0 =
-Adds Google Fonts local hosting (faster fonts, GDPR-friendly) and selective loading of WooCommerce, Contact Form 7 and block assets only where they are used. All new options are off by default: nothing changes until you enable them.
+= 3.3.1 =
+Recommended for everyone. Fixes the media library image editor option, which also disabled thumbnail generation, and two issues in image loading attributes that produced an invalid tag and left featured images marked both high priority and lazy loaded.
 
 == Support ==
 

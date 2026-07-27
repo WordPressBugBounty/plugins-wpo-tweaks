@@ -140,6 +140,14 @@ class Core_Diet_Perf_Images {
 				$image_count++;
 				$attrs = $matches[1];
 
+				// Set the self-closing slash aside: appending attributes after it
+				// would leave it mid-tag, as <img ... / loading="lazy">.
+				$close = '>';
+				if ( preg_match( '~["\'\s]\s*/\s*$~', $attrs ) ) {
+					$attrs = preg_replace( '~\s*/\s*$~', '', $attrs );
+					$close = ' />';
+				}
+
 				$is_logo = false;
 				foreach ( $this->core_diet_get_logo_class_patterns() as $logo_pattern ) {
 					if ( '' !== $logo_pattern && strpos( $attrs, $logo_pattern ) !== false ) {
@@ -148,8 +156,14 @@ class Core_Diet_Perf_Images {
 					}
 				}
 
+				// An image already marked as high priority is the LCP candidate,
+				// whoever marked it: core, the theme, or our own attachment filter
+				// on an earlier pass over this same tag (featured images reach both
+				// filters). It must never come out lazy loaded.
+				$is_priority = (bool) preg_match( '/fetchpriority=["\']?high/i', $attrs );
+
 				// First image or logo: no lazy loading, high priority
-				if ( ( $image_count === 1 && ! $this->first_image_found ) || $is_logo ) {
+				if ( ( $image_count === 1 && ! $this->first_image_found ) || $is_logo || $is_priority ) {
 					$this->first_image_found = true;
 
 					if ( strpos( $attrs, 'decoding=' ) === false ) {
@@ -163,13 +177,13 @@ class Core_Diet_Perf_Images {
 					// Remove lazy loading if present on first image
 					$attrs = preg_replace( '/\s*loading=["\'][^"\']*["\']/', '', $attrs );
 
-					return '<img' . $attrs . '>';
+					return '<img' . $attrs . $close;
 				}
 
 				// Leave images already handled by another lazy-load solution
 				// (sliders, captchas, WC placeholder, skip-lazy markers) alone.
 				if ( $this->core_diet_img_skips_lazy( $attrs ) ) {
-					return '<img' . $attrs . '>';
+					return '<img' . $attrs . $close;
 				}
 
 				// All other images: lazy load + low priority (only if not present)
@@ -187,7 +201,7 @@ class Core_Diet_Perf_Images {
 					$attrs .= ' fetchpriority="low"';
 				}
 
-				return '<img' . $attrs . '>';
+				return '<img' . $attrs . $close;
 			},
 			$content
 		);

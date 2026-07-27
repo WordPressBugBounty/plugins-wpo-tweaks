@@ -72,7 +72,11 @@ class Core_Diet_Light {
 		}
 
 		if ( $this->settings->is_enabled( 'disable_image_editor' ) ) {
-			add_filter( 'wp_image_editors', '__return_empty_array' );
+			// Remove the AJAX endpoints that serve and save the editor.
+			add_action( 'admin_init', array( $this, 'remove_image_editor_endpoints' ) );
+			// Hide the "Edit Image" entry points and skip the editor script.
+			add_action( 'admin_enqueue_scripts', array( $this, 'hide_image_editor_ui' ) );
+			add_action( 'admin_print_footer_scripts', array( $this, 'dequeue_image_editor_script' ), 1 );
 		}
 	}
 
@@ -162,6 +166,39 @@ class Core_Diet_Light {
 	 */
 	public function remove_wp_logo_admin_bar( $wp_admin_bar ) {
 		$wp_admin_bar->remove_node( 'wp-logo' );
+	}
+
+	/**
+	 * Remove the AJAX endpoints that power the media library image editor.
+	 *
+	 * The editor markup and every crop, rotate, scale and restore action travel
+	 * over these two endpoints, so dropping them disables the editor entirely.
+	 * Note that admin-ajax.php registers them at priority 1, before admin_init.
+	 */
+	public function remove_image_editor_endpoints() {
+		remove_action( 'wp_ajax_image-editor', 'wp_ajax_image_editor', 1 );
+		remove_action( 'wp_ajax_imgedit-preview', 'wp_ajax_imgedit_preview', 1 );
+	}
+
+	/**
+	 * Hide the "Edit Image" entry points across the admin.
+	 *
+	 * Covers the button on the attachment edit screen and in the legacy uploader
+	 * (both rendered with an imgedit-open-btn-<ID> identifier), plus the links in
+	 * the media modal templates.
+	 */
+	public function hide_image_editor_ui() {
+		$css  = '[id^="imgedit-open-btn-"] { display: none !important; }';
+		$css .= ' .edit-attachment { display: none !important; }';
+		$css .= ' .imgedit-wrap { display: none !important; }';
+		wp_add_inline_style( 'common', $css );
+	}
+
+	/**
+	 * Skip the image editor script, which prints in the admin footer.
+	 */
+	public function dequeue_image_editor_script() {
+		wp_dequeue_script( 'image-edit' );
 	}
 
 	/**

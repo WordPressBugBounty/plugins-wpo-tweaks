@@ -658,7 +658,7 @@ class Core_Diet_Settings {
 			'disable_post_by_email'   => __( 'Blocks access to wp-mail.php, which handles posting via email. Unused by most sites.', 'wpo-tweaks' ),
 			'disable_comment_pagination' => __( 'Disables comment pagination and adds 301 redirects from /comment-page-N/ URLs. Reduces duplicate content.', 'wpo-tweaks' ),
 			'disable_wp_logo_admin_bar'  => __( 'Removes the WordPress logo and its dropdown menu from the admin bar.', 'wpo-tweaks' ),
-			'disable_image_editor'    => __( 'Disables the built-in image editing tools (crop, rotate, resize) in the media library.', 'wpo-tweaks' ),
+			'disable_image_editor'    => __( 'Disables the built-in image editing tools (crop, rotate, resize) in the media library. Thumbnail generation is not affected.', 'wpo-tweaks' ),
 			'disable_oembed'          => __( 'Prevents other sites from embedding your posts and removes wp-embed.js. Does not affect your ability to embed external content.', 'wpo-tweaks' ),
 			'disable_rest_api_link'   => __( 'Removes the REST API discovery link from the HTML head. Does not disable the REST API itself.', 'wpo-tweaks' ),
 			'disable_jquery_migrate'  => __( 'Removes the jQuery Migrate compatibility layer. Some older plugins may need it.', 'wpo-tweaks' ),

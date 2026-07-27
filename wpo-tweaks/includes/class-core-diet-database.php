@@ -63,46 +63,13 @@ class Core_Diet_Database {
 		wp_cache_set( $cache_key, true, '', 300 ); // 5 minutes
 
 		// Use WordPress functions for cleaning transients
-		$this->clean_transients_wp_way();
+		delete_expired_transients();
 
 		// Clear cache after operation
 		wp_cache_delete( $cache_key );
 
 		// Cache that cleanup completed
 		wp_cache_set( 'core_diet_last_transient_cleanup', time(), '', HOUR_IN_SECONDS );
-	}
-
-	/**
-	 * Clean transients using WordPress methods
-	 */
-	private function clean_transients_wp_way() {
-		$current_time = time();
-		$cleaned      = 0;
-
-		// Clean known plugin transients
-		$plugin_transients = array(
-			'core_diet_critical_css_',
-			'core_diet_cleaning_transients',
-			'core_diet_last_transient_cleanup',
-		);
-
-		foreach ( $plugin_transients as $transient_prefix ) {
-			$timeout_value = get_option( '_transient_timeout_' . $transient_prefix );
-			if ( $timeout_value && $timeout_value < $current_time ) {
-				delete_transient( $transient_prefix );
-				$cleaned++;
-			}
-		}
-
-		// Safety limit to prevent timeouts
-		if ( $cleaned > 50 ) {
-			return;
-		}
-
-		// Use WordPress core function if available
-		if ( function_exists( 'delete_expired_transients' ) ) {
-			delete_expired_transients();
-		}
 	}
 
 	/**

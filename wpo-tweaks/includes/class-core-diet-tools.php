@@ -590,7 +590,7 @@ class Core_Diet_Tools {
 			'disable_capital_p'      => __( 'The auto-correction filter is cosmetic and unnecessary.', 'wpo-tweaks' ),
 			'disable_comment_pagination' => __( 'Comment pagination creates thin content and duplicate URLs. Safe to disable.', 'wpo-tweaks' ),
 			'disable_wp_logo_admin_bar'  => __( 'The WordPress logo in the admin bar serves no functional purpose.', 'wpo-tweaks' ),
-			'disable_image_editor'   => __( 'The media library image editor is rarely used. Frees server resources.', 'wpo-tweaks' ),
+			'disable_image_editor'   => __( 'The media library image editor is rarely used. Skips its scripts in the admin.', 'wpo-tweaks' ),
 		);
 
 		foreach ( $light_always_safe as $key => $reason ) {

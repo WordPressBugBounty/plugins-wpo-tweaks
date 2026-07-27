@@ -117,6 +117,13 @@ class Core_Diet_Perf_Scripts {
 			return $tag;
 		}
 
+		// Nor scripts the tag already defers. Core marks its own deferred
+		// scripts with data-wp-strategy="defer" (WP 6.3+), and a second defer
+		// attribute in the same tag is invalid markup.
+		if ( preg_match( '/\sdefer(\s|=|>)/', $tag ) ) {
+			return $tag;
+		}
+
 		// Don't defer scripts whose dependency chain requires immediate
 		// execution. A script must run immediately (not deferred) when:
 		// - It has inline "after" code attached via wp_add_inline_script()
