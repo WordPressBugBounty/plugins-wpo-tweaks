@@ -149,18 +149,58 @@ class Core_Diet_Tools {
 		// Merge profile over defaults to ensure all keys exist.
 		$new_settings = array_merge( Core_Diet_Settings::get_defaults(), $profile_settings );
 
+		// A profile describes a whole configuration, so its own internal
+		// dependencies are judged against the state it is about to save. What a
+		// profile cannot know is the rest of the site: an option locked by
+		// another plugin keeps whatever this site already had, and is reported
+		// instead of being stored as a value that could never apply.
+		$current = get_option( Core_Diet_Settings::OPTION_NAME, array() );
+		$skipped = array();
+
+		foreach ( array_keys( $new_settings ) as $key ) {
+			if ( ! Core_Diet_Settings::is_hard_locked( $key, $new_settings ) ) {
+				continue;
+			}
+
+			if ( ! is_array( $current ) || ! array_key_exists( $key, $current ) ) {
+				continue;
+			}
+
+			// Only a real change counts. Reporting a locked option the profile
+			// was not going to touch anyway would be noise.
+			if ( (bool) $current[ $key ] === (bool) $new_settings[ $key ] ) {
+				continue;
+			}
+
+			$new_settings[ $key ] = $current[ $key ];
+			$skipped[]            = Core_Diet_Settings::get_field_label( $key );
+		}
+
 		// Sanitize through the same callback.
 		$sanitized = Core_Diet_Settings::sanitize( $new_settings );
 
 		update_option( Core_Diet_Settings::OPTION_NAME, $sanitized );
 
-		wp_send_json_success( array(
-			'message' => sprintf(
-				/* translators: %s: profile name */
-				__( 'Profile "%s" applied successfully.', 'wpo-tweaks' ),
-				$profiles[ $profile_id ]['label']
-			),
-		) );
+		$message = sprintf(
+			/* translators: %s: profile name */
+			__( 'Profile "%s" applied successfully.', 'wpo-tweaks' ),
+			$profiles[ $profile_id ]['label']
+		);
+
+		if ( $skipped ) {
+			$message .= ' ' . sprintf(
+				/* translators: %s: comma-separated list of option names. */
+				_n(
+					'One option was left as it was because it cannot apply on this site: %s.',
+					'Some options were left as they were because they cannot apply on this site: %s.',
+					count( $skipped ),
+					'wpo-tweaks'
+				),
+				implode( ', ', $skipped )
+			);
+		}
+
+		wp_send_json_success( array( 'message' => $message ) );
 	}
 
 	/**
@@ -351,8 +391,12 @@ class Core_Diet_Tools {
 					'revisions_mode'         => 'disable',
 					'autosave_interval'      => 0,
 					'disable_sitemap'        => true,
-					'disable_lazy_loading'   => true,
-					'disable_fetchpriority'  => true,
+					// "Disable native lazy loading" and "Disable fetchpriority
+					// attribute" are deliberately left out. They only make
+					// sense when another plugin manages image loading, and this
+					// profile keeps the DietPress image enhancements on, which
+					// set those attributes better than WordPress does. Turning
+					// them on here would store two options that cannot apply.
 					'disable_version_params' => true,
 					'disable_feed_comments'    => true,
 					'disable_feed_taxonomies'  => true,
@@ -366,6 +410,11 @@ class Core_Diet_Tools {
 					'selective_woocommerce'    => true,
 					'selective_cf7'            => true,
 					'selective_blocks'         => true,
+					'selective_revslider'      => true,
+					'selective_tablepress'     => true,
+					'selective_smash_balloon'  => true,
+					'selective_formidable'     => true,
+					'selective_everest_forms'  => true,
 					// Widgets: maximum cleanup.
 					'disable_welcome_panel'         => true,
 					'disable_dashboard_quick_draft' => true,
@@ -480,6 +529,11 @@ class Core_Diet_Tools {
 			'selective_woocommerce'      => array( 6, 120.0, 0 ),
 			'selective_cf7'              => array( 2, 30.0, 0 ),
 			'selective_blocks'           => array( 2, 50.0, 0 ),
+			'selective_revslider'        => array( 3, 660.0, 0 ),
+			'selective_tablepress'       => array( 1, 8.0, 0 ),
+			'selective_smash_balloon'    => array( 1, 42.0, 0 ),
+			'selective_formidable'       => array( 1, 60.0, 0 ),
+			'selective_everest_forms'    => array( 3, 198.0, 0 ),
 			'htaccess_rules'             => array( 0, 0, 0 ),
 			'htaccess_expires'           => array( 0, 0, 0 ),
 			'htaccess_gzip'              => array( 0, 0, 0 ),
@@ -516,6 +570,11 @@ class Core_Diet_Tools {
 		foreach ( $changes as $key => $value ) {
 			$key = sanitize_key( $key );
 			if ( ! array_key_exists( $key, $defaults ) ) {
+				continue;
+			}
+			// The analyzer never offers a locked option, but the page may have
+			// been open since before something locked it.
+			if ( '' !== Core_Diet_Settings::get_lock_reason( $key ) ) {
 				continue;
 			}
 			$settings[ $key ] = (bool) $value;
@@ -697,7 +756,9 @@ class Core_Diet_Tools {
 			$has_seo_sitemap = defined( 'WPSEO_VERSION' )
 				|| class_exists( 'RankMath' )
 				|| class_exists( 'AIOSEO\\Plugin\\AIOSEO' )
-				|| defined( 'JEsuspended_PLUGIN_SLUG' );
+				|| defined( 'SEOPRESS_VERSION' )
+				|| defined( 'THE_SEO_FRAMEWORK_VERSION' )
+				|| defined( 'SLIM_SEO_VER' );
 
 			if ( $has_seo_sitemap ) {
 				$recommendations[] = array(
@@ -775,6 +836,65 @@ class Core_Diet_Tools {
 			);
 		}
 
+		// Slider Revolution is not on wordpress.org and renamed its internals
+		// between versions 6 and 7, so three separate signals are checked.
+		$has_revslider = defined( 'RS_REVISION' )
+			|| class_exists( 'RevSliderFront' )
+			|| shortcode_exists( 'rev_slider' )
+			|| shortcode_exists( 'sr7' );
+
+		if ( ! $settings->is_enabled( 'selective_revslider' ) && $has_revslider ) {
+			$recommendations[] = array(
+				'key'    => 'selective_revslider',
+				'label'  => Core_Diet_Settings::get_field_label( 'selective_revslider' ),
+				'reason' => __( 'Slider Revolution loads around 660 KB of JavaScript on every page by default. Selective loading hands the decision back to Slider Revolution, so it loads only where a slider is detected. Review any slider your theme prints from a template.', 'wpo-tweaks' ),
+				'risk'   => 'moderate',
+				'tab'    => 'strict',
+			);
+		}
+
+		if ( ! $settings->is_enabled( 'selective_tablepress' )
+			&& defined( 'TABLEPRESS_BASENAME' )
+			&& ( ! function_exists( 'wp_is_block_theme' ) || ! wp_is_block_theme() ) ) {
+			$recommendations[] = array(
+				'key'    => 'selective_tablepress',
+				'label'  => Core_Diet_Settings::get_field_label( 'selective_tablepress' ),
+				'reason' => __( 'On classic themes TablePress loads its stylesheet on every page. This turns on the conditional loading it already uses on block themes, with no dequeuing involved.', 'wpo-tweaks' ),
+				'risk'   => 'safe',
+				'tab'    => 'strict',
+			);
+		}
+
+		if ( ! $settings->is_enabled( 'selective_smash_balloon' ) && defined( 'SBIVER' ) ) {
+			$recommendations[] = array(
+				'key'    => 'selective_smash_balloon',
+				'label'  => Core_Diet_Settings::get_field_label( 'selective_smash_balloon' ),
+				'reason' => __( 'Smash Balloon loads its stylesheet on every page unless you turn on its own conditional setting, which ships off. This turns it on for visitors, with no dequeuing involved.', 'wpo-tweaks' ),
+				'risk'   => 'safe',
+				'tab'    => 'strict',
+			);
+		}
+
+		if ( ! $settings->is_enabled( 'selective_formidable' ) && class_exists( 'FrmAppHelper' ) ) {
+			$recommendations[] = array(
+				'key'    => 'selective_formidable',
+				'label'  => Core_Diet_Settings::get_field_label( 'selective_formidable' ),
+				'reason' => __( 'Formidable Forms loads its stylesheet on every page with its default setting. Selective loading keeps it only where a form is detected, without losing the footer fallback.', 'wpo-tweaks' ),
+				'risk'   => 'moderate',
+				'tab'    => 'strict',
+			);
+		}
+
+		if ( ! $settings->is_enabled( 'selective_everest_forms' ) && defined( 'EVF_VERSION' ) ) {
+			$recommendations[] = array(
+				'key'    => 'selective_everest_forms',
+				'label'  => Core_Diet_Settings::get_field_label( 'selective_everest_forms' ),
+				'reason' => __( 'Everest Forms loads its stylesheets, and forces Dashicons, on every page. Selective loading keeps them only where a form is detected.', 'wpo-tweaks' ),
+				'risk'   => 'moderate',
+				'tab'    => 'strict',
+			);
+		}
+
 		// Heartbeat: suggest reducing if still default.
 		if ( 'default' === $settings->get( 'heartbeat_mode' ) ) {
 			$recommendations[] = array(
@@ -799,7 +919,40 @@ class Core_Diet_Tools {
 			);
 		}
 
-		return $recommendations;
+		return $this->filter_recommendations( $recommendations );
+	}
+
+	/**
+	 * Drop what cannot be applied and carry the warnings across.
+	 *
+	 * An option that another plugin or another DietPress option has locked is
+	 * never suggested: switching it on from here would do nothing, or would
+	 * break the plugin that needs it. The rest travel with their card note, so
+	 * the analyzer says the same thing the settings page says.
+	 *
+	 * @param array $recommendations Recommendations collected above.
+	 * @return array
+	 */
+	private function filter_recommendations( $recommendations ) {
+		$filtered = array();
+
+		foreach ( $recommendations as $recommendation ) {
+			$key = isset( $recommendation['key'] ) ? $recommendation['key'] : '';
+
+			if ( '' === $key || '' !== Core_Diet_Settings::get_lock_reason( $key ) ) {
+				continue;
+			}
+
+			$notice = Core_Diet_Settings::get_notice( $key );
+
+			if ( $notice ) {
+				$recommendation['notice'] = $notice['text'];
+			}
+
+			$filtered[] = $recommendation;
+		}
+
+		return $filtered;
 	}
 
 	/* ============================

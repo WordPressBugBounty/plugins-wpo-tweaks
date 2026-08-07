@@ -64,11 +64,306 @@ class Core_Diet_Settings {
 	/**
 	 * Check if a boolean toggle is enabled.
 	 *
+	 * A locked option never counts as enabled, whatever is stored for it: this
+	 * is the single place that keeps a saved value from applying when it cannot
+	 * do what it promises. Every module, the analyzer and the savings counter
+	 * go through here, so none of them has to know about locks.
+	 *
 	 * @param string $key Setting key.
 	 * @return bool
 	 */
 	public function is_enabled( $key ) {
+		if ( '' !== self::get_lock_reason( $key ) ) {
+			return false;
+		}
+
 		return (bool) $this->get( $key, false );
+	}
+
+	/**
+	 * Options that cannot be applied while another option is in a given state.
+	 *
+	 * Each entry names the option that governs it, the state that locks it and
+	 * the reason shown in its card. Used both to enforce the lock in PHP and to
+	 * mirror it live in the settings page, so the two never drift apart.
+	 *
+	 * Locks are for options that would do nothing or undo another DietPress
+	 * option. An option that merely deserves a warning is not locked; see
+	 * get_notice().
+	 *
+	 * @return array
+	 */
+	public static function get_lock_rules() {
+		return array(
+			// Hard: the option contradicts another one, so it is switched off
+			// and cannot be turned on until that other one changes.
+			'disable_lazy_loading'       => array( 'enhance_images', true, 'images', 'hard' ),
+			'disable_fetchpriority'      => array( 'enhance_images', true, 'images', 'hard' ),
+
+			// Soft: the option simply has no effect right now. It stays usable,
+			// so a site can be configured in any order, and only says so.
+			'disable_feed_comments'      => array( 'disable_feed_all', true, 'feeds', 'soft' ),
+			'disable_feed_taxonomies'    => array( 'disable_feed_all', true, 'feeds', 'soft' ),
+			'disable_feed_authors'       => array( 'disable_feed_all', true, 'feeds', 'soft' ),
+			'disable_feed_search'        => array( 'disable_feed_all', true, 'feeds', 'soft' ),
+			'disable_feed_links_head'    => array( 'disable_feed_all', true, 'feeds', 'soft' ),
+			'htaccess_expires'           => array( 'htaccess_rules', false, 'htaccess', 'soft' ),
+			'htaccess_gzip'              => array( 'htaccess_rules', false, 'htaccess', 'soft' ),
+			'htaccess_brotli'            => array( 'htaccess_rules', false, 'htaccess', 'soft' ),
+			'htaccess_cache_headers'     => array( 'htaccess_rules', false, 'htaccess', 'soft' ),
+			'htaccess_cors_fonts'        => array( 'htaccess_rules', false, 'htaccess', 'soft' ),
+			'htaccess_keepalive'         => array( 'htaccess_rules', false, 'htaccess', 'soft' ),
+			'disable_customizer_widgets' => array( 'disable_customizer', true, 'customizer', 'soft' ),
+		);
+	}
+
+	/**
+	 * The text a key would show if it were locked, whatever its state now.
+	 *
+	 * Needed by the settings page, which has to be able to show the reason the
+	 * moment the option it depends on is switched, before any page reload.
+	 *
+	 * @param string $key Setting key.
+	 * @return string
+	 */
+	public static function get_lock_text_for( $key ) {
+		$rules = self::get_lock_rules();
+
+		return isset( $rules[ $key ] ) ? self::get_lock_reason_text( $rules[ $key ][2] ) : '';
+	}
+
+	/**
+	 * Whether an option is hard locked: switched off and not selectable.
+	 *
+	 * @param string     $key   Setting key.
+	 * @param array|null $state Settings to judge against, or null for the saved ones.
+	 * @return bool
+	 */
+	public static function is_hard_locked( $key, $state = null ) {
+		if ( '' === self::get_lock_reason_for_state( $key, $state ) ) {
+			return false;
+		}
+
+		if ( 'disable_sitemap' === $key ) {
+			return true;
+		}
+
+		$rules = self::get_lock_rules();
+
+		return isset( $rules[ $key ] ) && 'hard' === $rules[ $key ][3];
+	}
+
+	/**
+	 * The text explaining a lock, by reason group.
+	 *
+	 * Kept apart from the rules map so the map stays free of translation calls:
+	 * is_enabled() walks it on every read, and these strings are only ever
+	 * needed by the admin screens.
+	 *
+	 * @param string $group Reason group from get_lock_rules().
+	 * @return string
+	 */
+	private static function get_lock_reason_text( $group ) {
+		switch ( $group ) {
+			case 'images':
+				return __( 'Needs "Enhance image loading attributes" off: while it is on, DietPress already sets these attributes.', 'wpo-tweaks' );
+
+			case 'feeds':
+				return __( '"Disable ALL RSS feeds" already covers this, so it does nothing right now.', 'wpo-tweaks' );
+
+			case 'htaccess':
+				return __( 'The .htaccess master switch is off, so this does nothing right now.', 'wpo-tweaks' );
+
+			case 'customizer':
+				return __( 'The whole Customizer is off, so this does nothing right now.', 'wpo-tweaks' );
+
+			case 'sitemap':
+				return __( 'Another plugin builds on the native sitemap. Turn its sitemap feature off first.', 'wpo-tweaks' );
+		}
+
+		return '';
+	}
+
+	/**
+	 * Why an option cannot be applied right now, or '' when it can.
+	 *
+	 * @param string $key Setting key.
+	 * @return string
+	 */
+	public static function get_lock_reason( $key ) {
+		return self::get_lock_reason_for_state( $key, null );
+	}
+
+	/**
+	 * Why an option cannot be applied in a given set of settings.
+	 *
+	 * Passing the settings explicitly is what lets the quick profiles ask the
+	 * question about the state they are ABOUT to save, instead of the one on
+	 * disk: a profile that switches a master option on has every right to
+	 * switch its sub-options on in the same move.
+	 *
+	 * @param string     $key   Setting key.
+	 * @param array|null $state Settings to judge against, or null for the saved ones.
+	 * @return string
+	 */
+	public static function get_lock_reason_for_state( $key, $state = null ) {
+		// The native sitemap can be another plugin's foundation, in which case
+		// removing it breaks that plugin rather than saving anything. This one
+		// does not depend on any DietPress setting.
+		if ( 'disable_sitemap' === $key ) {
+			return self::native_sitemap_in_use() ? self::get_lock_reason_text( 'sitemap' ) : '';
+		}
+
+		$rules = self::get_lock_rules();
+
+		if ( ! isset( $rules[ $key ] ) ) {
+			return '';
+		}
+
+		list( $depends_on, $locked_when, $group ) = $rules[ $key ];
+
+		$current = is_array( $state )
+			? ! empty( $state[ $depends_on ] )
+			: (bool) self::get_instance()->get( $depends_on, false );
+
+		return ( $current === (bool) $locked_when ) ? self::get_lock_reason_text( $group ) : '';
+	}
+
+	/**
+	 * Whether another plugin depends on the native WordPress sitemap.
+	 *
+	 * Visibility (Native AEO Pack) customizes wp-sitemap.xml through the
+	 * wp_sitemaps_* filters, so it needs the native sitemap alive. Any other
+	 * plugin in the same situation can say so through the filter.
+	 *
+	 * @return bool
+	 */
+	private static function native_sitemap_in_use() {
+		static $in_use = null;
+
+		if ( null !== $in_use ) {
+			return $in_use;
+		}
+
+		$detected = class_exists( 'Native_AEO_Pack_Settings' )
+			&& method_exists( 'Native_AEO_Pack_Settings', 'is_module_enabled' )
+			&& Native_AEO_Pack_Settings::is_module_enabled( 'sitemap' );
+
+		/**
+		 * Filter whether a plugin depends on the native WordPress sitemap.
+		 *
+		 * Return true to lock the "Disable WordPress XML sitemap" option, so
+		 * nobody can pull the sitemap from under your plugin by mistake.
+		 *
+		 * @since 3.4.0
+		 * @param bool $detected Whether the native sitemap is in use.
+		 */
+		$detected = (bool) apply_filters( 'dietpress_native_sitemap_in_use', $detected );
+
+		// DietPress loads with the plugin file, so an early call can happen
+		// before the other plugin exists. Answer, but do not remember a "no"
+		// that only means "not loaded yet".
+		if ( ! did_action( 'plugins_loaded' ) ) {
+			return $detected;
+		}
+
+		$in_use = $detected;
+
+		return $in_use;
+	}
+
+	/**
+	 * The note shown inside an option card, or null when there is nothing to say.
+	 *
+	 * A locked option reports its lock; the rest report what the admin should
+	 * know before switching them on. Meant for the admin screens only: some of
+	 * these count content.
+	 *
+	 * @param string $key Setting key.
+	 * @return array|null Array with 'type' (locked or warning) and 'text'.
+	 */
+	public static function get_notice( $key ) {
+		$lock = self::get_lock_reason( $key );
+
+		if ( '' !== $lock ) {
+			return array(
+				'type' => self::is_hard_locked( $key ) ? 'locked' : 'inactive',
+				'text' => $lock,
+			);
+		}
+
+		if ( 'disable_posts_content_type' === $key ) {
+			$total = self::count_content( 'post' );
+
+			if ( ! $total ) {
+				return null;
+			}
+
+			return array(
+				'type' => 'warning',
+				'text' => sprintf(
+					/* translators: %s: number of posts, already formatted. */
+					_n(
+						'You have %s post: it would be hidden from the admin, the frontend and menus. Nothing is deleted.',
+						'You have %s posts: they would be hidden from the admin, the frontend and menus. Nothing is deleted.',
+						$total,
+						'wpo-tweaks'
+					),
+					number_format_i18n( $total )
+				),
+			);
+		}
+
+		if ( 'disable_pages_content_type' === $key ) {
+			$total = self::count_content( 'page' );
+
+			if ( ! $total ) {
+				return null;
+			}
+
+			return array(
+				'type' => 'warning',
+				'text' => sprintf(
+					/* translators: %s: number of pages, already formatted. */
+					_n(
+						'You have %s page: it would be hidden from the admin, the frontend and menus. Nothing is deleted.',
+						'You have %s pages: they would be hidden from the admin, the frontend and menus. Nothing is deleted.',
+						$total,
+						'wpo-tweaks'
+					),
+					number_format_i18n( $total )
+				),
+			);
+		}
+
+		return null;
+	}
+
+	/**
+	 * Count the entries of a post type that would become unreachable.
+	 *
+	 * Trashed and auto-draft entries are left out: they are not reachable to
+	 * begin with, so counting them would only inflate the warning.
+	 *
+	 * @param string $post_type Post type name.
+	 * @return int
+	 */
+	private static function count_content( $post_type ) {
+		$counts = wp_count_posts( $post_type );
+
+		if ( ! is_object( $counts ) ) {
+			return 0;
+		}
+
+		$total = 0;
+
+		foreach ( array( 'publish', 'future', 'draft', 'pending', 'private' ) as $status ) {
+			if ( isset( $counts->$status ) ) {
+				$total += (int) $counts->$status;
+			}
+		}
+
+		return $total;
 	}
 
 	/**
@@ -200,6 +495,11 @@ class Core_Diet_Settings {
 			'selective_woocommerce'     => false,
 			'selective_cf7'             => false,
 			'selective_blocks'          => false,
+			'selective_revslider'       => false,
+			'selective_tablepress'      => false,
+			'selective_smash_balloon'   => false,
+			'selective_formidable'      => false,
+			'selective_everest_forms'   => false,
 
 			// --- Performance: images ---
 			'enhance_images'            => true,
@@ -291,6 +591,8 @@ class Core_Diet_Settings {
 			'resource_hints', 'preload_assets',
 			'preload_logo', 'optimize_feeds', 'disable_pdf_previews',
 			'selective_woocommerce', 'selective_cf7', 'selective_blocks',
+			'selective_revslider', 'selective_tablepress', 'selective_smash_balloon',
+			'selective_formidable', 'selective_everest_forms',
 			'enhance_images', 'add_image_dimensions',
 			'clean_transients', 'optimize_comment_queries', 'optimize_main_queries',
 			'critical_css_inline', 'critical_css_defer',
@@ -484,6 +786,11 @@ class Core_Diet_Settings {
 					'selective_woocommerce',
 					'selective_cf7',
 					'selective_blocks',
+					'selective_revslider',
+					'selective_tablepress',
+					'selective_smash_balloon',
+					'selective_formidable',
+					'selective_everest_forms',
 					'htaccess_rules',
 					'htaccess_expires',
 					'htaccess_gzip',
@@ -610,6 +917,11 @@ class Core_Diet_Settings {
 			'selective_woocommerce'      => __( 'Load WooCommerce assets only on store pages', 'wpo-tweaks' ),
 			'selective_cf7'              => __( 'Load Contact Form 7 assets only on pages with forms', 'wpo-tweaks' ),
 			'selective_blocks'           => __( 'Load block styles only on pages that use blocks', 'wpo-tweaks' ),
+			'selective_revslider'        => __( 'Load Slider Revolution libraries only on pages with a slider', 'wpo-tweaks' ),
+			'selective_tablepress'       => __( 'Load TablePress styles only on pages with a table', 'wpo-tweaks' ),
+			'selective_smash_balloon'    => __( 'Load Smash Balloon styles only on pages with a feed', 'wpo-tweaks' ),
+			'selective_formidable'       => __( 'Load Formidable Forms styles only on pages with a form', 'wpo-tweaks' ),
+			'selective_everest_forms'    => __( 'Load Everest Forms styles only on pages with a form', 'wpo-tweaks' ),
 			'htaccess_rules'             => __( 'Write server performance rules to .htaccess', 'wpo-tweaks' ),
 			'htaccess_expires'           => __( 'Browser caching (mod_expires)', 'wpo-tweaks' ),
 			'htaccess_gzip'              => __( 'GZIP compression (mod_deflate)', 'wpo-tweaks' ),
@@ -677,9 +989,9 @@ class Core_Diet_Settings {
 			'disable_feed_authors'    => __( 'Disables author archive feeds. Useful if your site has a single author.', 'wpo-tweaks' ),
 			'disable_feed_search'     => __( 'Disables search result feeds. Rarely used and safe to remove.', 'wpo-tweaks' ),
 			'disable_feed_links_head' => __( 'Removes RSS/Atom discovery link tags from the HTML head.', 'wpo-tweaks' ),
-			'disable_sitemap'         => __( 'Disables the native WordPress XML sitemap (wp-sitemap.xml). Disable if using an SEO plugin with its own sitemap.', 'wpo-tweaks' ),
-			'disable_lazy_loading'    => __( 'Stops WordPress core from adding loading="lazy" to images. Enable only if a third-party plugin handles lazy loading, and turn off the DietPress image enhancements too, or they will keep adding it.', 'wpo-tweaks' ),
-			'disable_fetchpriority'   => __( 'Stops WordPress core from adding fetchpriority="high" to the likely LCP image (WP 6.3+). Enable only if a third-party plugin manages image priorities, and turn off the DietPress image enhancements too, or they will keep adding it.', 'wpo-tweaks' ),
+			'disable_sitemap'         => __( 'Disables the native WordPress XML sitemap (wp-sitemap.xml). Disable if using an SEO plugin with its own sitemap. It stays unavailable while another plugin builds on the native sitemap, so nobody can pull it from under that plugin by mistake.', 'wpo-tweaks' ),
+			'disable_lazy_loading'    => __( 'Stops WordPress core from adding loading="lazy" to images. Only useful when another plugin handles lazy loading, so it needs "Enhance image loading attributes" turned off: while that one is on, DietPress sets the attribute itself and this would change nothing, so it stays unavailable.', 'wpo-tweaks' ),
+			'disable_fetchpriority'   => __( 'Stops WordPress core from adding fetchpriority="high" to the likely LCP image (WP 6.3+). Only useful when another plugin manages image priorities, so it needs "Enhance image loading attributes" turned off: while that one is on, DietPress sets the attribute itself and this would change nothing, so it stays unavailable.', 'wpo-tweaks' ),
 			'disable_version_params'  => __( 'Removes the ?ver= parameter from CSS and JS URLs for cleaner caching. Plugin assets keep their version so plugin updates still reach visitors; jQuery and admin assets are left untouched.', 'wpo-tweaks' ),
 			'enable_classic_widgets'  => __( 'Reverts to the classic widget editor instead of the block-based widget editor.', 'wpo-tweaks' ),
 			'disable_customizer_widgets' => __( 'Removes the Widgets panel from the Customizer.', 'wpo-tweaks' ),
@@ -704,8 +1016,13 @@ class Core_Diet_Settings {
 			'critical_css_inline' => __( 'Prints a small block of critical CSS inline in the head so the page can start rendering before external stylesheets load. Cached in the object cache with a transient fallback. Filterable via dietpress_critical_css.', 'wpo-tweaks' ),
 			'critical_css_defer' => __( 'Experimental: converts non-critical stylesheets to rel=preload + onload so they load asynchronously. Can cause a flash of unstyled content (FOUC) on first paint. Theme, child theme and admin-bar styles stay synchronous.', 'wpo-tweaks' ),
 			'selective_woocommerce' => __( 'Removes WooCommerce styles and scripts on pages with no store content (shop, product, cart, checkout, account, WooCommerce shortcodes and blocks are detected). The cart fragments script is kept when a mini-cart widget is detected; if your theme has a hand-coded header cart, keep it with the dietpress_selective_wc_keep_cart_fragments filter. Only acts when WooCommerce is active.', 'wpo-tweaks' ),
-			'selective_cf7' => __( 'Loads Contact Form 7 styles and scripts only on pages where a form is detected (shortcode or block in content or widgets). If a form is injected via AJAX or template code, use the dietpress_selective_cf7_has_form filter. Only acts when Contact Form 7 is active.', 'wpo-tweaks' ),
+			'selective_cf7' => __( 'Loads Contact Form 7 styles and scripts only on pages where a form is detected (shortcode or block in content or widgets). Pages built with Elementor, and any request an Elementor Theme Builder template applies to, keep the assets. If a form is injected via AJAX or template code, use the dietpress_selective_cf7_has_form filter. Only acts when Contact Form 7 is active.', 'wpo-tweaks' ),
 			'selective_blocks' => __( 'Removes the block library stylesheets (wp-block-library and theme styles) on pages whose content uses no blocks. Skipped entirely on block themes, and Global Styles are never touched. If your classic theme reuses block styles in templates, turn this off or use the dietpress_selective_blocks_dequeue filter.', 'wpo-tweaks' ),
+			'selective_revslider' => __( 'Slider Revolution loads around 660 KB of JavaScript on every page by default. This turns its own "Include libraries globally" setting off per visit, without saving anything, so Slider Revolution decides: its shortcodes, its widget and its own page list keep working, and DietPress covers what its check misses, such as a shortcode in a widget. If your theme prints sliders with add_revslider(), add those pages to the Slider Revolution list.', 'wpo-tweaks' ),
+			'selective_tablepress' => __( 'On classic themes TablePress loads its stylesheet on every page; on block themes it already loads it only where a table is rendered. This turns that same conditional loading on for classic themes through the plugin own tablepress_frontend_legacy_css_loading filter, so no table can end up unstyled. Nothing is dequeued. Only acts when TablePress is active.', 'wpo-tweaks' ),
+			'selective_smash_balloon' => __( 'Smash Balloon has a setting to load its 42 KB stylesheet only where a feed is shown, and it ships turned off. This turns it on for visitors, leaving the admin screens untouched, so Smash Balloon itself loads the styles when a feed is rendered. Nothing is dequeued. Only acts when Smash Balloon Social Photo Feed is active.', 'wpo-tweaks' ),
+			'selective_formidable' => __( 'Removes the Formidable Forms stylesheet on pages with no form (shortcode or block in content or widgets). Only acts when Formidable is set to load its styles on all pages, which is the default, and its own footer fallback is put back in play so a form printed from a template still gets styled.', 'wpo-tweaks' ),
+			'selective_everest_forms' => __( 'Removes the Everest Forms stylesheets on pages with no form (shortcode or block in content or widgets), including the Dashicons stylesheet it forces on every visitor. Dashicons is only removed for logged-out visitors and when no other stylesheet depends on it; the dietpress_selective_everest_forms_dequeue_dashicons filter turns that part off.', 'wpo-tweaks' ),
 			'htaccess_rules' => __( 'Master switch for the managed .htaccess block (browser caching, compression and cache headers). The file is backed up before the first change and the block is removed cleanly when turned off or on deactivation. Apache or LiteSpeed only.', 'wpo-tweaks' ),
 			'htaccess_expires' => __( 'Sets far-future Expires headers for images, fonts, CSS, JS and media so returning visitors reuse cached files (mod_expires).', 'wpo-tweaks' ),
 			'htaccess_gzip' => __( 'Compresses text-based responses (HTML, CSS, JS, JSON, SVG, fonts) before sending them, reducing transfer size (mod_deflate).', 'wpo-tweaks' ),

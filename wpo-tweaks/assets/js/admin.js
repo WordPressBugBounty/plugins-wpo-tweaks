@@ -16,7 +16,110 @@
 		initToolsAnalyze();
 		initRestoreDefaults();
 		initSectionToggles();
+		initOptionLocks();
 	} );
+
+	/* ============================
+	 * Option locks
+	 * ============================ */
+
+	/**
+	 * Mirror, without reloading, the locks PHP applies to option cards.
+	 *
+	 * A card that depends on another option carries the option it depends on,
+	 * the state that locks it, whether the lock is hard (the toggle cannot be
+	 * used) or soft (it only says the option does nothing right now), and the
+	 * reason to show. PHP enforces the same rules on save and on render, so a
+	 * browser with no JavaScript loses the live update, never the rule.
+	 */
+	function initOptionLocks() {
+		var cards = document.querySelectorAll( '.core-diet-option-card[data-lock-on]' );
+
+		if ( ! cards.length ) {
+			return;
+		}
+
+		var byController = {};
+
+		Array.prototype.forEach.call( cards, function( card ) {
+			var id = card.getAttribute( 'data-lock-on' );
+
+			if ( ! byController[ id ] ) {
+				byController[ id ] = [];
+			}
+
+			byController[ id ].push( card );
+		} );
+
+		Object.keys( byController ).forEach( function( id ) {
+			var controller = document.getElementById( id );
+
+			if ( ! controller ) {
+				return;
+			}
+
+			controller.addEventListener( 'change', function() {
+				byController[ id ].forEach( function( card ) {
+					applyOptionLock( card, controller.checked );
+				} );
+			} );
+		} );
+	}
+
+	/**
+	 * Lock or unlock a single option card.
+	 */
+	function applyOptionLock( card, controllerChecked ) {
+		var lockWhen = '1' === card.getAttribute( 'data-lock-when' );
+		var hard     = 'hard' === card.getAttribute( 'data-lock-mode' );
+		var locked   = controllerChecked === lockWhen;
+		var checkbox = card.querySelector( 'input[type="checkbox"]' );
+		var notice   = card.querySelector( '.core-diet-option-notice' );
+		var text     = card.querySelector( '.core-diet-option-notice-text' );
+
+		card.classList.toggle( 'core-diet-option-locked', locked && hard );
+		card.classList.toggle( 'core-diet-option-inactive', locked && ! hard );
+
+		if ( notice ) {
+			if ( locked ) {
+				if ( text ) {
+					text.textContent = card.getAttribute( 'data-lock-text' ) || '';
+				}
+				notice.className = 'core-diet-option-notice core-diet-option-notice-' + ( hard ? 'locked' : 'inactive' );
+				notice.hidden    = false;
+			} else {
+				notice.hidden = true;
+			}
+		}
+
+		if ( ! hard || ! checkbox ) {
+			return;
+		}
+
+		// A disabled checkbox is not submitted, so its value travels in a
+		// hidden field while the lock lasts and the preference is not lost.
+		var hidden = card.querySelector( '.core-diet-locked-value' );
+
+		if ( locked ) {
+			checkbox.disabled = true;
+
+			if ( ! hidden ) {
+				hidden = document.createElement( 'input' );
+				hidden.type      = 'hidden';
+				hidden.className = 'core-diet-locked-value';
+				hidden.name      = checkbox.name;
+				card.appendChild( hidden );
+			}
+
+			hidden.value = checkbox.checked ? '1' : '';
+		} else {
+			checkbox.disabled = false;
+
+			if ( hidden ) {
+				hidden.parentNode.removeChild( hidden );
+			}
+		}
+	}
 
 	/* ============================
 	 * Tab navigation
@@ -511,6 +614,14 @@
 		html += '</label>';
 		html += '</div>';
 		html += '<p class="core-diet-option-desc">' + escHtml( rec.reason ) + '</p>';
+
+		if ( rec.notice ) {
+			html += '<p class="core-diet-option-notice core-diet-option-notice-warning">';
+			html += '<span class="dashicons dashicons-warning" aria-hidden="true"></span>';
+			html += '<span>' + escHtml( rec.notice ) + '</span>';
+			html += '</p>';
+		}
+
 		html += '</div>';
 
 		return html;

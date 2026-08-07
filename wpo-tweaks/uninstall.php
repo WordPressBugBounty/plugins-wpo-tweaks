@@ -21,7 +21,6 @@ delete_option( 'core_diet_version' );
 delete_option( 'ayudawp_wpotweaks_show_activation_notice' );
 
 // Delete any transients.
-delete_transient( 'core_diet_third_party_widgets' );
 delete_transient( 'core_diet_activation_notice' );
 delete_transient( 'core_diet_security_removed_notice' );
 

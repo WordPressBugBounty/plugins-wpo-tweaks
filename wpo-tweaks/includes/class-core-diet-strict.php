@@ -48,9 +48,10 @@ class Core_Diet_Strict {
 			add_filter( 'use_widgets_block_editor', '__return_false' );
 		}
 
-		if ( $this->settings->is_enabled( 'disable_sitemap' ) ) {
-			add_filter( 'wp_sitemaps_enabled', '__return_false' );
-		}
+		// Registered whatever the setting says, and decided when the filter
+		// runs: this option is locked while another plugin builds on the native
+		// sitemap, and that plugin may not be loaded yet at this point.
+		add_filter( 'wp_sitemaps_enabled', array( $this, 'maybe_disable_sitemap' ), 99 );
 
 		if ( $this->settings->is_enabled( 'disable_lazy_loading' ) ) {
 			add_filter( 'wp_lazy_loading_enabled', '__return_false' );
@@ -667,5 +668,15 @@ class Core_Diet_Strict {
 	public function remove_fetchpriority( $attrs ) {
 		unset( $attrs['fetchpriority'] );
 		return $attrs;
+	}
+
+	/**
+	 * Turn the native sitemap off, unless the option is locked.
+	 *
+	 * @param bool $enabled Whether WordPress serves its sitemap.
+	 * @return bool
+	 */
+	public function maybe_disable_sitemap( $enabled ) {
+		return $this->settings->is_enabled( 'disable_sitemap' ) ? false : $enabled;
 	}
 }

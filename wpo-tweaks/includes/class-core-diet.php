@@ -176,9 +176,6 @@ class Core_Diet {
 			add_option( 'core_diet_settings', Core_Diet_Settings::get_defaults(), '', 'yes' );
 		}
 
-		// Clean up the legacy wpo-tweaks activation flag, if present.
-		delete_option( 'ayudawp_wpotweaks_show_activation_notice' );
-
 		// Write the server-level performance rules to .htaccess on activation.
 		$htaccess = new Core_Diet_Htaccess( Core_Diet_Settings::get_instance() );
 		$htaccess->on_settings_saved( array(), get_option( 'core_diet_settings', array() ) );
@@ -199,7 +196,6 @@ class Core_Diet {
 		}
 
 		// Clear any transients.
-		delete_transient( 'core_diet_third_party_widgets' );
 		delete_transient( 'core_diet_activation_notice' );
 		delete_transient( 'core_diet_security_removed_notice' );
 

@@ -305,10 +305,7 @@ class Core_Diet_Admin {
 			'disable_wlw_manifest'   => __( 'Remove Windows Live Writer manifest', 'wpo-tweaks' ),
 			'disable_shortlink'      => __( 'Remove shortlink from head', 'wpo-tweaks' ),
 		);
-		foreach ( $header_fields as $key => $label ) {
-			$desc = isset( $descriptions[ $key ] ) ? $descriptions[ $key ] : '';
-			$this->render_toggle_card( $key, $label, $desc );
-		}
+		$this->render_card_group( $header_fields );
 
 		// Section: Legacy features.
 		$this->render_section_title( __( 'Legacy features', 'wpo-tweaks' ) );
@@ -316,10 +313,7 @@ class Core_Diet_Admin {
 		$security_fields = array(
 			'disable_self_pingbacks' => __( 'Disable self-pingbacks', 'wpo-tweaks' ),
 		);
-		foreach ( $security_fields as $key => $label ) {
-			$desc = isset( $descriptions[ $key ] ) ? $descriptions[ $key ] : '';
-			$this->render_toggle_card( $key, $label, $desc );
-		}
+		$this->render_card_group( $security_fields );
 
 		// Section: Admin & media.
 		$this->render_section_title( __( 'Admin & media', 'wpo-tweaks' ) );
@@ -331,10 +325,7 @@ class Core_Diet_Admin {
 			'disable_wp_logo_admin_bar'  => __( 'Remove WordPress logo from admin bar', 'wpo-tweaks' ),
 			'disable_image_editor'       => __( 'Disable media library image editor', 'wpo-tweaks' ),
 		);
-		foreach ( $admin_fields as $key => $label ) {
-			$desc = isset( $descriptions[ $key ] ) ? $descriptions[ $key ] : '';
-			$this->render_toggle_card( $key, $label, $desc );
-		}
+		$this->render_card_group( $admin_fields );
 
 
 		// Section: Performance (ported from wpo-tweaks, on by default).
@@ -350,10 +341,7 @@ class Core_Diet_Admin {
 			'disable_pdf_previews'  => __( 'Disable PDF thumbnail previews', 'wpo-tweaks' ),
 			'clean_transients'      => __( 'Clean expired transients daily', 'wpo-tweaks' ),
 		);
-		foreach ( $perf_fields as $key => $label ) {
-			$desc = isset( $descriptions[ $key ] ) ? $descriptions[ $key ] : '';
-			$this->render_toggle_card( $key, $label, $desc );
-		}
+		$this->render_card_group( $perf_fields );
 
 		echo '</div>';
 	}
@@ -380,10 +368,7 @@ class Core_Diet_Admin {
 			'disable_oembed'        => __( 'Disable oEmbed discovery and wp-embed.js', 'wpo-tweaks' ),
 			'disable_rest_api_link' => __( 'Remove REST API link from head', 'wpo-tweaks' ),
 		);
-		foreach ( $protocol_fields as $key => $label ) {
-			$desc = isset( $descriptions[ $key ] ) ? $descriptions[ $key ] : '';
-			$this->render_toggle_card( $key, $label, $desc );
-		}
+		$this->render_card_group( $protocol_fields );
 
 		// Section: Frontend performance.
 		$this->render_section_title( __( 'Frontend performance', 'wpo-tweaks' ) );
@@ -395,10 +380,7 @@ class Core_Diet_Admin {
 			'disable_global_styles'  => __( 'Remove Global Styles inline CSS', 'wpo-tweaks' ),
 			'disable_duotone'        => __( 'Remove Duotone SVG inline filters', 'wpo-tweaks' ),
 		);
-		foreach ( $performance_fields as $key => $label ) {
-			$desc = isset( $descriptions[ $key ] ) ? $descriptions[ $key ] : '';
-			$this->render_toggle_card( $key, $label, $desc );
-		}
+		$this->render_card_group( $performance_fields );
 
 		// Section: Editor & content.
 		$this->render_section_title( __( 'Editor & content', 'wpo-tweaks' ) );
@@ -409,10 +391,7 @@ class Core_Diet_Admin {
 			'disable_avatars'           => __( 'Disable avatars and Gravatar', 'wpo-tweaks' ),
 			'disable_comment_threading' => __( 'Disable comment threading (nested replies)', 'wpo-tweaks' ),
 		);
-		foreach ( $editor_fields as $key => $label ) {
-			$desc = isset( $descriptions[ $key ] ) ? $descriptions[ $key ] : '';
-			$this->render_toggle_card( $key, $label, $desc );
-		}
+		$this->render_card_group( $editor_fields );
 
 
 		// Section: Images & database (ported from wpo-tweaks, on by default).
@@ -424,10 +403,7 @@ class Core_Diet_Admin {
 			'optimize_comment_queries' => __( 'Optimize comment queries', 'wpo-tweaks' ),
 			'optimize_main_queries'    => __( 'Optimize main queries', 'wpo-tweaks' ),
 		);
-		foreach ( $img_db_fields as $key => $label ) {
-			$desc = isset( $descriptions[ $key ] ) ? $descriptions[ $key ] : '';
-			$this->render_toggle_card( $key, $label, $desc );
-		}
+		$this->render_card_group( $img_db_fields );
 
 		echo '</div>';
 	}
@@ -450,36 +426,16 @@ class Core_Diet_Admin {
 		// --- RSS feeds section ---
 		$this->render_section_title( __( 'RSS feeds', 'wpo-tweaks' ) );
 
-		$this->render_toggle_card(
-			'disable_feed_all',
-			__( 'Disable all feeds (nuclear option)', 'wpo-tweaks' ),
-			$descriptions['disable_feed_all']
+		// The nuclear option is pinned first: it governs the rest of the group.
+		$feed_fields = array(
+			'disable_feed_all'        => __( 'Disable all feeds (nuclear option)', 'wpo-tweaks' ),
+			'disable_feed_comments'   => __( 'Disable comment feeds', 'wpo-tweaks' ),
+			'disable_feed_taxonomies' => __( 'Disable category, tag, and taxonomy feeds', 'wpo-tweaks' ),
+			'disable_feed_authors'    => __( 'Disable author feeds', 'wpo-tweaks' ),
+			'disable_feed_search'     => __( 'Disable search result feeds', 'wpo-tweaks' ),
+			'disable_feed_links_head' => __( 'Remove feed discovery links from head', 'wpo-tweaks' ),
 		);
-		$this->render_toggle_card(
-			'disable_feed_comments',
-			__( 'Disable comment feeds', 'wpo-tweaks' ),
-			$descriptions['disable_feed_comments']
-		);
-		$this->render_toggle_card(
-			'disable_feed_taxonomies',
-			__( 'Disable category, tag, and taxonomy feeds', 'wpo-tweaks' ),
-			$descriptions['disable_feed_taxonomies']
-		);
-		$this->render_toggle_card(
-			'disable_feed_authors',
-			__( 'Disable author feeds', 'wpo-tweaks' ),
-			$descriptions['disable_feed_authors']
-		);
-		$this->render_toggle_card(
-			'disable_feed_search',
-			__( 'Disable search result feeds', 'wpo-tweaks' ),
-			$descriptions['disable_feed_search']
-		);
-		$this->render_toggle_card(
-			'disable_feed_links_head',
-			__( 'Remove feed discovery links from head', 'wpo-tweaks' ),
-			$descriptions['disable_feed_links_head']
-		);
+		$this->render_card_group( $feed_fields, array( 'disable_feed_all' ) );
 
 		// --- Core behavior section (selects only, no toggle-all) ---
 		$this->render_section_title( __( 'Core behavior', 'wpo-tweaks' ), false );
@@ -547,42 +503,59 @@ class Core_Diet_Admin {
 		// --- Advanced section (toggles only, with toggle-all) ---
 		$this->render_section_title( __( 'Advanced', 'wpo-tweaks' ) );
 
-		$this->render_toggle_card( 'disable_comments', __( 'Disable comments', 'wpo-tweaks' ), $descriptions['disable_comments'] );
-		$this->render_toggle_card( 'enable_classic_widgets', __( 'Restore classic widget editor', 'wpo-tweaks' ), $descriptions['enable_classic_widgets'] );
-		$this->render_toggle_card( 'disable_sitemap', __( 'Disable WordPress XML sitemap', 'wpo-tweaks' ), $descriptions['disable_sitemap'] );
-		$this->render_toggle_card( 'disable_lazy_loading', __( 'Disable native lazy loading', 'wpo-tweaks' ), $descriptions['disable_lazy_loading'] );
-		$this->render_toggle_card( 'disable_fetchpriority', __( 'Disable fetchpriority attribute', 'wpo-tweaks' ), $descriptions['disable_fetchpriority'] );
-		$this->render_toggle_card( 'disable_version_params', __( 'Remove version parameter from assets', 'wpo-tweaks' ), $descriptions['disable_version_params'] );
-		$this->render_toggle_card( 'disable_privacy_tools', __( 'Remove privacy tools from admin', 'wpo-tweaks' ), $descriptions['disable_privacy_tools'] );
-		$this->render_toggle_card( 'disable_internal_search', __( 'Disable internal site search', 'wpo-tweaks' ), $descriptions['disable_internal_search'] );
-		$this->render_toggle_card( 'disable_posts_content_type', __( 'Disable Posts content type', 'wpo-tweaks' ), $descriptions['disable_posts_content_type'] );
-		$this->render_toggle_card( 'disable_pages_content_type', __( 'Disable Pages content type', 'wpo-tweaks' ), $descriptions['disable_pages_content_type'] );
+		$advanced_fields = array(
+			'disable_comments'            => __( 'Disable comments', 'wpo-tweaks' ),
+			'enable_classic_widgets'      => __( 'Restore classic widget editor', 'wpo-tweaks' ),
+			'disable_sitemap'             => __( 'Disable WordPress XML sitemap', 'wpo-tweaks' ),
+			'disable_lazy_loading'        => __( 'Disable native lazy loading', 'wpo-tweaks' ),
+			'disable_fetchpriority'       => __( 'Disable fetchpriority attribute', 'wpo-tweaks' ),
+			'disable_version_params'      => __( 'Remove version parameter from assets', 'wpo-tweaks' ),
+			'disable_privacy_tools'       => __( 'Remove privacy tools from admin', 'wpo-tweaks' ),
+			'disable_internal_search'     => __( 'Disable internal site search', 'wpo-tweaks' ),
+			'disable_posts_content_type'  => __( 'Disable Posts content type', 'wpo-tweaks' ),
+			'disable_pages_content_type'  => __( 'Disable Pages content type', 'wpo-tweaks' ),
+		);
+		$this->render_card_group( $advanced_fields );
 
 
 		// --- Frontend performance (ported from wpo-tweaks, on by default) ---
 		$this->render_section_title( __( 'Frontend performance', 'wpo-tweaks' ) );
 
-		$this->render_toggle_card( 'defer_js', __( 'Defer JavaScript parsing', 'wpo-tweaks' ), $descriptions['defer_js'] );
-		$this->render_toggle_card( 'critical_css_inline', __( 'Inline critical CSS in head', 'wpo-tweaks' ), $descriptions['critical_css_inline'] );
-		$this->render_toggle_card( 'critical_css_defer', __( 'Defer non-critical stylesheets (experimental)', 'wpo-tweaks' ), $descriptions['critical_css_defer'] );
+		$frontend_perf_fields = array(
+			'defer_js'             => __( 'Defer JavaScript parsing', 'wpo-tweaks' ),
+			'critical_css_inline'  => __( 'Inline critical CSS in head', 'wpo-tweaks' ),
+			'critical_css_defer'   => __( 'Defer non-critical stylesheets (experimental)', 'wpo-tweaks' ),
+		);
+		$this->render_card_group( $frontend_perf_fields );
 
 		// --- Selective third-party loading ---
 		$this->render_section_title( __( 'Selective loading', 'wpo-tweaks' ) );
 
-		$this->render_toggle_card( 'selective_woocommerce', __( 'Load WooCommerce assets only on store pages', 'wpo-tweaks' ), $descriptions['selective_woocommerce'] );
-		$this->render_toggle_card( 'selective_cf7', __( 'Load Contact Form 7 assets only on pages with forms', 'wpo-tweaks' ), $descriptions['selective_cf7'] );
-		$this->render_toggle_card( 'selective_blocks', __( 'Load block styles only on pages that use blocks', 'wpo-tweaks' ), $descriptions['selective_blocks'] );
+		$selective_fields = array(
+			'selective_woocommerce'    => __( 'Load WooCommerce assets only on store pages', 'wpo-tweaks' ),
+			'selective_cf7'            => __( 'Load Contact Form 7 assets only on pages with forms', 'wpo-tweaks' ),
+			'selective_blocks'         => __( 'Load block styles only on pages that use blocks', 'wpo-tweaks' ),
+			'selective_revslider'      => __( 'Load Slider Revolution libraries only on pages with a slider', 'wpo-tweaks' ),
+			'selective_tablepress'     => __( 'Load TablePress styles only on pages with a table', 'wpo-tweaks' ),
+			'selective_smash_balloon'  => __( 'Load Smash Balloon styles only on pages with a feed', 'wpo-tweaks' ),
+			'selective_formidable'     => __( 'Load Formidable Forms styles only on pages with a form', 'wpo-tweaks' ),
+			'selective_everest_forms'  => __( 'Load Everest Forms styles only on pages with a form', 'wpo-tweaks' ),
+		);
+		$this->render_card_group( $selective_fields );
 
 		// --- Server-level rules (.htaccess) ---
 		$this->render_section_title( __( 'Server-level rules (.htaccess)', 'wpo-tweaks' ) );
 
-		$this->render_toggle_card( 'htaccess_rules', __( 'Write server performance rules to .htaccess', 'wpo-tweaks' ), $descriptions['htaccess_rules'] );
-		$this->render_toggle_card( 'htaccess_expires', __( 'Browser caching (mod_expires)', 'wpo-tweaks' ), $descriptions['htaccess_expires'] );
-		$this->render_toggle_card( 'htaccess_gzip', __( 'GZIP compression (mod_deflate)', 'wpo-tweaks' ), $descriptions['htaccess_gzip'] );
-		$this->render_toggle_card( 'htaccess_brotli', __( 'Brotli compression (mod_brotli)', 'wpo-tweaks' ), $descriptions['htaccess_brotli'] );
-		$this->render_toggle_card( 'htaccess_cache_headers', __( 'Cache-Control, Vary and ETag headers (mod_headers)', 'wpo-tweaks' ), $descriptions['htaccess_cache_headers'] );
-		$this->render_toggle_card( 'htaccess_cors_fonts', __( 'Cross-origin font loading (CORS)', 'wpo-tweaks' ), $descriptions['htaccess_cors_fonts'] );
-		$this->render_toggle_card( 'htaccess_keepalive', __( 'Keep-alive connections', 'wpo-tweaks' ), $descriptions['htaccess_keepalive'] );
+		$htaccess_fields = array(
+			'htaccess_rules'          => __( 'Write server performance rules to .htaccess', 'wpo-tweaks' ),
+			'htaccess_expires'        => __( 'Browser caching (mod_expires)', 'wpo-tweaks' ),
+			'htaccess_gzip'           => __( 'GZIP compression (mod_deflate)', 'wpo-tweaks' ),
+			'htaccess_brotli'         => __( 'Brotli compression (mod_brotli)', 'wpo-tweaks' ),
+			'htaccess_cache_headers'  => __( 'Cache-Control, Vary and ETag headers (mod_headers)', 'wpo-tweaks' ),
+			'htaccess_cors_fonts'     => __( 'Cross-origin font loading (CORS)', 'wpo-tweaks' ),
+			'htaccess_keepalive'      => __( 'Keep-alive connections', 'wpo-tweaks' ),
+		);
+		$this->render_card_group( $htaccess_fields, array( 'htaccess_rules' ) );
 
 		echo '</div>'; // End cards grid.
 	}
@@ -612,10 +585,7 @@ class Core_Diet_Admin {
 			'disable_dashboard_events'      => __( 'WordPress Events and News', 'wpo-tweaks' ),
 			'disable_dashboard_site_health' => __( 'Site Health Status', 'wpo-tweaks' ),
 		);
-		foreach ( $dashboard_fields as $key => $label ) {
-			$desc = isset( $descriptions[ $key ] ) ? $descriptions[ $key ] : '';
-			$this->render_toggle_card( $key, $label, $desc );
-		}
+		$this->render_card_group( $dashboard_fields );
 
 		// Third-party dashboard widgets (dynamic).
 		$this->render_third_party_widgets();
@@ -632,10 +602,7 @@ class Core_Diet_Admin {
 			'disable_block_calendar'        => __( 'Calendar block', 'wpo-tweaks' ),
 			'disable_block_search'          => __( 'Search block', 'wpo-tweaks' ),
 		);
-		foreach ( $block_fields as $key => $label ) {
-			$desc = isset( $descriptions[ $key ] ) ? $descriptions[ $key ] : '';
-			$this->render_toggle_card( $key, $label, $desc );
-		}
+		$this->render_card_group( $block_fields );
 
 		// Section: Customizer.
 		$this->render_section_title( __( 'Customizer', 'wpo-tweaks' ) );
@@ -644,10 +611,7 @@ class Core_Diet_Admin {
 			'disable_customizer_widgets' => __( 'Disable Widgets panel in Customizer', 'wpo-tweaks' ),
 			'disable_customizer'         => __( 'Disable Customizer completely', 'wpo-tweaks' ),
 		);
-		foreach ( $customizer_fields as $key => $label ) {
-			$desc = isset( $descriptions[ $key ] ) ? $descriptions[ $key ] : '';
-			$this->render_toggle_card( $key, $label, $desc );
-		}
+		$this->render_card_group( $customizer_fields );
 
 		// Section: Classic sidebar widgets.
 		$this->render_section_title( __( 'Classic widgets', 'wpo-tweaks' ) );
@@ -671,10 +635,7 @@ class Core_Diet_Admin {
 			'disable_widget_text'        => __( 'Text', 'wpo-tweaks' ),
 			'disable_widget_video'       => __( 'Video', 'wpo-tweaks' ),
 		);
-		foreach ( $classic_fields as $key => $label ) {
-			$desc = isset( $descriptions[ $key ] ) ? $descriptions[ $key ] : '';
-			$this->render_toggle_card( $key, $label, $desc );
-		}
+		$this->render_card_group( $classic_fields );
 
 		echo '</div>'; // End cards grid.
 	}
@@ -697,36 +658,44 @@ class Core_Diet_Admin {
 		// Section: Updates.
 		$this->render_section_title( __( 'Updates', 'wpo-tweaks' ) );
 
-		$this->render_toggle_card( 'disable_auto_core_update_email', __( 'Core auto-update result email', 'wpo-tweaks' ), $descriptions['disable_auto_core_update_email'] );
-		$this->render_toggle_card( 'disable_core_update_available_email', __( 'New core version available email', 'wpo-tweaks' ), $descriptions['disable_core_update_available_email'] );
-		$this->render_toggle_card( 'disable_auto_plugin_update_email', __( 'Plugin auto-update result email', 'wpo-tweaks' ), $descriptions['disable_auto_plugin_update_email'] );
-		$this->render_toggle_card( 'disable_auto_theme_update_email', __( 'Theme auto-update result email', 'wpo-tweaks' ), $descriptions['disable_auto_theme_update_email'] );
+		$update_email_fields = array(
+			'disable_auto_core_update_email'       => __( 'Core auto-update result email', 'wpo-tweaks' ),
+			'disable_core_update_available_email'  => __( 'New core version available email', 'wpo-tweaks' ),
+			'disable_auto_plugin_update_email'     => __( 'Plugin auto-update result email', 'wpo-tweaks' ),
+			'disable_auto_theme_update_email'      => __( 'Theme auto-update result email', 'wpo-tweaks' ),
+		);
+		$this->render_card_group( $update_email_fields );
 
 		// Section: Comments.
 		$this->render_section_title( __( 'Comments', 'wpo-tweaks' ) );
 
-		$this->render_toggle_card( 'disable_comment_moderation_email', __( 'Comment awaiting moderation', 'wpo-tweaks' ), $descriptions['disable_comment_moderation_email'] );
-		$this->render_toggle_card( 'disable_comment_author_email', __( 'New comment notice to the post author', 'wpo-tweaks' ), $descriptions['disable_comment_author_email'] );
+		$comment_email_fields = array(
+			'disable_comment_moderation_email'  => __( 'Comment awaiting moderation', 'wpo-tweaks' ),
+			'disable_comment_author_email'      => __( 'New comment notice to the post author', 'wpo-tweaks' ),
+		);
+		$this->render_card_group( $comment_email_fields );
 
 		// Section: Users & passwords.
 		$this->render_section_title( __( 'Users & passwords', 'wpo-tweaks' ) );
 
-		// Card order is laid out so each two-column row pairs cards of similar
-		// height. The two longest cards (the welcome email with its password-link
-		// warning and the admin email change notice) share the top row; the
-		// "to the admin" notices and the "to the user" notices follow as even rows.
-		$this->render_toggle_card( 'disable_new_user_email', __( 'New user welcome email (carries the password link)', 'wpo-tweaks' ), $descriptions['disable_new_user_email'] );
-		$this->render_toggle_card( 'disable_admin_email_change_email', __( 'Site admin email change notice', 'wpo-tweaks' ), $descriptions['disable_admin_email_change_email'] );
-		$this->render_toggle_card( 'disable_new_user_admin_email', __( 'New user notice to the admin', 'wpo-tweaks' ), $descriptions['disable_new_user_admin_email'] );
-		$this->render_toggle_card( 'disable_password_reset_admin_email', __( 'Password reset notice to the admin', 'wpo-tweaks' ), $descriptions['disable_password_reset_admin_email'] );
-		$this->render_toggle_card( 'disable_password_change_email', __( 'Password changed notice to the user', 'wpo-tweaks' ), $descriptions['disable_password_change_email'] );
-		$this->render_toggle_card( 'disable_email_change_email', __( 'Email changed notice to the user', 'wpo-tweaks' ), $descriptions['disable_email_change_email'] );
+		$user_email_fields = array(
+			'disable_new_user_email'              => __( 'New user welcome email (carries the password link)', 'wpo-tweaks' ),
+			'disable_admin_email_change_email'    => __( 'Site admin email change notice', 'wpo-tweaks' ),
+			'disable_new_user_admin_email'        => __( 'New user notice to the admin', 'wpo-tweaks' ),
+			'disable_password_reset_admin_email'  => __( 'Password reset notice to the admin', 'wpo-tweaks' ),
+			'disable_password_change_email'       => __( 'Password changed notice to the user', 'wpo-tweaks' ),
+			'disable_email_change_email'          => __( 'Email changed notice to the user', 'wpo-tweaks' ),
+		);
+		$this->render_card_group( $user_email_fields );
 
 		// Section: System (email-related features, not notifications).
 		$this->render_section_title( __( 'System', 'wpo-tweaks' ) );
 
-		$this->render_toggle_card( 'disable_email_check', __( 'Disable admin email verification prompt', 'wpo-tweaks' ), $descriptions['disable_email_check'] );
-		$this->render_toggle_card( 'disable_post_by_email', __( 'Disable post by email (wp-mail.php)', 'wpo-tweaks' ), $descriptions['disable_post_by_email'] );
+		$email_system_fields = array(
+			'disable_email_check'    => __( 'Disable admin email verification prompt', 'wpo-tweaks' ),
+			'disable_post_by_email'  => __( 'Disable post by email (wp-mail.php)', 'wpo-tweaks' ),
+		);
+		$this->render_card_group( $email_system_fields );
 
 		echo '</div>'; // End cards grid.
 	}
@@ -736,22 +705,49 @@ class Core_Diet_Admin {
 	 * ============================ */
 
 	/**
-	 * Render a group of boolean toggle fields as a cards grid.
+	 * Render the toggle cards of one section, evening out the grid rows.
 	 *
-	 * @param array $fields Associative array of key => label.
+	 * The cards sit in a two-column grid, so a long card next to a short one
+	 * leaves a ragged gap and the section ends up looking like a masonry wall.
+	 * Ordering each section by how much text a card carries, longest first,
+	 * puts cards of similar height side by side. The order follows the texts,
+	 * so it keeps working when they are edited or translated.
+	 *
+	 * @param array $fields Associative array of setting key => label.
+	 * @param array $pinned Keys that must stay first whatever their length,
+	 *                      such as the master switch of a group.
 	 */
-	private function render_toggle_fields( $fields ) {
-		$settings     = Core_Diet_Settings::get_instance();
+	private function render_card_group( $fields, $pinned = array() ) {
 		$descriptions = Core_Diet_Settings::get_descriptions();
 
-		echo '<div class="core-diet-cards-grid">';
-
-		foreach ( $fields as $key => $label ) {
-			$description = isset( $descriptions[ $key ] ) ? $descriptions[ $key ] : '';
-			$this->render_toggle_card( $key, $label, $description );
+		$first = array();
+		foreach ( (array) $pinned as $key ) {
+			if ( array_key_exists( $key, $fields ) ) {
+				$first[ $key ] = $fields[ $key ];
+				unset( $fields[ $key ] );
+			}
 		}
 
-		echo '</div>';
+		$weights = array();
+		foreach ( $fields as $key => $label ) {
+			$text            = $label . ( isset( $descriptions[ $key ] ) ? $descriptions[ $key ] : '' );
+			$weights[ $key ] = function_exists( 'mb_strlen' ) ? mb_strlen( $text ) : strlen( $text );
+		}
+
+		// Longest first, and alphabetical on a tie so the order never wobbles.
+		uksort(
+			$fields,
+			static function ( $a, $b ) use ( $weights ) {
+				if ( $weights[ $a ] === $weights[ $b ] ) {
+					return strcmp( $a, $b );
+				}
+				return $weights[ $b ] - $weights[ $a ];
+			}
+		);
+
+		foreach ( $first + $fields as $key => $label ) {
+			$this->render_toggle_card( $key, $label, isset( $descriptions[ $key ] ) ? $descriptions[ $key ] : '' );
+		}
 	}
 
 	/**
@@ -766,8 +762,44 @@ class Core_Diet_Admin {
 		$checked  = $settings->is_enabled( $key );
 		$field_id = 'core_diet_' . $key;
 		$name     = Core_Diet_Settings::OPTION_NAME . '[' . $key . ']';
+		$notice   = Core_Diet_Settings::get_notice( $key );
+		$type     = $notice ? $notice['type'] : '';
+		$locked   = 'locked' === $type;
+
+		// The stored value survives a hard lock: the disabled checkbox is never
+		// submitted, so a hidden field carries it through and the preference is
+		// still there when the lock lifts.
+		$stored = (bool) $settings->get( $key, false );
+
+		$card_class = 'core-diet-option-card';
+		if ( $locked ) {
+			$card_class .= ' core-diet-option-locked';
+		} elseif ( 'inactive' === $type ) {
+			$card_class .= ' core-diet-option-inactive';
+		}
+
+		// Most locks depend on another toggle on this same page, so the card
+		// carries what the script needs to mirror the lock without a reload.
+		// The rule is enforced in PHP either way.
+		$rules     = Core_Diet_Settings::get_lock_rules();
+		$lock_on   = isset( $rules[ $key ] ) ? 'core_diet_' . $rules[ $key ][0] : '';
+		$lock_when = isset( $rules[ $key ] ) && $rules[ $key ][1] ? '1' : '0';
+		$lock_mode = isset( $rules[ $key ] ) ? $rules[ $key ][3] : '';
+		$lock_text = isset( $rules[ $key ] ) ? Core_Diet_Settings::get_lock_reason( $key ) : '';
+
+		// When the card is not locked right now the reason is still needed, so
+		// the script can show it the moment the option it depends on changes.
+		if ( $lock_on && '' === $lock_text ) {
+			$lock_text = Core_Diet_Settings::get_lock_text_for( $key );
+		}
 		?>
-		<div class="core-diet-option-card">
+		<div class="<?php echo esc_attr( $card_class ); ?>"
+			<?php if ( $lock_on ) : ?>
+				data-lock-on="<?php echo esc_attr( $lock_on ); ?>"
+				data-lock-when="<?php echo esc_attr( $lock_when ); ?>"
+				data-lock-mode="<?php echo esc_attr( $lock_mode ); ?>"
+				data-lock-text="<?php echo esc_attr( $lock_text ); ?>"
+			<?php endif; ?>>
 			<div class="core-diet-option-header">
 				<label class="core-diet-option-label" for="<?php echo esc_attr( $field_id ); ?>">
 					<?php echo esc_html( $label ); ?>
@@ -777,12 +809,34 @@ class Core_Diet_Admin {
 					       id="<?php echo esc_attr( $field_id ); ?>"
 					       name="<?php echo esc_attr( $name ); ?>"
 					       value="1"
-					       <?php checked( $checked ); ?>>
+					       <?php checked( $locked ? $stored : $checked ); ?>
+					       <?php disabled( $locked ); ?>>
 					<span class="core-diet-toggle-slider"></span>
 				</label>
 			</div>
+			<?php if ( $locked ) : ?>
+				<input type="hidden"
+				       class="core-diet-locked-value"
+				       name="<?php echo esc_attr( $name ); ?>"
+				       value="<?php echo $stored ? '1' : ''; ?>">
+			<?php endif; ?>
 			<?php if ( $description ) : ?>
 				<p class="core-diet-option-desc"><?php echo esc_html( $description ); ?></p>
+			<?php endif; ?>
+			<?php
+			// The note is only printed when there is something to say, or when
+			// the card can be locked later without a reload and the script
+			// needs somewhere to write.
+			if ( $notice || $lock_on ) :
+				$notice_class = 'core-diet-option-notice';
+				if ( $type ) {
+					$notice_class .= ' core-diet-option-notice-' . $type;
+				}
+				?>
+				<p class="<?php echo esc_attr( $notice_class ); ?>" <?php echo $notice ? '' : 'hidden'; ?>>
+					<span class="dashicons <?php echo esc_attr( $locked ? 'dashicons-lock' : 'dashicons-warning' ); ?>" aria-hidden="true"></span>
+					<span class="core-diet-option-notice-text"><?php echo $notice ? esc_html( $notice['text'] ) : ''; ?></span>
+				</p>
 			<?php endif; ?>
 		</div>
 		<?php

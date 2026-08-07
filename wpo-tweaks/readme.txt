@@ -4,7 +4,7 @@ Tags: performance, optimization, cleanup, speed, bloat
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 7.0
-Stable tag: 3.3.1
+Stable tag: 3.4.0
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -30,7 +30,7 @@ By default WordPress loads functions, services and scripts that most sites do no
 * Theme stylesheet, critical fonts and logo preloading for a faster LCP
 * Google Fonts display=swap
 * Google Fonts local hosting: serve the fonts your theme uses from your own server, GDPR-friendly with a silent fallback to the Google CDN (opt-in)
-* Selective third-party loading: WooCommerce, Contact Form 7 and block library assets only load where they are used (opt-in)
+* Selective third-party loading: WooCommerce, Contact Form 7, block library, Slider Revolution, TablePress, Smash Balloon, Formidable Forms and Everest Forms assets only load where they are used (opt-in)
 * RSS feed optimization (cache headers and item limit)
 * Server rules in .htaccess: browser caching, GZIP and Brotli compression, immutable cache headers, CORS for fonts and keep-alive (master switch plus per-feature toggles)
 * Database maintenance: daily expired-transient cleanup and safe query optimizations
@@ -39,7 +39,7 @@ By default WordPress loads functions, services and scripts that most sites do no
 
 * **Light** (safe for any site): emojis, RSD/WLW tags, shortlinks, self-pingbacks, comment pagination, and more
 * **Moderate** (evaluate first): oEmbed, jQuery Migrate, Dashicons on the frontend, Global Styles and Duotone, remote block patterns, avatars and Gravatar, comment threading, and more
-* **Strict** (site-specific): granular RSS feed control, Heartbeat API mode, post revisions and autosave, disable comments, XML sitemap, native lazy loading/fetchpriority, content types, selective loading of WooCommerce, Contact Form 7 and block assets, and more
+* **Strict** (site-specific): granular RSS feed control, Heartbeat API mode, post revisions and autosave, disable comments, XML sitemap, native lazy loading/fetchpriority, content types, selective loading for WooCommerce, Contact Form 7, block assets, Slider Revolution, TablePress, Smash Balloon, Formidable Forms and Everest Forms, and more
 * **Widgets**: dashboard widgets (including third-party ones from Yoast, WooCommerce, Elementor, Jetpack, Wordfence, Rank Math, Gravity Forms), classic sidebar widgets, block-editor widgets and the Customizer
 * **Emails**: silence the automatic emails WordPress sends on its own, grouped by area: auto-update results for core, plugins and themes (plus the new-version notice), comment moderation and new-comment notices, and new user, password and email-change notices, plus toggles for the admin email verification prompt and post-by-email. Every option is off by default, and critical notices such as a failed core update are always kept
 
@@ -62,11 +62,15 @@ The plugin includes filters for developers:
 * `dietpress_dns_prefetch_domains` - Customize DNS prefetch domains
 * `dietpress_critical_fonts` - Define critical fonts to preload
 * `dietpress_exclude_local_fonts` - Exclude Google Fonts stylesheets from local hosting
+* `dietpress_selective_{module}_has_content` - Mark a page as showing the content of a selective loading module, so its assets are kept. The module is `wc`, `cf7`, `formidable`, `everest_forms` or `revslider`
+* `dietpress_selective_{module}_styles` / `dietpress_selective_{module}_scripts` - Adjust the handles removed by each module
+* `dietpress_selective_page_hides_content` - Mark a page as rendering content the content scan cannot reach, so no module removes anything (this is what handles Elementor)
 * `dietpress_selective_is_wc_page` - Override the WooCommerce page detection of selective loading
-* `dietpress_selective_wc_styles` / `dietpress_selective_wc_scripts` - Adjust the WooCommerce handles removed on non-store pages
 * `dietpress_selective_wc_keep_cart_fragments` - Keep the cart fragments script when your theme has a hand-coded mini-cart
 * `dietpress_selective_cf7_has_form` - Mark pages that load a Contact Form 7 form dynamically
 * `dietpress_selective_blocks_dequeue` - Override the block library dequeue decision
+* `dietpress_selective_everest_forms_dequeue_dashicons` - Keep Dashicons when another plugin enqueues it directly
+* `dietpress_native_sitemap_in_use` - Tell DietPress your plugin builds on the native WordPress sitemap, so the option that removes it becomes unavailable
 
 **Compatible with:**
 
@@ -119,7 +123,25 @@ When you enable it (Light tab, Performance section), DietPress detects the Googl
 
 = Selective loading removed something my site needs =
 
-Each selective loading module only removes assets where its target content is not detected, but unusual setups exist: a hand-coded header mini-cart, a form injected via AJAX, or a classic theme that reuses block styles everywhere. Turn the specific toggle off, or use the escape filters (`dietpress_selective_wc_keep_cart_fragments`, `dietpress_selective_cf7_has_form`, `dietpress_selective_blocks_dequeue`) to keep exactly what your site needs.
+Each selective loading module only removes assets where its target content is not detected, but unusual setups exist: a hand-coded header mini-cart, a form injected via AJAX, a slider printed by the theme, or a classic theme that reuses block styles everywhere. Turn the specific toggle off, or use the escape filters (`dietpress_selective_{module}_has_content`, `dietpress_selective_page_hides_content`, `dietpress_selective_wc_keep_cart_fragments`, `dietpress_selective_cf7_has_form`, `dietpress_selective_blocks_dequeue`) to keep exactly what your site needs.
+
+Pages built with Elementor, and any request an Elementor Theme Builder template applies to, are left alone on purpose: their content lives in the database, out of reach of the content scan.
+
+= Do the TablePress and Smash Balloon modules dequeue anything? =
+
+No. Both plugins already have a conditional loading mode of their own, off by default in the case they cover, and those two modules simply turn it on for visitors. The plugin itself then loads its stylesheet when a table or a feed is rendered, so nothing can end up unstyled. The Formidable Forms module does dequeue, but it puts the plugin own footer fallback back in play for the same reason.
+
+= What does the Slider Revolution module do exactly? =
+
+It turns the "Include libraries globally" setting of Slider Revolution off for each visit, without saving anything and without touching your configuration. From there Slider Revolution decides on its own, exactly as if you had turned that setting off in its Global Settings: it loads its libraries in preview mode, when one of its shortcodes is in the content, when its widget is active, and on any page you listed in its own "List of pages to include RevSlider libraries". DietPress only adds the cases its check misses, such as a shortcode inside a text widget or an archive page. If you already turned that setting off yourself, the module does nothing at all and your page list stays in charge.
+
+One thing to know: with the global loading off, the `add_revslider()` PHP function that some themes use to print a slider from a template refuses to render and shows a notice instead. That is how Slider Revolution behaves on its own, and the remedy is the one it documents: add those pages to its list.
+
+= Why is one of the options greyed out, or telling me it does nothing? =
+
+Because it cannot do what it says right now, and saying so is better than letting you switch on something inert. Two things can happen. An option is unavailable when it would contradict another one or break another plugin: "Disable WordPress XML sitemap" while a plugin builds its own sitemap on top of the native one, or "Disable native lazy loading" and "Disable fetchpriority attribute" while "Enhance image loading attributes" is on and already sets those attributes itself. And an option simply says it has no effect when another option already covers it: the granular RSS feed toggles while "Disable ALL RSS feeds" is on, or the .htaccess sub-options while the master switch is off. Those ones stay usable, so you can set them up before turning the master switch on.
+
+Whatever you had saved is kept. An option that cannot apply is not switched off behind your back: it stays stored and starts working again as soon as the thing blocking it changes.
 
 = Is it compatible with caching plugins and CDNs? =
 
@@ -144,23 +166,26 @@ Yes. See the filters listed in the description (the `dietpress_*` hooks).
 
 == Changelog ==
 
-= 3.3.1 =
-* Fix: "Disable media library image editor" no longer removes the Imagick and GD image editors site-wide. Doing so also stopped WordPress from creating thumbnails on upload and from regenerating them with WP-CLI or a regeneration plugin. The option now disables only the editor itself: its entry points, its AJAX endpoints and its script.
-* Fix: "Enhance image loading attributes" no longer produces an invalid image tag when the original tag is self-closing. The closing slash was left in the middle of the tag, before the attributes added by the plugin.
-* Fix: Featured images no longer come out with fetchpriority="high" and loading="lazy" at the same time. They travel through two filters, and the second one no longer treats an image already marked as high priority as a candidate for lazy loading, which worked against the very LCP the option aims to improve.
-* Fix: Deferred scripts no longer get a second defer attribute. WordPress 6.3 and later defers some scripts on its own, and adding another one made the tag invalid. WooCommerce was the most visible case.
-* Fix: Removed a dead loop in the daily transient cleanup. It looked up three names as transients when they are an object cache key and a prefix, so it never matched anything. The cleanup itself is unchanged.
-
-= 3.3.0 =
-* New: Google Fonts local hosting. DietPress can now download the Google Fonts your theme enqueues and serve them from your own server: no more visitor connections to Google (faster font delivery and GDPR-friendly), with a silent fallback to the Google CDN if any download fails, and automatic cleanup on theme switch or when turned off. Off by default; find it in Light > Performance next to the display=swap option, which keeps working as fallback.
-* New: Selective third-party loading, a new section in the Strict tab with three opt-in modules that stop loading assets where they are not used: WooCommerce styles and scripts outside the store (the cart fragments script is kept when a mini-cart widget is detected), Contact Form 7 assets on pages without a form, and the block library stylesheets on pages whose content uses no blocks (skipped on block themes, and Global Styles are never touched). Each module only acts when its target plugin is present, the site analyzer suggests them when they apply, the Maximum cleanup profile enables them, and escape filters cover custom setups.
+= 3.4.0 =
+* New: Selective loading covers five more plugins that load their assets on every page. Slider Revolution, around 660 KB of JavaScript per page, by turning its own Include libraries globally setting off for each visit and letting Slider Revolution decide, so its shortcodes, its widget and its own page list keep working (DietPress adds the cases its check misses, such as a shortcode inside a widget). TablePress and Smash Balloon, by turning on the conditional loading each one already ships with (nothing is dequeued, and no table or feed can end up unstyled). Formidable Forms, whose stylesheet is removed while its own footer fallback is put back in play. And Everest Forms, including the Dashicons file it forces on every visitor. All five are off by default, the site analyzer suggests each one when its plugin is active, and the Maximum cleanup profile enables them.
+* New: Options that cannot do what they promise now say so in their own card, and the ones that would contradict another option or break another plugin cannot be switched on at all. "Disable WordPress XML sitemap" becomes unavailable while a plugin that builds on the native sitemap is active (Visibility, or any plugin that says so through the new dietpress_native_sitemap_in_use filter), so nobody can pull the sitemap from under it by mistake. A stored value is never lost: it stays saved, it simply does not apply while the lock lasts, and the site analyzer stops suggesting anything locked.
+* New: The cards for "Disable Posts content type" and "Disable Pages content type" now count what you have and warn before you switch them on, for example that your site has 42 pages that would disappear from the admin, the frontend and your menus. Nothing is ever deleted, and the warning travels with the analyzer recommendations too.
+* Improved: Selective loading no longer removes assets on pages it cannot read. A page built with Elementor keeps its content in the database, out of reach of the content scan, and an Elementor Theme Builder template can inject a header, a footer or a popup into any request. Those pages now keep the assets of every detection-based module, which closes the known gap of the Contact Form 7 module with forms placed inside a builder.
+* Improved: Every selective loading module that removes handles now exposes the same three filters (dietpress_selective_{module}_has_content, _styles and _scripts), where before only WooCommerce had its handle lists filterable; the modules that flip a native setting expose their own escape filter instead. The filters published in 3.3.0 keep working.
+* Improved: The developer filters from the 2.x days (the ayudawp_wpotweaks_* prefix, renamed in 3.0.0) now report their deprecation through the standard WordPress notice, only when a site still has a callback hooked to one of them and only with WP_DEBUG on. They keep working, and are scheduled for removal in 4.0.
+* Improved: "Disable native lazy loading" and "Disable fetchpriority attribute" are no longer offered while "Enhance image loading attributes" is on. They only make sense when another plugin manages image loading, and with the DietPress option on they changed nothing, because DietPress sets those attributes itself right after WordPress. Turning off the image enhancements makes both available again, without reloading the page. If you had one of them on together with the image enhancements, the attributes were already being set by DietPress; now WordPress keeps setting its own too, which is the behavior the option descriptions always described.
+* Improved: The Scale tab is coherent with all of the above. The savings counter no longer counts an option that cannot apply, the analyzer does not suggest one, and applying a quick profile no longer stores one: it keeps whatever the site had and says which option it left alone and why. The Maximum cleanup profile also stops switching on "Disable native lazy loading" and "Disable fetchpriority attribute", which it combined with the image enhancements it keeps on, so they could never do anything.
+* Improved: The options that another option already covers now say so instead of looking active for no reason: the five granular RSS feed toggles while "Disable ALL RSS feeds" is on, the six .htaccess sub-options while the master switch is off, and the Customizer widgets one while the whole Customizer is disabled. They stay usable so a site can be configured in any order.
+* Improved: The option cards of every section are now laid out by how much text each one carries, so the two-column grid forms even rows instead of a ragged, masonry-looking wall. The order follows the texts themselves, so it keeps working after an edit or a translation, and the switch that governs a group (the .htaccess master, the nuclear RSS option) still comes first. Card notes sit at the bottom, so the ones sharing a row line up.
+* Fix: The site analyzer recommendation to disable the WordPress sitemap checked a constant belonging to no real plugin, so it only ever detected Yoast SEO, Rank Math and All in One SEO. It now also detects SEOPress, The SEO Framework and Slim SEO.
+* Fix: Internal cleanup with no change in behavior: an unused rendering method, two deletions of a transient that is never written, and a duplicated cleanup of a 2.x option on activation.
 
 For older changelog entries, please check the [changelog.txt](https://plugins.svn.wordpress.org/wpo-tweaks/trunk/changelog.txt) file.
 
 == Upgrade Notice ==
 
-= 3.3.1 =
-Recommended for everyone. Fixes the media library image editor option, which also disabled thumbnail generation, and two issues in image loading attributes that produced an invalid tag and left featured images marked both high priority and lazy loaded.
+= 3.4.0 =
+Adds selective loading for Slider Revolution, TablePress, Smash Balloon, Formidable Forms and Everest Forms, all off by default. Options that cannot apply now say so and cannot be switched on by mistake, and disabling the Posts or Pages content type warns you how much content it would hide.
 
 == Support ==
 
