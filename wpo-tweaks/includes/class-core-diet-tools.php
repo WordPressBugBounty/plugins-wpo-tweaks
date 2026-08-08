@@ -574,7 +574,7 @@ class Core_Diet_Tools {
 			}
 			// The analyzer never offers a locked option, but the page may have
 			// been open since before something locked it.
-			if ( '' !== Core_Diet_Settings::get_lock_reason( $key ) ) {
+			if ( '' !== Core_Diet_Settings::get_lock_group_for_state( $key ) ) {
 				continue;
 			}
 			$settings[ $key ] = (bool) $value;
@@ -939,7 +939,7 @@ class Core_Diet_Tools {
 		foreach ( $recommendations as $recommendation ) {
 			$key = isset( $recommendation['key'] ) ? $recommendation['key'] : '';
 
-			if ( '' === $key || '' !== Core_Diet_Settings::get_lock_reason( $key ) ) {
+			if ( '' === $key || '' !== Core_Diet_Settings::get_lock_group_for_state( $key ) ) {
 				continue;
 			}
 

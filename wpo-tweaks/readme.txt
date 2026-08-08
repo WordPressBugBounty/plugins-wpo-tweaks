@@ -4,7 +4,7 @@ Tags: performance, optimization, cleanup, speed, bloat
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 7.0
-Stable tag: 3.4.0
+Stable tag: 3.4.1
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -166,6 +166,12 @@ Yes. See the filters listed in the description (the `dietpress_*` hooks).
 
 == Changelog ==
 
+= 3.4.1 =
+* Improved: The settings page code is no longer loaded on frontend requests. Around 90 KB of PHP that only the admin ever needs was being read and parsed on every visit to the site.
+* Improved: The saved settings are no longer completed with the built-in defaults on every single request. That work, and the database write it could trigger in the middle of an anonymous visit, now happens only after a plugin update, which is the only moment it can change anything.
+* Fix: Translations were loaded before the init action, which printed a "Translation loading for the wpo-tweaks domain was triggered too early" notice on sites that have DietPress translated and WP_DEBUG on. Deciding whether an option was locked went through the sentence that explains the lock, so merely reading a setting asked for a translation while the plugin was still loading.
+* Fix: The WooCommerce selective loading module left two stylesheets behind on pages with no store content. On WordPress 7.0, wc-blocks-style survived because block styles are now enqueued while the page renders and only afterwards moved up into the head, past the point where the module was looking. And with any block theme, woocommerce-blocktheme was never on the list to begin with, so it loaded everywhere. Every other WooCommerce file was already being removed.
+
 = 3.4.0 =
 * New: Selective loading covers five more plugins that load their assets on every page. Slider Revolution, around 660 KB of JavaScript per page, by turning its own Include libraries globally setting off for each visit and letting Slider Revolution decide, so its shortcodes, its widget and its own page list keep working (DietPress adds the cases its check misses, such as a shortcode inside a widget). TablePress and Smash Balloon, by turning on the conditional loading each one already ships with (nothing is dequeued, and no table or feed can end up unstyled). Formidable Forms, whose stylesheet is removed while its own footer fallback is put back in play. And Everest Forms, including the Dashicons file it forces on every visitor. All five are off by default, the site analyzer suggests each one when its plugin is active, and the Maximum cleanup profile enables them.
 * New: Options that cannot do what they promise now say so in their own card, and the ones that would contradict another option or break another plugin cannot be switched on at all. "Disable WordPress XML sitemap" becomes unavailable while a plugin that builds on the native sitemap is active (Visibility, or any plugin that says so through the new dietpress_native_sitemap_in_use filter), so nobody can pull the sitemap from under it by mistake. A stored value is never lost: it stays saved, it simply does not apply while the lock lasts, and the site analyzer stops suggesting anything locked.
@@ -184,8 +190,8 @@ For older changelog entries, please check the [changelog.txt](https://plugins.sv
 
 == Upgrade Notice ==
 
-= 3.4.0 =
-Adds selective loading for Slider Revolution, TablePress, Smash Balloon, Formidable Forms and Everest Forms, all off by default. Options that cannot apply now say so and cannot be switched on by mistake, and disabling the Posts or Pages content type warns you how much content it would hide.
+= 3.4.1 =
+Fixes a notice about translations loading too early with WP_DEBUG on, and two WooCommerce stylesheets that selective loading left behind on WordPress 7.0 and on block themes. The settings page code and the defaults merge no longer run on frontend requests.
 
 == Support ==
 

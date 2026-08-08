@@ -69,15 +69,23 @@ class Core_Diet_Settings {
 	 * do what it promises. Every module, the analyzer and the savings counter
 	 * go through here, so none of them has to know about locks.
 	 *
+	 * A key missing from the stored option falls back to its built-in default,
+	 * the same answer get() gives. It used to pass false instead, which never
+	 * showed because Core_Diet::maybe_upgrade() wrote every default to the
+	 * option on every single request, so no reader ever met a missing key. Now
+	 * that it only does so after an update, the two had to agree: otherwise an
+	 * option absent from an imported settings file would read as off here and as
+	 * on everywhere else, including in its own checkbox.
+	 *
 	 * @param string $key Setting key.
 	 * @return bool
 	 */
 	public function is_enabled( $key ) {
-		if ( '' !== self::get_lock_reason( $key ) ) {
+		if ( '' !== self::get_lock_group_for_state( $key, null ) ) {
 			return false;
 		}
 
-		return (bool) $this->get( $key, false );
+		return (bool) $this->get( $key );
 	}
 
 	/**
@@ -140,7 +148,7 @@ class Core_Diet_Settings {
 	 * @return bool
 	 */
 	public static function is_hard_locked( $key, $state = null ) {
-		if ( '' === self::get_lock_reason_for_state( $key, $state ) ) {
+		if ( '' === self::get_lock_group_for_state( $key, $state ) ) {
 			return false;
 		}
 
@@ -156,12 +164,19 @@ class Core_Diet_Settings {
 	/**
 	 * The text explaining a lock, by reason group.
 	 *
-	 * Kept apart from the rules map so the map stays free of translation calls:
-	 * is_enabled() walks it on every read, and these strings are only ever
-	 * needed by the admin screens.
+	 * Only the admin screens ever need these strings, and nothing may reach them
+	 * before the init action: this class is instantiated while the plugin file
+	 * is still being included, so a translation call on the path that answers
+	 * "is this option locked?" would load the text domain far too early and trip
+	 * the _load_textdomain_just_in_time notice added in WordPress 6.7.
 	 *
-	 * @param string $group Reason group from get_lock_rules().
-	 * @return string
+	 * That is why the question is split in two: get_lock_group_for_state() knows
+	 * whether an option is locked and returns a bare group slug, and only this
+	 * method turns a group into words. Callers that just need the yes or no must
+	 * use the former; ask for the text only when it is about to be printed.
+	 *
+	 * @param string $group Reason group from get_lock_rules(), or '' when unlocked.
+	 * @return string Empty string when there is no lock to explain.
 	 */
 	private static function get_lock_reason_text( $group ) {
 		switch ( $group ) {
@@ -207,11 +222,27 @@ class Core_Diet_Settings {
 	 * @return string
 	 */
 	public static function get_lock_reason_for_state( $key, $state = null ) {
+		return self::get_lock_reason_text( self::get_lock_group_for_state( $key, $state ) );
+	}
+
+	/**
+	 * Which reason group locks an option in a given set of settings, or ''.
+	 *
+	 * The translation-free half of the lock question, and the one every module
+	 * goes through via is_enabled(). It answers with the bare group slug from
+	 * get_lock_rules() so that deciding whether an option applies never needs a
+	 * text domain; see get_lock_reason_text() for why that matters.
+	 *
+	 * @param string     $key   Setting key.
+	 * @param array|null $state Settings to judge against, or null for the saved ones.
+	 * @return string Reason group, or '' when the option is not locked.
+	 */
+	public static function get_lock_group_for_state( $key, $state = null ) {
 		// The native sitemap can be another plugin's foundation, in which case
 		// removing it breaks that plugin rather than saving anything. This one
 		// does not depend on any DietPress setting.
 		if ( 'disable_sitemap' === $key ) {
-			return self::native_sitemap_in_use() ? self::get_lock_reason_text( 'sitemap' ) : '';
+			return self::native_sitemap_in_use() ? 'sitemap' : '';
 		}
 
 		$rules = self::get_lock_rules();
@@ -226,7 +257,7 @@ class Core_Diet_Settings {
 			? ! empty( $state[ $depends_on ] )
 			: (bool) self::get_instance()->get( $depends_on, false );
 
-		return ( $current === (bool) $locked_when ) ? self::get_lock_reason_text( $group ) : '';
+		return ( $current === (bool) $locked_when ) ? $group : '';
 	}
 
 	/**

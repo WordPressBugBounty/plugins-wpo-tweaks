@@ -50,6 +50,16 @@ class Core_Diet_Perf_Selective {
 	private $elementor_scan_cache = null;
 
 	/**
+	 * Style handles the first pass decided to remove on this page.
+	 *
+	 * Fed by run_dequeue_module() and drained by the late pass, which is the one
+	 * that can reach handles enqueued on demand during rendering.
+	 *
+	 * @var array
+	 */
+	private $late_dequeue_styles = array();
+
+	/**
 	 * @param Core_Diet_Settings $settings Settings instance.
 	 */
 	public function __construct( $settings ) {
@@ -83,6 +93,13 @@ class Core_Diet_Perf_Selective {
 
 		// Priority 99: run after the target plugins have enqueued their assets.
 		add_action( 'wp_enqueue_scripts', array( $this, 'core_diet_selective_dequeue' ), 99 );
+
+		// Second pass for the handles that do not exist yet at the hook above.
+		// Since WordPress 7.0 block styles are enqueued on demand while their
+		// block renders, well past wp_head, and wp_hoist_late_printed_styles()
+		// lifts them into the HEAD from the template output buffer. It captures
+		// them at wp_footer priority 20, so this has to get there first.
+		add_action( 'wp_footer', array( $this, 'core_diet_selective_dequeue_late' ), 19 );
 	}
 
 	/* ============================
@@ -126,6 +143,11 @@ class Core_Diet_Perf_Selective {
 					'woocommerce-inline',
 					'wc-blocks-style',
 					'wc-blocks-vendors-style',
+					// Only enqueued when the active theme is a block theme, and
+					// then on every page. Everything it styles is scoped to
+					// .woocommerce, so a page with no store content has nothing
+					// to lose by it going.
+					'woocommerce-blocktheme',
 				),
 				'scripts'       => array(
 					'woocommerce',
@@ -223,6 +245,45 @@ class Core_Diet_Perf_Selective {
 	}
 
 	/**
+	 * Remove the handles that were enqueued after the first pass had run.
+	 *
+	 * Runs at wp_footer priority 19, right before wp_hoist_late_printed_styles()
+	 * captures the late styles at priority 20 to lift them into the HEAD. It
+	 * only touches handles a module already decided to drop on this page, so the
+	 * content detection and every dietpress_selective_* filter still rule: this
+	 * is the same verdict, applied where the handle can finally be reached.
+	 *
+	 * Styles only, on purpose. The hoisting it compensates for is a style
+	 * mechanism, and reaching into the footer for scripts has a wider blast
+	 * radius, since inline data and script translations ride along with them.
+	 */
+	public function core_diet_selective_dequeue_late() {
+		if ( empty( $this->late_dequeue_styles ) || is_admin() || is_customize_preview() || is_preview() ) {
+			return;
+		}
+
+		$wp_styles = wp_styles();
+
+		if ( ! $wp_styles instanceof WP_Styles ) {
+			return;
+		}
+
+		foreach ( array_unique( $this->late_dequeue_styles ) as $handle ) {
+			if ( ! in_array( $handle, (array) $wp_styles->queue, true ) ) {
+				continue;
+			}
+
+			// Something enqueued later may have declared it as a dependency;
+			// removing it then would break that stylesheet instead.
+			if ( $this->style_is_a_dependency( $handle ) ) {
+				continue;
+			}
+
+			wp_dequeue_style( $handle );
+		}
+	}
+
+	/**
 	 * Apply one dequeue module to the current page.
 	 *
 	 * @param string $slug   Module slug, used to build the filter names.
@@ -300,6 +361,11 @@ class Core_Diet_Perf_Selective {
 		foreach ( $styles as $handle ) {
 			wp_dequeue_style( $handle );
 		}
+
+		// Hand the same list to the late pass. A handle enqueued on demand while
+		// a block renders is not in the queue yet, so the loop above cannot see
+		// it and dequeuing it here is a no-op.
+		$this->late_dequeue_styles = array_merge( $this->late_dequeue_styles, $styles );
 
 		foreach ( $scripts as $handle ) {
 			wp_dequeue_script( $handle );

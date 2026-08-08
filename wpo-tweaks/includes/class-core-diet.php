@@ -39,18 +39,19 @@ class Core_Diet {
 	}
 
 	/**
-	 * Load required files.
+	 * Load the files every request needs.
+	 *
+	 * The settings page classes are not among them: they are only reachable from
+	 * the admin, so init_admin() requires them behind its is_admin() guard and a
+	 * frontend request never parses them.
 	 */
 	private function load_dependencies() {
 		require_once CORE_DIET_DIR . 'includes/class-core-diet-settings.php';
-		require_once CORE_DIET_DIR . 'includes/class-core-diet-admin.php';
-		require_once CORE_DIET_DIR . 'includes/class-core-diet-tools.php';
 		require_once CORE_DIET_DIR . 'includes/class-core-diet-light.php';
 		require_once CORE_DIET_DIR . 'includes/class-core-diet-moderate.php';
 		require_once CORE_DIET_DIR . 'includes/class-core-diet-strict.php';
 		require_once CORE_DIET_DIR . 'includes/class-core-diet-widgets.php';
 		require_once CORE_DIET_DIR . 'includes/class-core-diet-emails.php';
-		require_once CORE_DIET_DIR . 'includes/class-core-diet-promo-banner.php';
 
 		// Performance modules (ported from the former wpo-tweaks codebase).
 		require_once CORE_DIET_DIR . 'includes/class-core-diet-perf-scripts.php';
@@ -68,8 +69,23 @@ class Core_Diet {
 
 	/**
 	 * Run upgrade routines if needed.
+	 *
+	 * Gated on the stored version, the same one maybe_run_upgrade_tasks() uses,
+	 * because this runs while the plugin file is being included and therefore on
+	 * every request, anonymous frontend hits included. There it used to rebuild
+	 * the whole defaults map and walk it key by key to persist what was missing,
+	 * and could even fire an update_option() during a visitor's page load.
+	 *
+	 * Skipping it costs nothing as long as every reader answers a missing key
+	 * with its built-in default, which is what this routine used to guarantee by
+	 * brute force. get() always did; is_enabled() did not, and had to be fixed
+	 * alongside this guard, so mind that pair before adding a third reader.
 	 */
 	private function maybe_upgrade() {
+		if ( CORE_DIET_VERSION === get_option( 'core_diet_version' ) ) {
+			return;
+		}
+
 		$settings = get_option( 'core_diet_settings', array() );
 		$changed  = false;
 
@@ -141,6 +157,13 @@ class Core_Diet {
 		if ( ! is_admin() ) {
 			return;
 		}
+
+		// Loaded here, not in load_dependencies(), so that a frontend request
+		// never parses the settings page. admin-ajax.php sets is_admin(), so the
+		// Tools endpoints still find their class.
+		require_once CORE_DIET_DIR . 'includes/class-core-diet-admin.php';
+		require_once CORE_DIET_DIR . 'includes/class-core-diet-tools.php';
+		require_once CORE_DIET_DIR . 'includes/class-core-diet-promo-banner.php';
 
 		$admin = new Core_Diet_Admin();
 		$tools = new Core_Diet_Tools();
