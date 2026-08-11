@@ -135,6 +135,8 @@ class Core_Diet_Tools {
 			$sanitized = Core_Diet_Settings::sanitize( Core_Diet_Settings::get_defaults() );
 			update_option( Core_Diet_Settings::OPTION_NAME, $sanitized );
 
+			self::apply_cache_setting( false );
+
 			wp_send_json_success( array(
 				'message' => __( 'All settings restored to defaults.', 'wpo-tweaks' ),
 			) );
@@ -181,11 +183,28 @@ class Core_Diet_Tools {
 
 		update_option( Core_Diet_Settings::OPTION_NAME, $sanitized );
 
+		// The page cache lives in its own option, so it is applied apart. It is
+		// never forced on when the environment refuses it, and never silently:
+		// what happened is reported in the confirmation message.
+		$profile_cache = isset( $profiles[ $profile_id ]['cache'] ) ? (array) $profiles[ $profile_id ]['cache'] : array();
+		$wants_cache   = ! empty( $profile_cache['enabled'] );
+		$cache_result  = self::apply_cache_setting( $wants_cache, $profile_cache );
+
 		$message = sprintf(
 			/* translators: %s: profile name */
 			__( 'Profile "%s" applied successfully.', 'wpo-tweaks' ),
 			$profiles[ $profile_id ]['label']
 		);
+
+		if ( 'enabled' === $cache_result ) {
+			$message .= ' ' . __( 'The page cache was switched on: only visitors who are not logged in get cached pages, so browse in a private window to see it fill up.', 'wpo-tweaks' );
+		} elseif ( 'adjusted' === $cache_result ) {
+			$message .= ' ' . __( 'The page cache settings were adjusted to suit this profile.', 'wpo-tweaks' );
+		} elseif ( 'blocked' === $cache_result ) {
+			$message .= ' ' . __( 'The page cache was left off because this site cannot run it; the Page cache tab explains why.', 'wpo-tweaks' );
+		} elseif ( 'needs_ack' === $cache_result ) {
+			$message .= ' ' . __( 'The page cache was left off because your hosting already serves one: switch it on from the Page cache tab if you want it anyway.', 'wpo-tweaks' );
+		}
 
 		if ( $skipped ) {
 			$message .= ' ' . sprintf(
@@ -201,6 +220,77 @@ class Core_Diet_Tools {
 		}
 
 		wp_send_json_success( array( 'message' => $message ) );
+	}
+
+	/**
+	 * Switch the page cache on or off from the profiles and the analyzer.
+	 *
+	 * The module keeps its own option, so it cannot travel inside the settings
+	 * array. Turning it on goes through the same gates the settings page uses:
+	 * a site that cannot run it is never left with a toggle that says on and a
+	 * cache that never fills.
+	 *
+	 * @param bool $enable Desired state.
+	 * @return string One of: enabled, disabled, blocked, needs_ack, unchanged.
+	 */
+	public static function apply_cache_setting( $enable, $extra = array() ) {
+		if ( ! class_exists( 'Core_Diet_Cache_Settings' ) ) {
+			return 'unchanged';
+		}
+
+		$settings = get_option( Core_Diet_Cache_Settings::OPTION_NAME, array() );
+		$settings = is_array( $settings ) ? $settings : array();
+		$settings = array_merge( Core_Diet_Cache_Settings::get_defaults(), $settings );
+
+		$was = ! empty( $settings['enabled'] );
+
+		if ( ! $enable ) {
+			if ( ! $was ) {
+				return 'unchanged';
+			}
+			$settings['enabled'] = false;
+			update_option( Core_Diet_Cache_Settings::OPTION_NAME, $settings );
+			return 'disabled';
+		}
+
+		if ( Core_Diet_Cache_Compat::get_blocking_reasons() ) {
+			return 'blocked';
+		}
+
+		// A hosting cache in front of this one needs a deliberate decision that
+		// a one-click profile cannot make on the site owner's behalf.
+		if ( empty( $settings['host_cache_ack'] ) && Core_Diet_Cache_Compat::get_warnings() ) {
+			return 'needs_ack';
+		}
+
+		$settings = array_merge( $settings, (array) $extra );
+
+		if ( $was && $settings === array_merge( Core_Diet_Cache_Settings::get_defaults(), (array) get_option( Core_Diet_Cache_Settings::OPTION_NAME, array() ) ) ) {
+			return 'unchanged';
+		}
+
+		$settings['enabled'] = true;
+		update_option( Core_Diet_Cache_Settings::OPTION_NAME, Core_Diet_Cache_Settings::sanitize( $settings ) );
+
+		return $was ? 'adjusted' : 'enabled';
+	}
+
+	/**
+	 * Set one key of the page cache module's own option.
+	 *
+	 * @param string $key   Setting key.
+	 * @param mixed  $value New value.
+	 */
+	public static function set_cache_option( $key, $value ) {
+		if ( ! class_exists( 'Core_Diet_Cache_Settings' ) ) {
+			return;
+		}
+
+		$settings         = get_option( Core_Diet_Cache_Settings::OPTION_NAME, array() );
+		$settings         = array_merge( Core_Diet_Cache_Settings::get_defaults(), is_array( $settings ) ? $settings : array() );
+		$settings[ $key ] = $value;
+
+		update_option( Core_Diet_Cache_Settings::OPTION_NAME, Core_Diet_Cache_Settings::sanitize( $settings ) );
 	}
 
 	/**
@@ -251,6 +341,15 @@ class Core_Diet_Tools {
 					'disable_welcome_panel'  => true,
 					'disable_dashboard_events' => true,
 				),
+				// Page cache on. The lifetime is capped at 12 hours everywhere,
+				// which is not a preference: a WordPress security token stays
+				// valid for between 12 and 24 hours, so a page kept longer can
+				// be served carrying an expired one.
+				'cache'       => array(
+					'enabled'          => true,
+					'ttl_hours'        => 12,
+					'precompress_gzip' => true,
+				),
 			),
 
 			'woocommerce' => array(
@@ -294,6 +393,14 @@ class Core_Diet_Tools {
 					'disable_welcome_panel'         => true,
 					'disable_dashboard_quick_draft' => true,
 					'disable_dashboard_events'      => true,
+				),
+				// A shorter lifetime than the rest: prices and stock show up on
+				// category and shop pages, and those are not purged when an order
+				// changes the stock (WooCommerce writes it as meta).
+				'cache'       => array(
+					'enabled'          => true,
+					'ttl_hours'        => 6,
+					'precompress_gzip' => true,
 				),
 			),
 
@@ -351,6 +458,13 @@ class Core_Diet_Tools {
 					'disable_widget_tag_cloud'      => true,
 					'disable_widget_rss'            => true,
 					'disable_customizer_widgets'    => true,
+				),
+				// A landing page changes by hand and is purged when it does, so
+				// the lifetime only has to stay inside the token window.
+				'cache'       => array(
+					'enabled'          => true,
+					'ttl_hours'        => 12,
+					'precompress_gzip' => true,
 				),
 			),
 
@@ -432,6 +546,11 @@ class Core_Diet_Tools {
 					'disable_widget_tag_cloud'      => true,
 					'disable_widget_rss'            => true,
 					'disable_customizer_widgets'    => true,
+				),
+				'cache'       => array(
+					'enabled'          => true,
+					'ttl_hours'        => 12,
+					'precompress_gzip' => true,
 				),
 			),
 		);
@@ -569,6 +688,20 @@ class Core_Diet_Tools {
 
 		foreach ( $changes as $key => $value ) {
 			$key = sanitize_key( $key );
+
+			// The engine keeps its own option, so these never reach the settings
+			// array; apply_cache_setting() runs the same gates the settings
+			// page does.
+			if ( self::CACHE_REC_KEY === $key ) {
+				self::apply_cache_setting( (bool) $value );
+				continue;
+			}
+
+			if ( self::CACHE_GZIP_REC_KEY === $key ) {
+				self::set_cache_option( 'precompress_gzip', (bool) $value );
+				continue;
+			}
+
 			if ( ! array_key_exists( $key, $defaults ) ) {
 				continue;
 			}
@@ -601,7 +734,7 @@ class Core_Diet_Tools {
 
 		$tab = isset( $_POST['tab'] ) ? sanitize_key( wp_unslash( $_POST['tab'] ) ) : '';
 
-		$allowed_tabs = array( 'light', 'moderate', 'strict', 'widgets', 'emails' );
+		$allowed_tabs = array( 'light', 'moderate', 'strict', 'cache', 'widgets', 'emails' );
 		if ( ! in_array( $tab, $allowed_tabs, true ) ) {
 			wp_send_json_error( __( 'Invalid tab.', 'wpo-tweaks' ) );
 		}
@@ -624,6 +757,19 @@ class Core_Diet_Tools {
 		$sanitized = Core_Diet_Settings::sanitize( $current );
 		update_option( Core_Diet_Settings::OPTION_NAME, $sanitized );
 
+		// The cache tab spans two options: the .htaccess rules above and the
+		// page cache engine, which keeps its own.
+		if ( 'cache' === $tab && class_exists( 'Core_Diet_Cache_Settings' ) ) {
+			update_option(
+				Core_Diet_Cache_Settings::OPTION_NAME,
+				Core_Diet_Cache_Settings::sanitize( Core_Diet_Cache_Settings::get_defaults() )
+			);
+		}
+
+		// A one-shot notice rather than a query argument, so it cannot come
+		// back on a reload the way the purge confirmation used to.
+		set_transient( 'core_diet_restored_notice_' . get_current_user_id(), $tab, MINUTE_IN_SECONDS );
+
 		wp_send_json_success();
 	}
 
@@ -634,9 +780,133 @@ class Core_Diet_Tools {
 	 *
 	 * @return array
 	 */
+	/** @var string Reserved recommendation key for the page cache toggle. */
+	const CACHE_REC_KEY = 'cache_enabled';
+
+	/** @var string Reserved recommendation key for the gzip precompression toggle. */
+	const CACHE_GZIP_REC_KEY = 'cache_precompress_gzip';
+
+	/**
+	 * Recommendations for the Cache tab.
+	 *
+	 * Same criteria as the rest of the analyzer: only what is off right now,
+	 * only what can actually apply on this site, and each one carrying the risk
+	 * badge that matches what it does. The two engine toggles keep their own
+	 * option, so they travel under reserved keys; the .htaccess rules are
+	 * ordinary settings keys.
+	 *
+	 * @param Core_Diet_Settings $settings Settings reader.
+	 * @return array
+	 */
+	private function get_cache_recommendations( $settings ) {
+		$out = array();
+
+		if ( ! class_exists( 'Core_Diet_Cache' ) ) {
+			return $out;
+		}
+
+		$blocked  = Core_Diet_Cache_Compat::get_blocking_reasons();
+		$warnings = Core_Diet_Cache_Compat::get_warnings();
+		$cache_on = Core_Diet_Cache::is_enabled();
+
+		// The engine itself. Never suggested when the site cannot run it.
+		if ( ! $cache_on && ! $blocked ) {
+			$out[] = array(
+				'key'    => self::CACHE_REC_KEY,
+				'label'  => __( 'Enable the page cache', 'wpo-tweaks' ),
+				'reason' => $warnings
+					? __( 'Serving a stored copy is the single biggest speed gain available here. Your hosting already caches pages, though, so read the warning on the Cache tab before switching it on.', 'wpo-tweaks' )
+					: __( 'Serves anonymous visitors a copy stored on disk instead of building the page again. It is the single biggest speed gain available, and logged in visitors, carts and forms always get the live site.', 'wpo-tweaks' ),
+				'risk'   => $warnings ? 'moderate' : 'recommended',
+				'tab'    => 'cache',
+			);
+		}
+
+		// Only worth suggesting once the engine is on: with the cache off it
+		// would compress nothing.
+		if ( $cache_on && ! $this->cache_setting_enabled( 'precompress_gzip' ) && function_exists( 'gzencode' ) ) {
+			$out[] = array(
+				'key'    => self::CACHE_GZIP_REC_KEY,
+				'label'  => __( 'Store a compressed copy of cached pages', 'wpo-tweaks' ),
+				'reason' => __( 'Writes a gzipped twin of every cached page, so the server sends it as is instead of compressing the same HTML on every visit. Costs a little disk.', 'wpo-tweaks' ),
+				'risk'   => 'safe',
+				'tab'    => 'cache',
+			);
+		}
+
+		/*
+		 * Browser caching and compression. No server check here on purpose:
+		 * the toggles themselves are offered to every site, and the writer
+		 * writes the block regardless, so filtering only the analyzer would
+		 * make it disagree with the tab it points at. Detecting the server and
+		 * acting on it belongs in all three places at once, which is the
+		 * HostResolver item still sitting in the backlog.
+		 */
+		/*
+		 * The .htaccess rules are split across two tabs now, each with its own
+		 * master: what caches sits in Cache, and compression and connections
+		 * stayed in Strict. Each recommendation carries the tab it actually
+		 * lives in and the master it hangs from, so the analyzer never sends
+		 * anybody to the wrong tab and never suggests an option that could not
+		 * do anything yet.
+		 */
+		$htaccess = array(
+			'htaccess_rules'         => array( 'strict', '', __( 'Writes the compression and connection rules to your .htaccess file. Without it, none of them apply.', 'wpo-tweaks' ) ),
+			'htaccess_browser_cache' => array( 'cache', '', __( 'Writes the browser caching rules to your .htaccess file. Without it, none of them apply.', 'wpo-tweaks' ) ),
+			'htaccess_expires'       => array( 'cache', 'htaccess_browser_cache', __( 'Tells browsers how long to keep your images, styles and fonts, so a returning visitor downloads almost nothing.', 'wpo-tweaks' ) ),
+			'htaccess_cache_headers' => array( 'cache', 'htaccess_browser_cache', __( 'Adds the Cache-Control and Vary headers that make browsers and CDNs reuse files instead of asking again.', 'wpo-tweaks' ) ),
+			'htaccess_gzip'          => array( 'strict', 'htaccess_rules', __( 'Compresses HTML, CSS and JavaScript before sending them. Typically cuts their size by two thirds.', 'wpo-tweaks' ) ),
+			'htaccess_brotli'        => array( 'strict', 'htaccess_rules', __( 'Compresses better than GZIP on servers that support it, and falls back on its own where they do not.', 'wpo-tweaks' ) ),
+			'htaccess_keepalive'     => array( 'strict', 'htaccess_rules', __( 'Reuses the same connection for several files instead of opening one per file.', 'wpo-tweaks' ) ),
+		);
+
+		foreach ( $htaccess as $key => $entry ) {
+			list( $tab, $master, $reason ) = $entry;
+
+			if ( $settings->is_enabled( $key ) ) {
+				continue;
+			}
+
+			// While its master is off an option cannot do anything, so only the
+			// master is offered. Suggesting a sub-option that would change
+			// nothing is exactly what the lock rules exist to prevent
+			// elsewhere.
+			if ( '' !== $master && ! $settings->is_enabled( $master ) ) {
+				continue;
+			}
+
+			$out[] = array(
+				'key'    => $key,
+				'label'  => Core_Diet_Settings::get_field_label( $key ),
+				'reason' => $reason,
+				'risk'   => 'safe',
+				'tab'    => $tab,
+			);
+		}
+
+		return $out;
+	}
+
+	/**
+	 * Read one of the page cache module's own settings.
+	 *
+	 * @param string $key Setting key.
+	 * @return bool
+	 */
+	private function cache_setting_enabled( $key ) {
+		if ( ! class_exists( 'Core_Diet_Cache_Settings' ) ) {
+			return false;
+		}
+		return Core_Diet_Cache_Settings::get_instance()->is_enabled( $key );
+	}
+
 	public function get_recommendations() {
 		$settings        = Core_Diet_Settings::get_instance();
 		$recommendations = array();
+
+		// --- Cache tab ---
+
+		$recommendations = array_merge( $recommendations, $this->get_cache_recommendations( $settings ) );
 
 		// --- Light tab: always safe ---
 
@@ -939,6 +1209,14 @@ class Core_Diet_Tools {
 		foreach ( $recommendations as $recommendation ) {
 			$key = isset( $recommendation['key'] ) ? $recommendation['key'] : '';
 
+			// The engine toggles are not core_diet_settings keys, so the lock
+			// rules and the coherence notices do not describe them. Their own
+			// gates ran when the recommendation was built.
+			if ( self::CACHE_REC_KEY === $key || self::CACHE_GZIP_REC_KEY === $key ) {
+				$filtered[] = $recommendation;
+				continue;
+			}
+
 			if ( '' === $key || '' !== Core_Diet_Settings::get_lock_group_for_state( $key ) ) {
 				continue;
 			}
@@ -966,10 +1244,23 @@ class Core_Diet_Tools {
 		?>
 		<div class="core-diet-tools-sections">
 			<?php $this->render_savings_indicator(); ?>
+			<?php $this->render_cache_status(); ?>
 			<?php $this->render_profiles_section(); ?>
 			<?php $this->render_recommendations_section(); ?>
 		</div>
 		<?php
+	}
+
+	/**
+	 * Render the page cache status block, when the module is available.
+	 */
+	private function render_cache_status() {
+		if ( ! class_exists( 'Core_Diet_Cache_Admin' ) ) {
+			return;
+		}
+
+		$cache_admin = new Core_Diet_Cache_Admin( Core_Diet_Cache_Settings::get_instance() );
+		$cache_admin->render_dashboard_status();
 	}
 
 	/**

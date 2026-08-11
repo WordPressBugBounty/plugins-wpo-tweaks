@@ -55,6 +55,56 @@ class Core_Diet_Htaccess {
 	public function init() {
 		add_action( 'update_option_' . Core_Diet_Settings::OPTION_NAME, array( $this, 'on_settings_saved' ), 10, 2 );
 		add_action( 'add_option_' . Core_Diet_Settings::OPTION_NAME, array( $this, 'on_settings_added' ), 10, 2 );
+
+		if ( ! is_admin() ) {
+			add_filter( 'wp_headers', array( $this, 'set_html_cache_control' ), 20 );
+		}
+	}
+
+	/**
+	 * Tell browsers how long they may keep the page itself.
+	 *
+	 * Sent from PHP rather than written to .htaccess, and that is a correction,
+	 * not a preference. The rule used to live in a `<FilesMatch "\.html?$">`
+	 * block, and FilesMatch tests the name of the file Apache is serving: for a
+	 * WordPress permalink that file is index.php, so the directive matched
+	 * nothing and the setting was very nearly inert. From here it applies to
+	 * every page WordPress renders, and it works on nginx too.
+	 *
+	 * Note that zero is not the same as sending nothing. With no Cache-Control
+	 * at all a browser falls back to heuristic caching, typically a tenth of
+	 * the age of the document, which can be hours and is entirely out of the
+	 * site's hands. "max-age=0, must-revalidate" makes it ask every time, and
+	 * the answer is usually a 304 of a few hundred bytes, so the page is not
+	 * re-downloaded either.
+	 *
+	 * @param array $headers Headers WordPress is about to send.
+	 * @return array
+	 */
+	public function set_html_cache_control( $headers ) {
+		if ( ! $this->settings || ! $this->settings->is_enabled( 'htaccess_browser_cache' ) ) {
+			return $headers;
+		}
+
+		// A logged in visitor gets personalised pages, and anything that has
+		// declared itself uncacheable stays that way.
+		if ( is_user_logged_in() || ( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) ) {
+			return $headers;
+		}
+
+		// Something already spoke for this response, WooCommerce on the cart
+		// and the checkout being the usual case. Do not argue with it.
+		if ( isset( $headers['Cache-Control'] ) ) {
+			return $headers;
+		}
+
+		$seconds = Core_Diet_Settings::period_to_seconds( (string) $this->settings->get( 'htaccess_html_maxage' ) );
+
+		$headers['Cache-Control'] = $seconds > 0
+			? 'max-age=' . $seconds . ', public'
+			: 'max-age=0, must-revalidate';
+
+		return $headers;
 	}
 
 	/**
@@ -71,10 +121,24 @@ class Core_Diet_Htaccess {
 	}
 
 	/**
+	 * Whether anything still wants the managed .htaccess block written.
+	 *
+	 * Two independent masters govern it now, one per tab: compression and
+	 * connections in Strict, browser caching in Cache. Either one is enough to
+	 * keep the block, and only with both off is it removed.
+	 *
+	 * @return bool
+	 */
+	private function should_write_block() {
+		return $this->settings->is_enabled( 'htaccess_rules' )
+			|| $this->settings->is_enabled( 'htaccess_browser_cache' );
+	}
+
+	/**
 	 * Handle the settings being saved.
 	 *
-	 * Rewrites or cleans the plugin .htaccess block depending on the master
-	 * toggle. Idempotent: if the block already matches, nothing is written.
+	 * Rewrites or cleans the plugin .htaccess block depending on the two master
+	 * toggles. Idempotent: if the block already matches, nothing is written.
 	 *
 	 * @param mixed $old Previous option value.
 	 * @param mixed $new New option value.
@@ -85,8 +149,8 @@ class Core_Diet_Htaccess {
 			return;
 		}
 
-		// Master toggle off: remove our block entirely.
-		if ( ! $this->settings->is_enabled( 'htaccess_rules' ) ) {
+		// Both masters off: nothing writes to the file, so remove our block.
+		if ( ! $this->should_write_block() ) {
 			$this->clean_htaccess();
 			return;
 		}
@@ -255,16 +319,23 @@ class Core_Diet_Htaccess {
 	private function core_diet_get_htaccess_rules() {
 		$lines = array();
 
+		$compression   = $this->settings->is_enabled( 'htaccess_rules' );
+		$browser_cache = $this->settings->is_enabled( 'htaccess_browser_cache' );
+
 		// MIME types and charset. Always emitted with the master toggle on:
 		// without an explicit AddType, older Apache builds serve AVIF as
 		// application/octet-stream (so the ExpiresByType rule below never
 		// applies). The charset is taken from the site option, defaulting to
 		// UTF-8, and restricted to a safe token.
-		$lines[] = '# MIME types and charset';
-		$lines[] = '<IfModule mod_mime.c>';
-		$lines[] = 'AddType image/avif .avif';
-		$lines[] = 'AddType image/avif-sequence .avifs';
-		$lines[] = '</IfModule>';
+		// The comment tracks what actually follows: with browser caching off the
+		// AVIF types are pointless and only the charset is written.
+		$lines[] = $browser_cache ? '# MIME types and charset' : '# Charset';
+		if ( $browser_cache ) {
+			$lines[] = '<IfModule mod_mime.c>';
+			$lines[] = 'AddType image/avif .avif';
+			$lines[] = 'AddType image/avif-sequence .avifs';
+			$lines[] = '</IfModule>';
+		}
 		$charset = preg_replace( '/[^A-Za-z0-9_-]/', '', (string) get_bloginfo( 'charset' ) );
 		if ( '' === $charset ) {
 			$charset = 'UTF-8';
@@ -272,48 +343,65 @@ class Core_Diet_Htaccess {
 		$lines[] = 'AddDefaultCharset ' . $charset;
 		$lines[] = '';
 
+		/*
+		 * The three lifetimes are chosen in the Cache tab and are used by two
+		 * sections, the Expires rules and the Cache-Control ones, so they are
+		 * resolved before either. Their values come from an allowlist in the
+		 * sanitizer, which is what makes it safe to interpolate them into an
+		 * Apache directive; the fallbacks below cover a settings array that
+		 * predates these keys.
+		 */
+		$expires_choices = Core_Diet_Settings::get_expires_choices();
+		$media           = (string) $this->settings->get( 'htaccess_expires_media' );
+		$assets          = (string) $this->settings->get( 'htaccess_expires_assets' );
+		$fonts           = (string) $this->settings->get( 'htaccess_expires_fonts' );
+
+		$media  = isset( $expires_choices[ $media ] ) ? $media : '1 month';
+		$assets = isset( $expires_choices[ $assets ] ) ? $assets : '1 year';
+		$fonts  = isset( $expires_choices[ $fonts ] ) ? $fonts : '1 year';
+
 		// Expires Headers.
-		if ( $this->settings->is_enabled( 'htaccess_expires' ) ) {
+		if ( $browser_cache && $this->settings->is_enabled( 'htaccess_expires' ) ) {
 			$lines[] = '# Browser Caching with Expires Headers';
 			$lines[] = '<IfModule mod_expires.c>';
 			$lines[] = 'ExpiresActive On';
-			$lines[] = 'ExpiresDefault "access plus 1 month"';
+			$lines[] = 'ExpiresDefault "access plus ' . $media . '"';
 			$lines[] = '';
 			$lines[] = '# Images';
 			$lines[] = 'ExpiresByType image/x-icon "access plus 1 year"';
-			$lines[] = 'ExpiresByType image/gif "access plus 1 month"';
-			$lines[] = 'ExpiresByType image/png "access plus 1 month"';
-			$lines[] = 'ExpiresByType image/jpg "access plus 1 month"';
-			$lines[] = 'ExpiresByType image/jpeg "access plus 1 month"';
-			$lines[] = 'ExpiresByType image/webp "access plus 1 month"';
-			$lines[] = 'ExpiresByType image/avif "access plus 1 month"';
-			$lines[] = 'ExpiresByType image/svg+xml "access plus 1 month"';
+			$lines[] = 'ExpiresByType image/gif "access plus ' . $media . '"';
+			$lines[] = 'ExpiresByType image/png "access plus ' . $media . '"';
+			$lines[] = 'ExpiresByType image/jpg "access plus ' . $media . '"';
+			$lines[] = 'ExpiresByType image/jpeg "access plus ' . $media . '"';
+			$lines[] = 'ExpiresByType image/webp "access plus ' . $media . '"';
+			$lines[] = 'ExpiresByType image/avif "access plus ' . $media . '"';
+			$lines[] = 'ExpiresByType image/svg+xml "access plus ' . $media . '"';
 			$lines[] = '';
 			$lines[] = '# Video and Audio';
-			$lines[] = 'ExpiresByType video/mp4 "access plus 1 month"';
-			$lines[] = 'ExpiresByType video/ogg "access plus 1 month"';
-			$lines[] = 'ExpiresByType video/webm "access plus 1 month"';
-			$lines[] = 'ExpiresByType audio/ogg "access plus 1 month"';
+			$lines[] = 'ExpiresByType video/mp4 "access plus ' . $media . '"';
+			$lines[] = 'ExpiresByType video/ogg "access plus ' . $media . '"';
+			$lines[] = 'ExpiresByType video/webm "access plus ' . $media . '"';
+			$lines[] = 'ExpiresByType audio/ogg "access plus ' . $media . '"';
 			$lines[] = '';
 			$lines[] = '# CSS and JavaScript';
-			$lines[] = 'ExpiresByType text/css "access plus 1 year"';
-			$lines[] = 'ExpiresByType application/javascript "access plus 1 year"';
-			$lines[] = 'ExpiresByType application/x-javascript "access plus 1 year"';
-			$lines[] = 'ExpiresByType text/javascript "access plus 1 year"';
+			$lines[] = 'ExpiresByType text/css "access plus ' . $assets . '"';
+			$lines[] = 'ExpiresByType application/javascript "access plus ' . $assets . '"';
+			$lines[] = 'ExpiresByType application/x-javascript "access plus ' . $assets . '"';
+			$lines[] = 'ExpiresByType text/javascript "access plus ' . $assets . '"';
 			$lines[] = '';
 			$lines[] = '# Fonts';
-			$lines[] = 'ExpiresByType font/woff "access plus 1 year"';
-			$lines[] = 'ExpiresByType font/woff2 "access plus 1 year"';
-			$lines[] = 'ExpiresByType application/font-woff "access plus 1 year"';
-			$lines[] = 'ExpiresByType application/font-woff2 "access plus 1 year"';
-			$lines[] = 'ExpiresByType font/otf "access plus 1 year"';
-			$lines[] = 'ExpiresByType font/ttf "access plus 1 year"';
-			$lines[] = 'ExpiresByType application/font-otf "access plus 1 year"';
-			$lines[] = 'ExpiresByType application/font-ttf "access plus 1 year"';
-			$lines[] = 'ExpiresByType application/vnd.ms-fontobject "access plus 1 year"';
+			$lines[] = 'ExpiresByType font/woff "access plus ' . $fonts . '"';
+			$lines[] = 'ExpiresByType font/woff2 "access plus ' . $fonts . '"';
+			$lines[] = 'ExpiresByType application/font-woff "access plus ' . $fonts . '"';
+			$lines[] = 'ExpiresByType application/font-woff2 "access plus ' . $fonts . '"';
+			$lines[] = 'ExpiresByType font/otf "access plus ' . $fonts . '"';
+			$lines[] = 'ExpiresByType font/ttf "access plus ' . $fonts . '"';
+			$lines[] = 'ExpiresByType application/font-otf "access plus ' . $fonts . '"';
+			$lines[] = 'ExpiresByType application/font-ttf "access plus ' . $fonts . '"';
+			$lines[] = 'ExpiresByType application/vnd.ms-fontobject "access plus ' . $fonts . '"';
 			$lines[] = '';
 			$lines[] = '# Other files';
-			$lines[] = 'ExpiresByType application/pdf "access plus 1 month"';
+			$lines[] = 'ExpiresByType application/pdf "access plus ' . $media . '"';
 			$lines[] = 'ExpiresByType application/manifest+json "access plus 1 year"';
 			$lines[] = 'ExpiresByType application/x-web-app-manifest+json "access plus 0 seconds"';
 			$lines[] = 'ExpiresByType text/cache-manifest "access plus 0 seconds"';
@@ -325,7 +413,7 @@ class Core_Diet_Htaccess {
 		}
 
 		// GZIP Compression.
-		if ( $this->settings->is_enabled( 'htaccess_gzip' ) ) {
+		if ( $compression && $this->settings->is_enabled( 'htaccess_gzip' ) ) {
 			$lines[] = '# GZIP Compression';
 			$lines[] = '<IfModule mod_deflate.c>';
 			$lines[] = 'SetOutputFilter DEFLATE';
@@ -357,7 +445,7 @@ class Core_Diet_Htaccess {
 		}
 
 		// Brotli Compression (modern servers).
-		if ( $this->settings->is_enabled( 'htaccess_brotli' ) ) {
+		if ( $compression && $this->settings->is_enabled( 'htaccess_brotli' ) ) {
 			$lines[] = '# Brotli Compression (if available)';
 			$lines[] = '<IfModule mod_brotli.c>';
 			$lines[] = 'AddOutputFilterByType BROTLI_COMPRESS text/html text/plain text/xml';
@@ -380,33 +468,59 @@ class Core_Diet_Htaccess {
 		// only when its own toggle is enabled, so unrelated directives never leak
 		// in.
 		$open_headers = (
-			$this->settings->is_enabled( 'htaccess_cache_headers' ) ||
-			$this->settings->is_enabled( 'htaccess_cors_fonts' ) ||
-			$this->settings->is_enabled( 'htaccess_keepalive' )
+			( $browser_cache && $this->settings->is_enabled( 'htaccess_cache_headers' ) ) ||
+			( $compression && $this->settings->is_enabled( 'htaccess_cors_fonts' ) ) ||
+			( $compression && $this->settings->is_enabled( 'htaccess_keepalive' ) )
 		);
 
 		if ( $open_headers ) {
-			$lines[] = '# Cache-Control Headers';
+			// Named for what the block will hold: with browser caching off the
+			// only headers here are CORS and keep-alive.
+			$lines[] = ( $browser_cache && $this->settings->is_enabled( 'htaccess_cache_headers' ) )
+				? '# Cache-Control Headers'
+				: '# Response headers';
 			$lines[] = '<IfModule mod_headers.c>';
 			$lines[] = '';
 
-			if ( $this->settings->is_enabled( 'htaccess_cache_headers' ) ) {
-				$lines[] = '# Cache static files with immutable flag';
-				$lines[] = '<FilesMatch "\\.(?:css|js|png|jpe?g|gif|webp|avif|woff2?|ttf|otf|eot|svg|ico)$">';
-				$lines[] = 'Header set Cache-Control "public, max-age=31536000, immutable"';
+			if ( $browser_cache && $this->settings->is_enabled( 'htaccess_cache_headers' ) ) {
+				/*
+				 * max-age is derived from the very periods the Expires rules
+				 * use, not written by hand. Browsers obey Cache-Control when
+				 * the two disagree, so a hardcoded year here (which is what
+				 * this block used to carry) silently overrode whatever the site
+				 * had chosen for its images.
+				 *
+				 * immutable only goes on styles, scripts and fonts: those carry
+				 * a version in their URL and really never change. An image
+				 * keeps its URL when it is replaced, so promising a browser it
+				 * will never change is how a new logo takes months to appear.
+				 */
+				$media_age  = Core_Diet_Settings::period_to_seconds( $media );
+				$assets_age = Core_Diet_Settings::period_to_seconds( $assets );
+				$fonts_age  = Core_Diet_Settings::period_to_seconds( $fonts );
+
+				$lines[] = '# Cache-Control for styles, scripts and fonts (versioned, so immutable)';
+				$lines[] = '<FilesMatch "\\.(?:css|js)$">';
+				$lines[] = 'Header set Cache-Control "public, max-age=' . $assets_age . ', immutable"';
+				$lines[] = '</FilesMatch>';
+				$lines[] = '<FilesMatch "\\.(?:woff2?|ttf|otf|eot)$">';
+				$lines[] = 'Header set Cache-Control "public, max-age=' . $fonts_age . ', immutable"';
 				$lines[] = '</FilesMatch>';
 				$lines[] = '';
-				$lines[] = '# Cache HTML for 1 hour';
-				$lines[] = '<FilesMatch "\\.(?:html|htm)$">';
-				$lines[] = 'Header set Cache-Control "max-age=3600, public"';
+				$lines[] = '# Cache-Control for media (replaceable, so not immutable)';
+				$lines[] = '<FilesMatch "\\.(?:png|jpe?g|gif|webp|avif|svg|ico|mp4|webm|ogg|pdf)$">';
+				$lines[] = 'Header set Cache-Control "public, max-age=' . $media_age . '"';
 				$lines[] = '</FilesMatch>';
 				$lines[] = '';
-				$lines[] = '# Remove ETags for static files';
-				$lines[] = '<FilesMatch "\\.(?:css|js|png|jpe?g|gif|webp|avif|woff2?|ttf|otf|eot|svg|ico)$">';
-				$lines[] = 'Header unset ETag';
-				$lines[] = 'FileETag None';
-				$lines[] = '</FilesMatch>';
-				$lines[] = '';
+
+				if ( $this->settings->is_enabled( 'htaccess_etag' ) ) {
+					$lines[] = '# Remove ETags for static files';
+					$lines[] = '<FilesMatch "\\.(?:css|js|png|jpe?g|gif|webp|avif|woff2?|ttf|otf|eot|svg|ico)$">';
+					$lines[] = 'Header unset ETag';
+					$lines[] = 'FileETag None';
+					$lines[] = '</FilesMatch>';
+					$lines[] = '';
+				}
 				$lines[] = '# Vary Accept-Encoding for better CDN caching';
 				$lines[] = '<FilesMatch "\\.(?:js|css|xml|gz|html|svg)$">';
 				$lines[] = 'Header append Vary: Accept-Encoding';
@@ -414,7 +528,7 @@ class Core_Diet_Htaccess {
 				$lines[] = '';
 			}
 
-			if ( $this->settings->is_enabled( 'htaccess_cors_fonts' ) ) {
+			if ( $compression && $this->settings->is_enabled( 'htaccess_cors_fonts' ) ) {
 				$lines[] = '# CORS headers for fonts (CDN compatibility)';
 				$lines[] = '<FilesMatch "\\.(?:ttf|ttc|otf|eot|woff2?|font\\.css|css)$">';
 				$lines[] = 'Header set Access-Control-Allow-Origin "*"';
@@ -422,7 +536,7 @@ class Core_Diet_Htaccess {
 				$lines[] = '';
 			}
 
-			if ( $this->settings->is_enabled( 'htaccess_keepalive' ) ) {
+			if ( $compression && $this->settings->is_enabled( 'htaccess_keepalive' ) ) {
 				$lines[] = '# Keep-Alive for connection reuse';
 				$lines[] = 'Header set Connection keep-alive';
 				$lines[] = '';

@@ -17,6 +17,7 @@
 		initRestoreDefaults();
 		initSectionToggles();
 		initOptionLocks();
+		initCacheActions();
 	} );
 
 	/* ============================
@@ -158,9 +159,12 @@
 				}
 			} );
 
-			// Hide submit button on Scale and Tools tabs.
+			// Scale and Tools are rendered outside the settings form and work
+			// over AJAX, so the form's save button does not apply to them. The
+			// cache tab IS inside the form and keeps its button.
 			if ( submitWrap ) {
-				submitWrap.classList.toggle( 'core-diet-hidden', tabId === 'scale' || tabId === 'tools' );
+				var ownFormTabs = [ 'scale', 'tools' ];
+				submitWrap.classList.toggle( 'core-diet-hidden', ownFormTabs.indexOf( tabId ) !== -1 );
 			}
 		}
 
@@ -177,12 +181,14 @@
 					history.replaceState( null, '', url.toString() );
 				}
 
-				var referer = document.querySelector( 'input[name="_wp_http_referer"]' );
-				if ( referer ) {
+				// Every form on the page, not just the first one: the page cache
+				// tab has a form of its own and would otherwise send the visitor
+				// back to whichever tab was open when the page loaded.
+				document.querySelectorAll( 'input[name="_wp_http_referer"]' ).forEach( function( referer ) {
 					var refUrl = new URL( referer.value, window.location.origin );
 					refUrl.searchParams.set( 'tab', tabId );
 					referer.value = refUrl.pathname + refUrl.search;
-				}
+				} );
 			} );
 		} );
 
@@ -442,7 +448,7 @@
 
 		var s = coreDietAdmin.strings;
 		var riskLabels = { safe: s.riskSafe, recommended: s.riskRecommended, moderate: s.riskModerate };
-		var tabLabels  = { light: s.tabLight, moderate: s.tabModerate, strict: s.tabStrict };
+		var tabLabels  = { light: s.tabLight, moderate: s.tabModerate, strict: s.tabStrict, cache: s.tabCache };
 
 		// Separate boolean (toggleable) from select (info-only) recommendations.
 		var toggleable = [];
@@ -477,7 +483,9 @@
 		html += '</div>';
 
 		// Toggleable cards grouped by tab.
-		var tabOrder = [ 'light', 'moderate', 'strict' ];
+		// Same order as the tabs themselves. A tab missing from this list would
+		// silently drop its recommendations instead of rendering them.
+		var tabOrder = [ 'light', 'moderate', 'strict', 'cache' ];
 		tabOrder.forEach( function( tab ) {
 			if ( ! groups[ tab ] || ! groups[ tab ].length ) {
 				return;
@@ -676,6 +684,246 @@
 	 * Restore defaults (per-tab)
 	 * ============================ */
 
+	/* ============================
+	 * Cache: purge and self test
+	 * ============================ */
+
+	/**
+	 * Purge and test buttons on the Cache tab.
+	 *
+	 * Both run over AJAX rather than through a redirect. A redirect left the
+	 * result in the query string, so the confirmation came back on every reload
+	 * of the page, hard refresh included.
+	 */
+	function initCacheActions() {
+		var purgeBtn = document.getElementById( 'core-diet-cache-purge' );
+		var testBtn  = document.getElementById( 'core-diet-cache-test' );
+		var result   = document.getElementById( 'core-diet-cache-result' );
+
+		if ( ! result || ( ! purgeBtn && ! testBtn ) ) {
+			return;
+		}
+
+		function show( message, isError ) {
+			result.className = 'core-diet-cache-result notice inline ' +
+				( isError ? 'notice-warning' : 'notice-success' );
+
+			// Built as a node with textContent rather than as an HTML string:
+			// the message comes back from the server and never needs markup.
+			var paragraph = document.createElement( 'p' );
+			paragraph.textContent = message;
+			result.replaceChildren( paragraph );
+			result.hidden = false;
+		}
+
+		function refreshStats( stats ) {
+			if ( ! stats ) {
+				return;
+			}
+			var pages = document.getElementById( 'core-diet-cache-pages' );
+			var bytes = document.getElementById( 'core-diet-cache-bytes' );
+			if ( pages ) {
+				pages.textContent = stats.pages;
+			}
+			if ( bytes ) {
+				bytes.textContent = stats.bytes;
+			}
+		}
+
+		function run( button, action, extra ) {
+			var body = new FormData();
+			body.append( 'action', action );
+			body.append( 'security', coreDietAdmin.nonce );
+
+			Object.keys( extra || {} ).forEach( function( key ) {
+				body.append( key, extra[ key ] );
+			} );
+
+			var label = button.textContent;
+			button.disabled = true;
+			button.textContent = coreDietAdmin.strings.working;
+			result.hidden = true;
+
+			fetch( coreDietAdmin.ajaxUrl, { method: 'POST', body: body, credentials: 'same-origin' } )
+				.then( function( response ) { return response.json(); } )
+				.then( function( json ) {
+					var payload = json && json.data ? json.data : {};
+					var message = typeof payload === 'string' ? payload : payload.message;
+					show( message || coreDietAdmin.strings.error, ! json.success );
+					refreshStats( payload.stats );
+				} )
+				.catch( function() {
+					show( coreDietAdmin.strings.error, true );
+				} )
+				.finally( function() {
+					button.disabled = false;
+					button.textContent = label;
+				} );
+		}
+
+		if ( purgeBtn ) {
+			purgeBtn.addEventListener( 'click', function() {
+				var input = document.getElementById( 'core-diet-cache-url' );
+				var url   = input ? input.value.trim() : '';
+
+				if ( '' === url && ! window.confirm( coreDietAdmin.strings.confirmPurgeAll ) ) {
+					return;
+				}
+
+				run( purgeBtn, 'core_diet_cache_purge', { cache_url: url } );
+			} );
+		}
+
+		if ( testBtn ) {
+			testBtn.addEventListener( 'click', function() {
+				run( testBtn, 'core_diet_cache_test', {} );
+			} );
+		}
+
+		initCacheSearch();
+	}
+
+	/**
+	 * Instant search on the purge field: type a title, get its URL.
+	 *
+	 * Debounced at 400ms with a three character minimum, the same shape as the
+	 * search boxes in Vigilant. Copying a permalink by hand is where the wrong
+	 * domain and the missing trailing slash come from.
+	 */
+	function initCacheSearch() {
+		var input   = document.getElementById( 'core-diet-cache-url' );
+		var results = document.getElementById( 'core-diet-cache-search-results' );
+
+		if ( ! input || ! results ) {
+			return;
+		}
+
+		var timer   = null;
+		var active  = -1;
+
+		function close() {
+			results.hidden = true;
+			results.replaceChildren();
+			input.setAttribute( 'aria-expanded', 'false' );
+			active = -1;
+		}
+
+		function items() {
+			return results.querySelectorAll( '.core-diet-search-item' );
+		}
+
+		function highlight( index ) {
+			var all = items();
+			if ( ! all.length ) {
+				return;
+			}
+			active = ( index + all.length ) % all.length;
+			all.forEach( function( item, i ) {
+				item.classList.toggle( 'is-active', i === active );
+				item.setAttribute( 'aria-selected', i === active ? 'true' : 'false' );
+			} );
+			all[ active ].scrollIntoView( { block: 'nearest' } );
+		}
+
+		function render( list ) {
+			results.replaceChildren();
+
+			if ( ! list.length ) {
+				var empty = document.createElement( 'div' );
+				empty.className = 'core-diet-search-empty';
+				empty.textContent = coreDietAdmin.strings.searchNoResults;
+				results.appendChild( empty );
+				results.hidden = false;
+				input.setAttribute( 'aria-expanded', 'true' );
+				return;
+			}
+
+			list.forEach( function( item ) {
+				var row = document.createElement( 'button' );
+				row.type = 'button';
+				row.className = 'core-diet-search-item';
+				row.setAttribute( 'role', 'option' );
+				row.setAttribute( 'aria-selected', 'false' );
+				row.dataset.url = item.url;
+
+				var title = document.createElement( 'span' );
+				title.className = 'core-diet-search-item-title';
+				title.textContent = item.label;
+
+				var meta = document.createElement( 'span' );
+				meta.className = 'core-diet-search-item-meta';
+				meta.textContent = item.type + ' — ' + item.url;
+
+				row.appendChild( title );
+				row.appendChild( meta );
+
+				row.addEventListener( 'click', function() {
+					input.value = item.url;
+					close();
+					input.focus();
+				} );
+
+				results.appendChild( row );
+			} );
+
+			results.hidden = false;
+			input.setAttribute( 'aria-expanded', 'true' );
+		}
+
+		input.addEventListener( 'input', function() {
+			var term = input.value.trim();
+
+			window.clearTimeout( timer );
+
+			// A pasted URL needs no search, and neither does anything shorter
+			// than three characters.
+			if ( term.length < 3 || /^https?:\/\//i.test( term ) || term.charAt( 0 ) === '/' ) {
+				close();
+				return;
+			}
+
+			timer = window.setTimeout( function() {
+				var body = new FormData();
+				body.append( 'action', 'core_diet_cache_search' );
+				body.append( 'security', coreDietAdmin.nonce );
+				body.append( 'term', term );
+
+				fetch( coreDietAdmin.ajaxUrl, { method: 'POST', body: body, credentials: 'same-origin' } )
+					.then( function( response ) { return response.json(); } )
+					.then( function( json ) {
+						if ( json.success && json.data ) {
+							render( json.data.results || [] );
+						}
+					} )
+					.catch( close );
+			}, 400 );
+		} );
+
+		input.addEventListener( 'keydown', function( e ) {
+			if ( results.hidden ) {
+				return;
+			}
+			if ( 'ArrowDown' === e.key ) {
+				e.preventDefault();
+				highlight( active + 1 );
+			} else if ( 'ArrowUp' === e.key ) {
+				e.preventDefault();
+				highlight( active - 1 );
+			} else if ( 'Enter' === e.key && active > -1 ) {
+				e.preventDefault();
+				items()[ active ].click();
+			} else if ( 'Escape' === e.key ) {
+				close();
+			}
+		} );
+
+		document.addEventListener( 'click', function( e ) {
+			if ( ! results.hidden && ! results.contains( e.target ) && e.target !== input ) {
+				close();
+			}
+		} );
+	}
+
 	function initRestoreDefaults() {
 		var restoreBtn = document.getElementById( 'core-diet-restore-defaults' );
 		if ( ! restoreBtn || typeof coreDietAdmin === 'undefined' ) {
@@ -713,6 +961,13 @@
 			.then( function( response ) { return response.json(); } )
 			.then( function( result ) {
 				if ( result.success ) {
+					// The server leaves a one-shot notice behind, and the page
+					// has to open at the top for it to be seen: browsers put a
+					// reload back where it was unless told otherwise.
+					if ( 'scrollRestoration' in history ) {
+						history.scrollRestoration = 'manual';
+					}
+					window.scrollTo( 0, 0 );
 					window.location.reload();
 				} else {
 					alert( result.data || coreDietAdmin.strings.error );

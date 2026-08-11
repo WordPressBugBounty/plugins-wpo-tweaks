@@ -1,22 +1,55 @@
 === DietPress ===
 Contributors: fernandot, ayudawp
-Tags: performance, optimization, cleanup, speed, bloat
+Tags: performance, cache, optimization, cleanup, speed
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 7.0
-Stable tag: 3.4.1
+Stable tag: 3.5.0
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
-Put your WordPress on a diet and speed it up. Disable the bloat you do not need and enable performance optimizations, all fully configurable.
+Page cache, browser cache, defer JS, critical CSS, lazy load and WordPress cleanup. Speed up your site and disable the bloat you do not need.
 
 == Description ==
 
-DietPress puts your WordPress on a diet and speeds it up. It pairs a complete set of performance optimizations (the ones that used to ship in "Zero Config Performance Optimization") with a clean, risk-based interface to disable the WordPress features you do not use. Everything is configurable, and the performance optimizations are already on by default, so you can simply activate and enjoy a faster site, or fine-tune every detail.
+**DietPress is a free WordPress speed optimization plugin with a built-in page cache.** Page caching, browser caching, GZIP and Brotli compression, deferred JavaScript, critical CSS, image loading attributes, preloading, locally hosted Google Fonts and selective asset loading, all in one plugin and all free.
+
+And it goes further than a caching plugin: it also puts WordPress itself on a diet, switching off the features your site never uses. It pairs that with a clean, risk-based interface. Everything is configurable, the optimizations are already on by default, and nothing is hidden behind a paid tier. Activate it and your site is faster, or open the settings and tune every detail.
 
 > **Coming from "Zero Config Performance Optimization"?** This is the same plugin, now called DietPress and fully configurable. All your previous optimizations stay active by default; you just gained a settings page and a whole new set of WordPress-diet options.
 
 By default WordPress loads functions, services and scripts that most sites do not need. They slow down loading times and consume hosting resources. DietPress lets you trim that fat and apply battle-tested performance tweaks, with a clear description of what each option does and what might break, organized by risk level so you always know what is safe.
+
+### WHY CHOOSE DIETPRESS
+
+* **Page caching, for free.** Serve anonymous visitors a copy stored on disk instead of building the page again. The feature people buy WP Rocket or a NitroPack subscription for, with no licence and no monthly fee.
+* **No drop-in, no changes to wp-config.php.** Unlike WP Super Cache or W3 Total Cache, DietPress installs no `advanced-cache.php` and never edits `wp-config.php`. Switching it off leaves your site exactly as it was, with nothing orphaned behind.
+* **It tells you why.** Most cache plugins leave you guessing when nothing is cached. DietPress reports its own status, tests itself against your home page, and names the exact reason a page was skipped.
+* **WooCommerce-safe by design.** Carts, checkout, my account and any visitor carrying a cart cookie always get the live site, so nobody ever sees somebody else's basket.
+* **Diet as well as speed.** Where Perfmatters focuses on disabling scripts, DietPress covers that ground and adds page caching, critical CSS, local Google Fonts and a dashboard, admin and email cleanup, in one plugin.
+* **Light on your server.** No account, no external service, no telemetry, no upsell nags. Everything runs on your own hosting.
+
+### WHAT THE PAGE CACHE DOES TO YOUR RESPONSE TIME
+
+Measured on a WordPress 7.0 install with GeneratePress, WooCommerce and a 76 product catalogue, PHP 8.5, taking the median of 15 requests per URL. Your own hosting will give different figures, but the shape of the result will not change.
+
+Server response time, the same pages with the page cache off and on:
+
+* **Home page** - 52.7 ms without, **15.1 ms with**, 71% faster
+* **WooCommerce shop** - 45.4 ms without, **14.8 ms with**, 67% faster
+* **A 110 KB article** - 43.0 ms without, **15.1 ms with**, 65% faster
+* **A 98 KB page** - 41.0 ms without, **14.9 ms with**, 64% faster
+* **A product category** - 41.3 ms without, **15.1 ms with**, 63% faster
+
+The interesting part is not the percentage, it is that the cached figure barely moves. Serving a stored file costs the same whether the page was cheap or expensive to build, so the saving grows with the size of your site rather than with the power of your server. The heaviest page in the test is the one that gained most.
+
+And what the server can take, 100 requests with 10 running in parallel:
+
+* **Home page** - 38 requests per second without, **213 with**
+* **WooCommerce shop** - 43 without, **216 with**
+* **A 110 KB article** - 46 without, **210 with**
+
+That five-fold headroom is what keeps a modest hosting plan standing up when one of your posts does well.
 
 ### TWO THINGS IN ONE PLUGIN
 
@@ -32,8 +65,9 @@ By default WordPress loads functions, services and scripts that most sites do no
 * Google Fonts local hosting: serve the fonts your theme uses from your own server, GDPR-friendly with a silent fallback to the Google CDN (opt-in)
 * Selective third-party loading: WooCommerce, Contact Form 7, block library, Slider Revolution, TablePress, Smash Balloon, Formidable Forms and Everest Forms assets only load where they are used (opt-in)
 * RSS feed optimization (cache headers and item limit)
-* Server rules in .htaccess: browser caching, GZIP and Brotli compression, immutable cache headers, CORS for fonts and keep-alive (master switch plus per-feature toggles)
+* Server rules in .htaccess: browser caching with a configurable lifetime for media, for styles and scripts and for fonts, GZIP and Brotli compression, immutable cache headers, CORS for fonts and keep-alive (master switch plus per-feature toggles)
 * Database maintenance: daily expired-transient cleanup and safe query optimizations
+* Page cache: store each page on disk and serve it to anonymous visitors without building it again, with automatic purging, gzip precompression and a status panel that says whether it is working (opt-in, in its own tab)
 
 **2. Put WordPress on a diet (risk-based, opt-in)**
 
@@ -47,7 +81,7 @@ By default WordPress loads functions, services and scripts that most sites do no
 
 * Savings indicator: HTTP requests removed, CSS/JS saved and active optimizations at a glance
 * Quick profiles: Personal Blog, WooCommerce Store, Landing Page and Maximum Cleanup
-* Site analyzer: personalized recommendations based on your active plugins and content
+* Site analyzer: personalized recommendations based on your active plugins and content, page cache included
 * Import and export your whole configuration as a JSON file
 
 ### COMPATIBILITY AND EXTENSIBILITY
@@ -71,14 +105,19 @@ The plugin includes filters for developers:
 * `dietpress_selective_blocks_dequeue` - Override the block library dequeue decision
 * `dietpress_selective_everest_forms_dequeue_dashicons` - Keep Dashicons when another plugin enqueues it directly
 * `dietpress_native_sitemap_in_use` - Tell DietPress your plugin builds on the native WordPress sitemap, so the option that removes it becomes unavailable
+* `dietpress_cache_bypass` - Keep the current page out of the page cache
+* `dietpress_cache_bypass_cookies` - Adjust the cookie name prefixes that make a visitor uncacheable
+* `dietpress_cache_ignored_params` - Adjust the query parameters that do not change the page
+* `dietpress_cache_exclude_urls` - Adjust the excluded URL patterns
+* `dietpress_cache_post_urls` - Adjust the URLs purged along with a post
 
 **Compatible with:**
 
 * Well-coded themes and page builders (Divi, Elementor, Beaver Builder, Bricks Gutenberg)
-* Cache plugins (WP Rocket, LiteSpeed Cache, W3 Total Cache, WP Super Cache, etc.)
+* Cache plugins (WP Rocket, LiteSpeed Cache, W3 Total Cache, WP Super Cache, etc.). The one exception is the optional page cache module, which will not run beside another page cache and says so; everything else in DietPress works alongside them as it always has
 * Security plugins (DietPress focuses on performance and deliberately leaves security to them; we recommend our free Vigilant)
 * CDNs (Cloudflare, StackPath, KeyCDN, etc.) thanks to CORS and Vary headers
-* WordPress Multisite
+* WordPress Multisite (except the optional page cache module, which does not support it yet)
 
 ### HOW TO VERIFY THE OPTIMIZATIONS
 
@@ -96,6 +135,72 @@ Always measure with tools like Google PageSpeed, GTMetrix or WebPageTest, and ru
 3. Open the **DietPress** menu to review the settings. Performance optimizations are already on; the diet options are off until you enable them.
 
 == Frequently Asked Questions ==
+
+= What does a page cache actually do, and do I need one? =
+
+Every time somebody visits your site, WordPress queries the database, runs your plugins, builds the page from your theme and sends it. For a visitor who is not logged in, the result is the same every time until you change something, so doing all of that again is wasted work.
+
+A page cache does it once and stores the finished HTML on disk. The next visitor gets that file, skipping the database, the theme and most of the loading time. It is normally the single biggest speed gain a WordPress site can get, and it is also what keeps a small hosting plan standing up when a post does well on social media.
+
+You need one unless your hosting already provides it. DietPress detects the usual managed hosts and tells you when that is the case.
+
+= How were the speed figures in the description measured, and can I repeat them? =
+
+On a local WordPress 7.0 install with GeneratePress, WooCommerce and a 76 product catalogue, on PHP 8.5. Each URL was requested twice to warm up and then fifteen times, and the median was taken; the parallel figures are 100 requests with ten in flight at a time. The only thing that changed between the two columns was the page cache switch, on the same content, in the same session.
+
+You can repeat it on your own site with any tool that reports time to first byte. From a terminal, `curl -o /dev/null -w "%{time_starttransfer}\n" https://yoursite.com/` a dozen times with the cache off, then a dozen with it on, and compare the medians rather than any single reading. Do it while logged out, because your own visits are never cached.
+
+Two honest caveats. A local install has no network latency, so the absolute milliseconds are lower than you will see in production, where the saving is usually larger rather than smaller. And these numbers say nothing about a Lighthouse score: that measures mostly what the browser does with your theme and your scripts after the page arrives, which is a different problem from how fast your server answers.
+
+= What is critical CSS and why does it matter? =
+
+A browser will not paint anything until it has downloaded every stylesheet in the page. Those files are render-blocking: your visitor stares at a blank screen while they arrive.
+
+Critical CSS is the small subset of rules needed to draw what fits on the screen at first sight. DietPress writes it straight into the page, so the browser can paint immediately and load the rest of the styles afterwards. It is the usual fix for the "eliminate render-blocking resources" warning in PageSpeed Insights, and it improves Largest Contentful Paint, one of the Core Web Vitals Google measures.
+
+= What does deferring JavaScript do? =
+
+By default a script tag stops the browser: it downloads the file, runs it, and only then carries on reading your page. A theme with half a dozen scripts in the head can hold the first paint for a second or more.
+
+Deferring tells the browser to keep building the page and run the scripts once it has finished. Nothing is removed and nothing loads later than it should, it just stops blocking. DietPress handles the dependency order for you and lets you exclude any script that misbehaves, from the settings or with a filter.
+
+= Why should I host Google Fonts on my own server? =
+
+Two reasons. Speed: a font from fonts.gstatic.com needs a fresh DNS lookup, TCP connection and TLS handshake to a domain the browser has never contacted, and browser cache partitioning means the visitor gets no benefit from having downloaded that font on another site. Privacy: serving them from Google transfers your visitor's IP address to Google, which German and other European courts have ruled a GDPR violation.
+
+DietPress downloads the fonts your theme uses to your own uploads folder and rewrites the stylesheets to point there. If anything fails it quietly falls back to Google, so a font never goes missing.
+
+= What is selective loading? =
+
+Plugins tend to load their CSS and JavaScript on every page of your site, whether or not the page uses them. A contact form plugin loads its scripts on every blog post; a slider plugin loads its libraries on pages with no slider; WooCommerce loads its cart on your About page.
+
+DietPress detects which pages actually use each one and removes the rest, for WooCommerce, Contact Form 7, the block library, Slider Revolution, TablePress, Smash Balloon, Formidable Forms and Everest Forms. Pages built with a builder such as Elementor keep everything, because their content is not readable from the database and guessing there is how things break.
+
+= What is browser caching and how is it different from the page cache? =
+
+They cache different things for different people. The page cache stores your HTML on your server, so the next visitor is served it without rebuilding the page. Browser caching tells each visitor's own browser to keep your images, styles, scripts and fonts on their machine, so their second visit downloads almost nothing.
+
+You want both, and they do not overlap. DietPress lets you set how long each family of files is kept: media, styles and scripts, and fonts, each on its own, because the right answer is different for each.
+
+= What does "let browsers keep the HTML for" do, and why is zero the default? =
+
+It decides how long a visitor's browser may reuse the page itself, as opposed to its images and styles. Zero, "Always revalidate", is not the same as sending nothing at all.
+
+With no answer at all the browser invents a lifetime of its own, normally about a tenth of the age of the document, which on an old page can be hours and is entirely out of your hands. With "Always revalidate" the browser asks every time, and the usual answer is a 304 Not Modified of a few hundred bytes, so the page is not downloaded again either: you get almost all of the saving and none of the staleness.
+
+Raise it only for a site that genuinely almost never changes, and be aware of the trade: an edit then takes that long to reach anyone who has already visited, because their browser will not even ask. This one is sent as an HTTP header rather than an .htaccess rule, so it works on nginx too.
+
+= What is the difference between Light, Moderate and Strict? =
+
+Risk, not importance. Light is safe on any site: things nobody misses, like the emoji script or the Windows Live Writer tag. Moderate deserves a look first, because a plugin or theme might use it, oEmbed or jQuery Migrate for example. Strict depends on what your site actually does: disabling comments, feeds or a whole content type is only right if you really do not use them.
+
+Every option says what it does and what might break, and the Scale tab analyses your site and recommends only what applies to you, so you never have to guess.
+
+= What are Core Web Vitals and does this help with them? =
+
+They are the three measurements Google uses to judge how a page feels: how quickly the main content appears (LCP), how quickly the page responds to a click (INP) and how much things jump around while loading (CLS).
+
+DietPress works on all three. The page cache and preloading cut the time to the first byte and to the largest element; deferring JavaScript and trimming what loads leaves the main thread free to answer clicks; and adding width and height to images that lack them stops the layout from shifting as they arrive.
 
 = I was using "Zero Config Performance Optimization". What changed? =
 
@@ -151,9 +256,35 @@ Yes. DietPress works alongside caching plugins and includes CORS and Vary header
 
 If a plugin or theme does not enqueue scripts correctly, the JavaScript defer may affect it; you can turn that option off or use the `dietpress_skip_defer_script_handles` filter. If you get a 500 error, edit your `.htaccess` and remove the block that starts with `# BEGIN DietPress` (or `# BEGIN Zero Config Performance` if you updated from 2.x and the rules have not been rewritten yet), or disable the ".htaccess server rules" option.
 
+= Why is a page not being cached? =
+
+Open DietPress and go to the Cache tab, then press "Test the cache now": the site asks itself for its own home page and tells you whether it was served from disk, rebuilt, or skipped entirely. If you need the exact reason for one particular page, turn `WP_DEBUG` on and read the last line of that page's HTML source: DietPress writes the reason there, for example that the response set a cookie or that a plugin declared the page uncacheable.
+
+The three usual causes are a plugin that sets a cookie on every visit (a consent banner, some analytics scripts), a page that is genuinely personal (cart, checkout, my account, a password protected post), and a cache directory the server cannot write to. The status panel reports the third one on its own.
+
+= I published a change and visitors still see the old page =
+
+Publishing, editing, deleting or renaming a post purges it and everything that lists it, and approving a comment purges the post it belongs to. Changing the theme, the menus, the widgets, the permalinks or the front page settings empties the whole cache, and so does activating or updating any plugin.
+
+If a change made outside WordPress (straight in the database, or by an importer) is not showing, use the purge button on the Page Cache screen. And check with a private window first: DietPress asks browsers not to keep the HTML, but an aggressive browser cache, a CDN or a hosting cache in front of the site are outside its reach.
+
+= Does it work with WooCommerce? =
+
+Yes. WooCommerce marks the cart, the checkout and my account as uncacheable itself, and DietPress obeys that mark rather than guessing from the URL, so it keeps working if you move or rename those pages. On top of that, any visitor carrying a WooCommerce cart or session cookie is served the live site everywhere, so a mini cart in the header never shows somebody else's basket. A store in "coming soon" mode is not cached at all.
+
+= Can I use it together with my other cache plugin, or with my hosting cache? =
+
+With another page cache plugin, no, and DietPress will not let you: two page caches on the same site serve each other's stale HTML and the result is very hard to diagnose. If W3 Total Cache, WP Super Cache, LiteSpeed Cache, WP Fastest Cache, Cache Enabler, Surge, WP Rocket or any of about thirty similar plugins is active, the toggle stays disabled and says which one. Object cache plugins such as Redis Object Cache are a different thing and are fine.
+
+With a hosting cache (Kinsta, WP Engine, SpinupWP, Cloudways and others) it is possible but rarely a good idea, because purging one does not purge the other. DietPress detects the usual ones and asks for an explicit confirmation before letting you enable it. On LiteSpeed servers we recommend the LiteSpeed Cache plugin instead: caching at server level is faster than anything PHP can do.
+
+= Are logged in users cached? =
+
+Never, and there is no option to change that. The same goes for anyone with a cart, an unlocked password protected post or a comment awaiting moderation.
+
 = Can I customize the optimizations as a developer? =
 
-Yes. See the filters listed in the description (the `dietpress_*` hooks).
+Yes. See the filters listed in the description (the `dietpress_*` hooks). The page cache adds `dietpress_cache_bypass`, `dietpress_cache_bypass_cookies`, `dietpress_cache_ignored_params`, `dietpress_cache_exclude_urls` and `dietpress_cache_post_urls`, the `dietpress_cache_purge_all` action and the `dietpress_purge_page_cache( $url )` function. Defining `DIETPRESS_DISABLE_CACHE` as true switches the engine off without deactivating anything.
 
 == Screenshots ==
 
@@ -166,32 +297,21 @@ Yes. See the filters listed in the description (the `dietpress_*` hooks).
 
 == Changelog ==
 
-= 3.4.1 =
-* Improved: The settings page code is no longer loaded on frontend requests. Around 90 KB of PHP that only the admin ever needs was being read and parsed on every visit to the site.
-* Improved: The saved settings are no longer completed with the built-in defaults on every single request. That work, and the database write it could trigger in the middle of an anonymous visit, now happens only after a plugin update, which is the only moment it can change anything.
-* Fix: Translations were loaded before the init action, which printed a "Translation loading for the wpo-tweaks domain was triggered too early" notice on sites that have DietPress translated and WP_DEBUG on. Deciding whether an option was locked went through the sentence that explains the lock, so merely reading a setting asked for a translation while the plugin was still loading.
-* Fix: The WooCommerce selective loading module left two stylesheets behind on pages with no store content. On WordPress 7.0, wc-blocks-style survived because block styles are now enqueued while the page renders and only afterwards moved up into the head, past the point where the module was looking. And with any block theme, woocommerce-blocktheme was never on the list to begin with, so it loaded everywhere. Every other WooCommerce file was already being removed.
-
-= 3.4.0 =
-* New: Selective loading covers five more plugins that load their assets on every page. Slider Revolution, around 660 KB of JavaScript per page, by turning its own Include libraries globally setting off for each visit and letting Slider Revolution decide, so its shortcodes, its widget and its own page list keep working (DietPress adds the cases its check misses, such as a shortcode inside a widget). TablePress and Smash Balloon, by turning on the conditional loading each one already ships with (nothing is dequeued, and no table or feed can end up unstyled). Formidable Forms, whose stylesheet is removed while its own footer fallback is put back in play. And Everest Forms, including the Dashicons file it forces on every visitor. All five are off by default, the site analyzer suggests each one when its plugin is active, and the Maximum cleanup profile enables them.
-* New: Options that cannot do what they promise now say so in their own card, and the ones that would contradict another option or break another plugin cannot be switched on at all. "Disable WordPress XML sitemap" becomes unavailable while a plugin that builds on the native sitemap is active (Visibility, or any plugin that says so through the new dietpress_native_sitemap_in_use filter), so nobody can pull the sitemap from under it by mistake. A stored value is never lost: it stays saved, it simply does not apply while the lock lasts, and the site analyzer stops suggesting anything locked.
-* New: The cards for "Disable Posts content type" and "Disable Pages content type" now count what you have and warn before you switch them on, for example that your site has 42 pages that would disappear from the admin, the frontend and your menus. Nothing is ever deleted, and the warning travels with the analyzer recommendations too.
-* Improved: Selective loading no longer removes assets on pages it cannot read. A page built with Elementor keeps its content in the database, out of reach of the content scan, and an Elementor Theme Builder template can inject a header, a footer or a popup into any request. Those pages now keep the assets of every detection-based module, which closes the known gap of the Contact Form 7 module with forms placed inside a builder.
-* Improved: Every selective loading module that removes handles now exposes the same three filters (dietpress_selective_{module}_has_content, _styles and _scripts), where before only WooCommerce had its handle lists filterable; the modules that flip a native setting expose their own escape filter instead. The filters published in 3.3.0 keep working.
-* Improved: The developer filters from the 2.x days (the ayudawp_wpotweaks_* prefix, renamed in 3.0.0) now report their deprecation through the standard WordPress notice, only when a site still has a callback hooked to one of them and only with WP_DEBUG on. They keep working, and are scheduled for removal in 4.0.
-* Improved: "Disable native lazy loading" and "Disable fetchpriority attribute" are no longer offered while "Enhance image loading attributes" is on. They only make sense when another plugin manages image loading, and with the DietPress option on they changed nothing, because DietPress sets those attributes itself right after WordPress. Turning off the image enhancements makes both available again, without reloading the page. If you had one of them on together with the image enhancements, the attributes were already being set by DietPress; now WordPress keeps setting its own too, which is the behavior the option descriptions always described.
-* Improved: The Scale tab is coherent with all of the above. The savings counter no longer counts an option that cannot apply, the analyzer does not suggest one, and applying a quick profile no longer stores one: it keeps whatever the site had and says which option it left alone and why. The Maximum cleanup profile also stops switching on "Disable native lazy loading" and "Disable fetchpriority attribute", which it combined with the image enhancements it keeps on, so they could never do anything.
-* Improved: The options that another option already covers now say so instead of looking active for no reason: the five granular RSS feed toggles while "Disable ALL RSS feeds" is on, the six .htaccess sub-options while the master switch is off, and the Customizer widgets one while the whole Customizer is disabled. They stay usable so a site can be configured in any order.
-* Improved: The option cards of every section are now laid out by how much text each one carries, so the two-column grid forms even rows instead of a ragged, masonry-looking wall. The order follows the texts themselves, so it keeps working after an edit or a translation, and the switch that governs a group (the .htaccess master, the nuclear RSS option) still comes first. Card notes sit at the bottom, so the ones sharing a row line up.
-* Fix: The site analyzer recommendation to disable the WordPress sitemap checked a constant belonging to no real plugin, so it only ever detected Yoast SEO, Rank Math and All in One SEO. It now also detects SEOPress, The SEO Framework and Slim SEO.
-* Fix: Internal cleanup with no change in behavior: an unused rendering method, two deletions of a transient that is never written, and a duplicated cleanup of a 2.x option on activation.
+= 3.5.0 =
+* New: Page cache. DietPress can now store a static copy of each page on disk and serve it to anonymous visitors without building the page again, from its own Cache tab in the DietPress settings, next to the diet levels, which also gathers the browser caching rules that used to live under Strict. It is off by default, it installs no drop-in file and it never writes to wp-config.php, so switching it off leaves the site exactly as it was. Logged in visitors, anyone carrying a cart, a password protected post and a comment awaiting moderation always get the live page. Every response carries an X-DietPress-Cache header, and every stored page a footprint comment, so a hit and a miss can be told apart at a glance.
+* New: Browser caching is now configurable rather than fixed: how long browsers keep your media, your styles and scripts, your fonts and the HTML itself, each on its own, plus a switch for the ETag header. Browser caching and compression also get a master switch each, so you can run one without the other; a site updating from 3.4.x keeps whatever its single switch said. The Cache-Control headers are built from those same lifetimes instead of a hardcoded year, which is a fix in itself: they used to contradict the Expires rules, and browsers obey Cache-Control when the two disagree. Only styles, scripts and fonts are marked immutable now, because they carry a version in their URL; an image keeps its URL when you replace it. The HTML lifetime is sent as an HTTP header instead of an .htaccess rule, which is a fix too: the old rule only matched files whose name ends in .html, so it never applied to a WordPress permalink at all.
+* New: The Cache tab reports what the cache is really doing instead of just offering switches: how many pages and how much disk it holds, when the cleanup last ran and when it runs next, and a Test the cache now button that asks the site for its own home page, as an anonymous visitor would, and says whether it was served from disk, rebuilt, or skipped. The same status block appears on the Scale tab next to the savings, the site analyzer gained a Cache section that covers the engine, the gzip copy and the browser caching rules, and the quick profiles switch the cache on with a lifetime that suits each one, six hours for a store and twelve for the rest. Purging accepts a title as you type and fills in the right URL for you. With WP_DEBUG on, a page that is not being stored names the exact reason in an HTML comment at the end of its source.
+* New: Invalidation happens on its own for the things that change a page. Publishing, editing, deleting or renaming a post purges it along with the front page, the blog page, its archives and its author page, and renaming a slug also purges the address it used to live at. Approving, editing or deleting a comment purges its post. Changing the theme, the menus, the widgets, the permalinks or the front page settings, and activating or updating any plugin, empty the cache completely. There is also a purge button, a field to purge one URL, the dietpress_cache_purge_all action and the dietpress_purge_page_cache() function.
+* New: The cache refuses to run beside another one instead of fighting it. With W3 Total Cache, WP Super Cache, LiteSpeed Cache, WP Fastest Cache, Cache Enabler, Surge, WP Rocket or any of about thirty similar plugins active, the toggle is disabled and says which one is in the way, and if one of them is activated later DietPress switches its own cache off and tells you. On hosting that already serves a page cache, such as Kinsta, WP Engine, SpinupWP or Cloudways, it explains the risk and asks for an explicit confirmation. On LiteSpeed servers it points at the LiteSpeed Cache plugin, which caches at server level. Multisite is not supported yet and says so rather than misbehaving.
+* Fix: Activating a conflicting cache plugin from WP-CLI, or from any code that activates plugins outside the dashboard, did not switch the page cache off. The check only listened while an admin screen was loading, so a host control panel or a staging script could leave two page caches running at once, which is the exact situation the check exists to prevent.
+* Fix: An option held back by another one lost its saved value on the next save. The switches that depend on a master switch, the five RSS feed ones and the compression ones among them, were drawn from whether they apply right now rather than from what you had chosen, so while the master was off they rendered as off, and saving wrote that over your real preference. Turning the master back on then restored nothing. A card now always shows what is stored, and the note underneath is what says whether it can do anything yet.
 
 For older changelog entries, please check the [changelog.txt](https://plugins.svn.wordpress.org/wpo-tweaks/trunk/changelog.txt) file.
 
 == Upgrade Notice ==
 
-= 3.4.1 =
-Fixes a notice about translations loading too early with WP_DEBUG on, and two WooCommerce stylesheets that selective loading left behind on WordPress 7.0 and on block themes. The settings page code and the defaults merge no longer run on frontend requests.
+= 3.5.0 =
+Adds an optional page cache that stores each page on disk and serves it to anonymous visitors. Off by default, with no drop-in file and no changes to wp-config.php. It refuses to run beside another cache plugin. Nothing changes until you switch it on.
 
 == Support ==
 

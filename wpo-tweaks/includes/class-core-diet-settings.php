@@ -115,12 +115,28 @@ class Core_Diet_Settings {
 			'disable_feed_authors'       => array( 'disable_feed_all', true, 'feeds', 'soft' ),
 			'disable_feed_search'        => array( 'disable_feed_all', true, 'feeds', 'soft' ),
 			'disable_feed_links_head'    => array( 'disable_feed_all', true, 'feeds', 'soft' ),
-			'htaccess_expires'           => array( 'htaccess_rules', false, 'htaccess', 'soft' ),
+			// Two independent masters, one per tab. htaccess_rules governs
+			// compression and connections, in Strict; htaccess_browser_cache
+			// governs the caching rules, in Cache. Either one on is enough for
+			// the .htaccess block to be written.
 			'htaccess_gzip'              => array( 'htaccess_rules', false, 'htaccess', 'soft' ),
 			'htaccess_brotli'            => array( 'htaccess_rules', false, 'htaccess', 'soft' ),
-			'htaccess_cache_headers'     => array( 'htaccess_rules', false, 'htaccess', 'soft' ),
 			'htaccess_cors_fonts'        => array( 'htaccess_rules', false, 'htaccess', 'soft' ),
 			'htaccess_keepalive'         => array( 'htaccess_rules', false, 'htaccess', 'soft' ),
+
+			'htaccess_expires'           => array( 'htaccess_browser_cache', false, 'browsercache', 'soft' ),
+			'htaccess_cache_headers'     => array( 'htaccess_browser_cache', false, 'browsercache', 'soft' ),
+
+			// The lifetimes belong to browser caching, which is their own
+			// master inside the .htaccess block.
+			'htaccess_expires_media'     => array( 'htaccess_expires', false, 'expires', 'soft' ),
+			'htaccess_expires_assets'    => array( 'htaccess_expires', false, 'expires', 'soft' ),
+			'htaccess_expires_fonts'     => array( 'htaccess_expires', false, 'expires', 'soft' ),
+			'htaccess_etag'              => array( 'htaccess_cache_headers', false, 'headers', 'soft' ),
+
+			// Sent from PHP, so it only depends on the browser cache master and
+			// not on the .htaccess header rules.
+			'htaccess_html_maxage'       => array( 'htaccess_browser_cache', false, 'browsercache', 'soft' ),
 			'disable_customizer_widgets' => array( 'disable_customizer', true, 'customizer', 'soft' ),
 		);
 	}
@@ -181,13 +197,22 @@ class Core_Diet_Settings {
 	private static function get_lock_reason_text( $group ) {
 		switch ( $group ) {
 			case 'images':
-				return __( 'Needs "Enhance image loading attributes" off: while it is on, DietPress already sets these attributes.', 'wpo-tweaks' );
+				return __( 'Needs "Enhance image loading attributes" off, in the Moderate tab: while it is on, DietPress already sets these attributes.', 'wpo-tweaks' );
 
 			case 'feeds':
 				return __( '"Disable ALL RSS feeds" already covers this, so it does nothing right now.', 'wpo-tweaks' );
 
 			case 'htaccess':
-				return __( 'The .htaccess master switch is off, so this does nothing right now.', 'wpo-tweaks' );
+				return __( '"Write compression rules to .htaccess" is off, so this does nothing right now.', 'wpo-tweaks' );
+
+			case 'browsercache':
+				return __( '"Write browser cache rules to .htaccess" is off, so this does nothing right now.', 'wpo-tweaks' );
+
+			case 'expires':
+				return __( '"Browser caching (mod_expires)" is off, so this lifetime does nothing right now.', 'wpo-tweaks' );
+
+			case 'headers':
+				return __( '"Cache-Control, Vary and ETag headers" is off, so this does nothing right now.', 'wpo-tweaks' );
 
 			case 'customizer':
 				return __( 'The whole Customizer is off, so this does nothing right now.', 'wpo-tweaks' );
@@ -253,9 +278,24 @@ class Core_Diet_Settings {
 
 		list( $depends_on, $locked_when, $group ) = $rules[ $key ];
 
-		$current = is_array( $state )
-			? ! empty( $state[ $depends_on ] )
-			: (bool) self::get_instance()->get( $depends_on, false );
+		/*
+		 * A key missing from the stored option has to resolve to its built-in
+		 * default here, exactly as get() and is_enabled() resolve it. This used
+		 * to pass false as an explicit default, which is a different answer:
+		 * get()'s second argument is the fallback, so a missing key came back
+		 * false while the very same key rendered as true in its own checkbox.
+		 *
+		 * That contradiction is invisible for as long as every key is present,
+		 * which is why it went unnoticed for years: Core_Diet::maybe_upgrade()
+		 * used to write every default to the option on every request. Since
+		 * 3.4.1 it only runs after an update, so a key added between releases
+		 * is genuinely absent, and in 3.5.0 htaccess_browser_cache made it
+		 * visible: its switch read as on and the two options it governs
+		 * announced that it was off.
+		 */
+		$current = is_array( $state ) && array_key_exists( $depends_on, $state )
+			? (bool) $state[ $depends_on ]
+			: (bool) self::get_instance()->get( $depends_on );
 
 		return ( $current === (bool) $locked_when ) ? $group : '';
 	}
@@ -547,7 +587,13 @@ class Core_Diet_Settings {
 
 			// --- Performance: .htaccess server rules ---
 			'htaccess_rules'            => true,
+			'htaccess_browser_cache'    => true,
 			'htaccess_expires'          => true,
+			'htaccess_expires_media'    => '1 month',
+			'htaccess_expires_assets'   => '1 year',
+			'htaccess_expires_fonts'    => '1 year',
+			'htaccess_html_maxage'      => '0',
+			'htaccess_etag'             => true,
 			'htaccess_gzip'             => true,
 			'htaccess_brotli'           => true,
 			'htaccess_cache_headers'    => true,
@@ -627,8 +673,13 @@ class Core_Diet_Settings {
 			'enhance_images', 'add_image_dimensions',
 			'clean_transients', 'optimize_comment_queries', 'optimize_main_queries',
 			'critical_css_inline', 'critical_css_defer',
-			'htaccess_rules', 'htaccess_expires', 'htaccess_gzip', 'htaccess_brotli',
+			// The three htaccess_expires_* lifetimes are NOT here: they are
+			// selects, and a boolean cast would turn any submitted string into
+			// true, which then survives the allowlist check further down
+			// because that check only ever writes a value it recognises.
+			'htaccess_rules', 'htaccess_browser_cache', 'htaccess_expires', 'htaccess_gzip', 'htaccess_brotli',
 			'htaccess_cache_headers', 'htaccess_cors_fonts', 'htaccess_keepalive',
+			'htaccess_etag',
 		);
 	}
 
@@ -691,6 +742,18 @@ class Core_Diet_Settings {
 		}
 
 		// --- Third-party dashboard widgets (array of IDs) ---
+		// Browser cache lifetimes. The value goes straight into an .htaccess
+		// directive, so nothing outside the allowlist may ever reach it.
+		foreach ( array( 'htaccess_expires_media', 'htaccess_expires_assets', 'htaccess_expires_fonts' ) as $key ) {
+			if ( isset( $input[ $key ] ) && array_key_exists( $input[ $key ], self::get_expires_choices() ) ) {
+				$sanitized[ $key ] = $input[ $key ];
+			}
+		}
+
+		if ( isset( $input['htaccess_html_maxage'] ) && array_key_exists( $input['htaccess_html_maxage'], self::get_html_maxage_choices() ) ) {
+			$sanitized['htaccess_html_maxage'] = $input['htaccess_html_maxage'];
+		}
+
 		if ( isset( $input['disable_dashboard_third_party'] ) && is_array( $input['disable_dashboard_third_party'] ) ) {
 			$sanitized['disable_dashboard_third_party'] = array_map( 'sanitize_key', $input['disable_dashboard_third_party'] );
 		} else {
@@ -759,6 +822,65 @@ class Core_Diet_Settings {
 	 * @param string $tab Tab slug (light, moderate, strict, widgets).
 	 * @return array Flat array of setting keys.
 	 */
+	/**
+	 * Browser cache lifetimes offered for the .htaccess expires rules.
+	 *
+	 * The keys are the literal mod_expires periods, which is what makes the
+	 * allowlist in sanitize() the only thing standing between a stored option
+	 * and an Apache directive.
+	 *
+	 * @return array Period => label.
+	 */
+	public static function get_expires_choices() {
+		return array(
+			'1 day'    => __( '1 day', 'wpo-tweaks' ),
+			'1 week'   => __( '1 week', 'wpo-tweaks' ),
+			'1 month'  => __( '1 month', 'wpo-tweaks' ),
+			'4 months' => __( '4 months', 'wpo-tweaks' ),
+			'1 year'   => __( '1 year', 'wpo-tweaks' ),
+		);
+	}
+
+	/**
+	 * How long browsers may keep an HTML document.
+	 *
+	 * @return array Period => label.
+	 */
+	public static function get_html_maxage_choices() {
+		return array(
+			'0'         => __( 'Always revalidate', 'wpo-tweaks' ),
+			'5 minutes' => __( '5 minutes', 'wpo-tweaks' ),
+			'1 hour'   => __( '1 hour', 'wpo-tweaks' ),
+			'1 day'    => __( '1 day', 'wpo-tweaks' ),
+		);
+	}
+
+	/**
+	 * Turn one of the periods above into seconds, for a max-age directive.
+	 *
+	 * Expires and Cache-Control describe the same thing, and browsers obey
+	 * Cache-Control when the two disagree. Deriving the seconds from the very
+	 * period that goes into the Expires rule is what keeps a site from choosing
+	 * "1 month" for its images and being served a year regardless.
+	 *
+	 * @param string $period Period such as "4 months".
+	 * @return int Seconds. 0 when the period is not one we offer.
+	 */
+	public static function period_to_seconds( $period ) {
+		$map = array(
+			'0'         => 0,
+			'5 minutes' => 5 * MINUTE_IN_SECONDS,
+			'1 hour'    => HOUR_IN_SECONDS,
+			'1 day'     => DAY_IN_SECONDS,
+			'1 week'    => WEEK_IN_SECONDS,
+			'1 month'   => MONTH_IN_SECONDS,
+			'4 months'  => 4 * MONTH_IN_SECONDS,
+			'1 year'    => YEAR_IN_SECONDS,
+		);
+
+		return isset( $map[ $period ] ) ? (int) $map[ $period ] : 0;
+	}
+
 	public static function get_tab_keys( $tab ) {
 		switch ( $tab ) {
 			case 'light':
@@ -822,13 +944,26 @@ class Core_Diet_Settings {
 					'selective_smash_balloon',
 					'selective_formidable',
 					'selective_everest_forms',
+					// Compression and connection rules stay here: they are
+					// written to .htaccess like the caching ones, but they are
+					// not caching. Only what caches moved to the Cache tab.
 					'htaccess_rules',
-					'htaccess_expires',
 					'htaccess_gzip',
 					'htaccess_brotli',
-					'htaccess_cache_headers',
 					'htaccess_cors_fonts',
 					'htaccess_keepalive',
+				);
+
+			case 'cache':
+				return array(
+					'htaccess_browser_cache',
+					'htaccess_expires',
+					'htaccess_expires_media',
+					'htaccess_expires_assets',
+					'htaccess_expires_fonts',
+					'htaccess_cache_headers',
+					'htaccess_html_maxage',
+					'htaccess_etag',
 				);
 
 			case 'widgets':
@@ -953,13 +1088,19 @@ class Core_Diet_Settings {
 			'selective_smash_balloon'    => __( 'Load Smash Balloon styles only on pages with a feed', 'wpo-tweaks' ),
 			'selective_formidable'       => __( 'Load Formidable Forms styles only on pages with a form', 'wpo-tweaks' ),
 			'selective_everest_forms'    => __( 'Load Everest Forms styles only on pages with a form', 'wpo-tweaks' ),
-			'htaccess_rules'             => __( 'Write server performance rules to .htaccess', 'wpo-tweaks' ),
-			'htaccess_expires'           => __( 'Browser caching (mod_expires)', 'wpo-tweaks' ),
-			'htaccess_gzip'              => __( 'GZIP compression (mod_deflate)', 'wpo-tweaks' ),
-			'htaccess_brotli'            => __( 'Brotli compression (mod_brotli)', 'wpo-tweaks' ),
-			'htaccess_cache_headers'     => __( 'Cache-Control, Vary and ETag headers (mod_headers)', 'wpo-tweaks' ),
-			'htaccess_cors_fonts'        => __( 'Cross-origin font loading (CORS)', 'wpo-tweaks' ),
-			'htaccess_keepalive'         => __( 'Keep-alive connections', 'wpo-tweaks' ),
+			'htaccess_rules'             => __( 'Write compression rules to .htaccess', 'wpo-tweaks' ),
+			'htaccess_browser_cache'     => __( 'Write browser cache rules to .htaccess', 'wpo-tweaks' ),
+			'htaccess_expires'           => __( 'Browser caching (mod_expires) (.htaccess)', 'wpo-tweaks' ),
+			'htaccess_expires_media'     => __( 'Keep images, video and PDFs for', 'wpo-tweaks' ),
+			'htaccess_expires_assets'    => __( 'Keep styles and scripts for', 'wpo-tweaks' ),
+			'htaccess_expires_fonts'     => __( 'Keep fonts for', 'wpo-tweaks' ),
+			'htaccess_html_maxage'       => __( 'Let browsers keep the HTML for', 'wpo-tweaks' ),
+			'htaccess_etag'              => __( 'Remove ETags from static files (.htaccess)', 'wpo-tweaks' ),
+			'htaccess_gzip'              => __( 'GZIP compression (mod_deflate) (.htaccess)', 'wpo-tweaks' ),
+			'htaccess_brotli'            => __( 'Brotli compression (mod_brotli) (.htaccess)', 'wpo-tweaks' ),
+			'htaccess_cache_headers'     => __( 'Cache-Control and Vary headers (mod_headers) (.htaccess)', 'wpo-tweaks' ),
+			'htaccess_cors_fonts'        => __( 'Cross-origin font loading (CORS) (.htaccess)', 'wpo-tweaks' ),
+			'htaccess_keepalive'         => __( 'Keep-alive connections (.htaccess)', 'wpo-tweaks' ),
 
 			// Emails.
 			'disable_auto_core_update_email'      => __( 'Core auto-update result email', 'wpo-tweaks' ),
@@ -1054,11 +1195,13 @@ class Core_Diet_Settings {
 			'selective_smash_balloon' => __( 'Smash Balloon has a setting to load its 42 KB stylesheet only where a feed is shown, and it ships turned off. This turns it on for visitors, leaving the admin screens untouched, so Smash Balloon itself loads the styles when a feed is rendered. Nothing is dequeued. Only acts when Smash Balloon Social Photo Feed is active.', 'wpo-tweaks' ),
 			'selective_formidable' => __( 'Removes the Formidable Forms stylesheet on pages with no form (shortcode or block in content or widgets). Only acts when Formidable is set to load its styles on all pages, which is the default, and its own footer fallback is put back in play so a form printed from a template still gets styled.', 'wpo-tweaks' ),
 			'selective_everest_forms' => __( 'Removes the Everest Forms stylesheets on pages with no form (shortcode or block in content or widgets), including the Dashicons stylesheet it forces on every visitor. Dashicons is only removed for logged-out visitors and when no other stylesheet depends on it; the dietpress_selective_everest_forms_dequeue_dashicons filter turns that part off.', 'wpo-tweaks' ),
-			'htaccess_rules' => __( 'Master switch for the managed .htaccess block (browser caching, compression and cache headers). The file is backed up before the first change and the block is removed cleanly when turned off or on deactivation. Apache or LiteSpeed only.', 'wpo-tweaks' ),
+			'htaccess_rules' => __( 'Master switch for the compression and connection rules of the managed .htaccess block. The file is backed up before the first change and the block is removed cleanly when everything that writes to it is turned off. Apache or LiteSpeed only.', 'wpo-tweaks' ),
+			'htaccess_browser_cache' => __( 'Master switch for the browser caching rules of the managed .htaccess block. Independent of the compression switch in the Strict tab: either one can be on without the other. Apache or LiteSpeed only.', 'wpo-tweaks' ),
 			'htaccess_expires' => __( 'Sets far-future Expires headers for images, fonts, CSS, JS and media so returning visitors reuse cached files (mod_expires).', 'wpo-tweaks' ),
 			'htaccess_gzip' => __( 'Compresses text-based responses (HTML, CSS, JS, JSON, SVG, fonts) before sending them, reducing transfer size (mod_deflate).', 'wpo-tweaks' ),
 			'htaccess_brotli' => __( 'Adds Brotli compression for text assets on servers that support mod_brotli. Safely ignored if the module is unavailable.', 'wpo-tweaks' ),
-			'htaccess_cache_headers' => __( 'Marks static assets as immutable with a one-year max-age, caches HTML for one hour, removes ETags and adds Vary Accept-Encoding (mod_headers).', 'wpo-tweaks' ),
+			'htaccess_cache_headers' => __( 'Sends Cache-Control with the same lifetimes as the Expires rules above, marks versioned styles, scripts and fonts as immutable, and adds Vary Accept-Encoding (mod_headers).', 'wpo-tweaks' ),
+			'htaccess_etag' => __( 'Drops the ETag header from static files. With a max-age already set it adds nothing, and on some clustered hosting the value differs per server and defeats the cache.', 'wpo-tweaks' ),
 			'htaccess_cors_fonts' => __( 'Adds Access-Control-Allow-Origin to font files so they load from a CDN or different subdomain. Disable if your policy forbids a wildcard CORS origin.', 'wpo-tweaks' ),
 			'htaccess_keepalive' => __( 'Sends a Connection keep-alive header to encourage connection reuse. Some managed hosts manage keep-alive themselves and may ignore it.', 'wpo-tweaks' ),
 

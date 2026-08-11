@@ -274,6 +274,7 @@
 	display: flex;
 	align-items: center;
 	gap: 12px;
+	margin-top: 24px;
 }
 
 .core-diet-submit-wrap.core-diet-hidden {
@@ -850,6 +851,194 @@
 }
 
 /* Narrow screens */
+/* ==========================================================================
+   Cache tab
+   ========================================================================== */
+
+/* Only shown when the page cache is off: a green dot would be noise, and
+   dimming the tab was misleading, since most of its options are on by
+   default whatever the engine is doing. */
+.core-diet-tab-dot {
+	display: inline-block;
+	width: 8px;
+	height: 8px;
+	margin-left: 8px;
+	border-radius: 50%;
+	vertical-align: middle;
+}
+
+.core-diet-tab-dot-off {
+	background: var(--dp-danger);
+}
+
+/* A standing fact, not an event, so it wears the same clothes as the notes
+   inside the option cards instead of a WordPress admin notice. */
+.core-diet-tab-note {
+	margin: 0 0 20px;
+	max-width: 900px;
+}
+
+/* Instant search on the purge field. */
+.core-diet-cache-search {
+	position: relative;
+}
+
+.core-diet-search-results {
+	position: absolute;
+	z-index: 10;
+	left: 0;
+	right: 0;
+	max-height: 280px;
+	margin-top: 2px;
+	overflow-y: auto;
+	background: #fff;
+	border: 1px solid var(--dp-border-strong);
+	border-radius: var(--dp-radius);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.core-diet-search-item {
+	display: block;
+	width: 100%;
+	padding: 8px 12px;
+	border: 0;
+	border-bottom: 1px solid var(--dp-border);
+	background: none;
+	text-align: left;
+	cursor: pointer;
+}
+
+.core-diet-search-item:last-child {
+	border-bottom: 0;
+}
+
+.core-diet-search-item:hover,
+.core-diet-search-item.is-active {
+	background: var(--dp-bg-subtle);
+}
+
+.core-diet-search-item-title {
+	display: block;
+	font-weight: 600;
+	color: var(--dp-text);
+}
+
+.core-diet-search-item-meta {
+	display: block;
+	overflow: hidden;
+	font-size: 12px;
+	color: var(--dp-text-muted);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.core-diet-search-empty {
+	padding: 10px 12px;
+	font-size: 13px;
+	color: var(--dp-text-muted);
+}
+
+.core-diet-cache-status {
+	margin: 0 0 20px;
+}
+
+.core-diet-cache-grid {
+	margin: 0 0 16px;
+}
+
+/* "in 6 hours" does not fit at the size a number does. */
+.core-diet-cache-value-small {
+	font-size: 18px;
+	line-height: 1.4;
+}
+
+/* Outside a card these are blocks of their own, so the auto top margin that
+   pins a note to the bottom of a card has to go, and they need real spacing
+   instead of sitting flush against whatever comes next. */
+.core-diet-cache-block {
+	margin: 0 0 12px;
+}
+
+.core-diet-cache-panel {
+	max-width: 680px;
+	padding: 16px 18px;
+	border: 1px solid var(--dp-border);
+	border-radius: var(--dp-radius);
+	background: #fff;
+}
+
+.core-diet-cache-panel > p:first-child {
+	margin-top: 0;
+}
+
+.core-diet-cache-panel .core-diet-option-label {
+	display: block;
+	margin-bottom: 8px;
+}
+
+.core-diet-cache-panel input[type="text"] {
+	width: 100%;
+	max-width: 100%;
+}
+
+/* Buttons need air: sitting flush against the box above them was the main
+   thing that read as unfinished. */
+.core-diet-cache-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+	margin: 14px 0 0;
+}
+
+.core-diet-cache-actions-hint {
+	font-size: 12px;
+	color: var(--dp-text-muted);
+}
+
+/* Transient results use the WordPress notice styles, which is what an admin
+   expects something that just happened to look like. */
+.core-diet-cache-result {
+	margin: 14px 0 0;
+}
+
+.core-diet-cache-result p {
+	margin: 0.5em 0;
+}
+
+/* A textarea has nothing to gain from half the width, and pairing it with a
+   toggle card in the same row left a ragged edge. */
+.core-diet-option-card-wide {
+	grid-column: 1 / -1;
+}
+
+.core-diet-option-card-wide textarea {
+	margin: 0;
+	font-size: 12px;
+}
+
+/* The number input is the card's control, so it lines up where a toggle would. */
+.core-diet-option-card .core-diet-option-header input[type="number"] {
+	flex: 0 0 auto;
+	margin: 0;
+}
+
+/* A heading that is not inside the cards grid has no gap to separate it from
+   what follows, so it carries its own spacing. */
+.core-diet-tab-panel > .core-diet-section-title {
+	margin: 32px 0 14px;
+}
+
+.core-diet-tab-panel > .core-diet-section-title:first-child {
+	margin-top: 0;
+}
+
+/* A description right under a heading should not add its own top margin on
+   top of the heading's bottom one. */
+.core-diet-tab-panel > .core-diet-section-title + .core-diet-tab-description {
+	margin-top: 0;
+}
+
 @media screen and (max-width: 782px) {
 	.core-diet-cards-grid {
 		grid-template-columns: 1fr;

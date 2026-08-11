@@ -96,6 +96,19 @@ class Core_Diet {
 			$changed = true;
 		}
 
+		/*
+		 * 3.5.0 split the single .htaccess master in two, one per tab. The new
+		 * one has to inherit what the old one said on this site, not its own
+		 * default: a site that had the whole block switched off would otherwise
+		 * find browser caching turned on by an update it never asked for. This
+		 * has to happen before the defaults are merged below, which is what
+		 * would introduce the key with its default value.
+		 */
+		if ( isset( $settings['htaccess_rules'] ) && ! array_key_exists( 'htaccess_browser_cache', $settings ) ) {
+			$settings['htaccess_browser_cache'] = $settings['htaccess_rules'];
+			$changed                            = true;
+		}
+
 		// Merge any new defaults for keys that don't exist yet.
 		$defaults = Core_Diet_Settings::get_defaults();
 		foreach ( $defaults as $key => $value ) {
@@ -224,6 +237,13 @@ class Core_Diet {
 
 		// Unschedule the transient-cleanup cron event.
 		wp_clear_scheduled_hook( 'core_diet_clean_transients' );
+
+		// Empty the page cache and stop its garbage collector. Leaving cached
+		// HTML on disk while the plugin is inactive is harmless (nothing serves
+		// it), but it would be stale the moment the plugin came back.
+		if ( class_exists( 'Core_Diet_Cache' ) ) {
+			Core_Diet_Cache::deactivate();
+		}
 
 		// Remove our .htaccess rules so they do not linger while inactive.
 		$htaccess = new Core_Diet_Htaccess( Core_Diet_Settings::get_instance() );

@@ -17,6 +17,29 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 delete_option( 'core_diet_settings' );
 delete_option( 'core_diet_version' );
 
+// Page cache module: its own option, its bookkeeping and the whole cache tree.
+delete_option( 'core_diet_cache_settings' );
+delete_option( 'core_diet_cache_last_gc' );
+delete_transient( 'core_diet_cache_auto_disabled' );
+wp_clear_scheduled_hook( 'core_diet_cache_gc' );
+
+require_once plugin_dir_path( __FILE__ ) . 'includes/cache/class-core-diet-cache-store.php';
+
+if ( class_exists( 'Core_Diet_Cache_Store' ) ) {
+	Core_Diet_Cache_Store::purge_all();
+
+	// purge_all() keeps the root and its hardening files, which have to go too
+	// when the plugin is being deleted outright.
+	$dietpress_cache_root = Core_Diet_Cache_Store::get_root();
+	foreach ( array( '/.htaccess', '/index.php' ) as $dietpress_cache_file ) {
+		if ( file_exists( $dietpress_cache_root . $dietpress_cache_file ) ) {
+			wp_delete_file( $dietpress_cache_root . $dietpress_cache_file );
+		}
+	}
+	// phpcs:ignore WordPress.WP.AlternativeFunctions -- Removing the plugin's own now-empty cache directory during uninstall.
+	@rmdir( $dietpress_cache_root );
+}
+
 // Remove the legacy wpo-tweaks activation flag, if it somehow remains.
 delete_option( 'ayudawp_wpotweaks_show_activation_notice' );
 

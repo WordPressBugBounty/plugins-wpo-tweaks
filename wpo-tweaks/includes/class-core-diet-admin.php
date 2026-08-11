@@ -35,6 +35,7 @@ class Core_Diet_Admin {
 				'light'    => __( 'Light', 'wpo-tweaks' ),
 				'moderate' => __( 'Moderate', 'wpo-tweaks' ),
 				'strict'   => __( 'Strict', 'wpo-tweaks' ),
+				'cache'    => __( 'Cache', 'wpo-tweaks' ),
 				'widgets'  => __( 'Widgets', 'wpo-tweaks' ),
 				'emails'   => __( 'Emails', 'wpo-tweaks' ),
 				'tools'    => __( 'Tools', 'wpo-tweaks' ),
@@ -152,8 +153,12 @@ class Core_Diet_Admin {
 				'tabLight'          => __( 'Light', 'wpo-tweaks' ),
 				'tabModerate'       => __( 'Moderate', 'wpo-tweaks' ),
 				'tabStrict'         => __( 'Strict', 'wpo-tweaks' ),
+				'tabCache'          => __( 'Cache', 'wpo-tweaks' ),
 				'recTip'            => __( 'Adjust this in the Strict tab.', 'wpo-tweaks' ),
 				'quickSelect'       => __( 'Quick select:', 'wpo-tweaks' ),
+				'working'           => __( 'Working...', 'wpo-tweaks' ),
+				'confirmPurgeAll'   => __( 'This will delete every cached page. They are rebuilt as visitors arrive. Continue?', 'wpo-tweaks' ),
+				'searchNoResults'   => __( 'Nothing found. You can paste a URL instead.', 'wpo-tweaks' ),
 			),
 		) );
 	}
@@ -171,7 +176,13 @@ class Core_Diet_Admin {
 		}
 
 		$current_tab   = $this->get_current_tab();
-		$settings_tabs = array( 'light', 'moderate', 'strict', 'widgets', 'emails' );
+
+		// The cache tab is inside the main form like any other settings tab: it
+		// carries the .htaccess options, which live in the shared settings, and
+		// its own option is registered in the same settings group so one save
+		// button stores both. Its purge and test controls run over AJAX, so
+		// they need no form of their own.
+		$settings_tabs = array( 'light', 'moderate', 'strict', 'cache', 'widgets', 'emails' );
 		$ajax_tabs     = array( 'scale', 'tools' );
 		?>
 		<div class="wrap core-diet-wrap">
@@ -180,17 +191,50 @@ class Core_Diet_Admin {
 				<?php echo esc_html( get_admin_page_title() ); ?>
 			</h1>
 
-			<?php settings_errors( 'core_diet_settings' ); ?>
+			<?php
+			/*
+			 * With no argument, so every tab gets feedback when it saves.
+			 * options.php files its own "Settings saved." under the general
+			 * slug and stashes the whole set in a transient, so asking for one
+			 * option's slug (which is what this used to do) never matched it
+			 * and no tab ever confirmed anything.
+			 */
+			settings_errors();
+			$this->render_restored_notice();
+			?>
 
 			<div class="core-diet-layout">
 				<div class="core-diet-main">
 
 					<nav class="nav-tab-wrapper core-diet-tabs">
-						<?php foreach ( $this->get_tabs() as $tab_id => $tab_label ) : ?>
+						<?php
+						foreach ( $this->get_tabs() as $tab_id => $tab_label ) :
+							$tab_class = 'nav-tab core-diet-nav-tab';
+							if ( $current_tab === $tab_id ) {
+								$tab_class .= ' nav-tab-active';
+							}
+							?>
 							<a href="#<?php echo esc_attr( $tab_id ); ?>"
-							   class="nav-tab core-diet-nav-tab <?php echo $current_tab === $tab_id ? 'nav-tab-active' : ''; ?>"
+							   class="<?php echo esc_attr( $tab_class ); ?>"
 							   data-tab="<?php echo esc_attr( $tab_id ); ?>">
-								<?php echo esc_html( $tab_label ); ?>
+								<?php
+								echo esc_html( $tab_label );
+
+								/*
+								 * A red dot when the page cache is off, and
+								 * nothing at all when it is on. A green dot
+								 * would be noise, and dimming the whole tab was
+								 * misleading: plenty of options on it are on by
+								 * default whatever the engine is doing.
+								 */
+								if ( 'cache' === $tab_id && class_exists( 'Core_Diet_Cache' ) && ! Core_Diet_Cache::is_enabled() ) {
+									printf(
+										'<span class="core-diet-tab-dot core-diet-tab-dot-off" title="%s" aria-hidden="true"></span><span class="screen-reader-text">%s</span>',
+										esc_attr__( 'Page cache off', 'wpo-tweaks' ),
+										esc_html__( 'Page cache off', 'wpo-tweaks' )
+									);
+								}
+								?>
 							</a>
 						<?php endforeach; ?>
 					</nav>
@@ -229,6 +273,12 @@ class Core_Diet_Admin {
 										break;
 									case 'strict':
 										$this->render_tab_strict();
+										break;
+									case 'cache':
+										if ( class_exists( 'Core_Diet_Cache_Admin' ) ) {
+											$cache_admin = new Core_Diet_Cache_Admin( Core_Diet_Cache_Settings::get_instance() );
+											$cache_admin->render_tab( $this );
+										}
 										break;
 									case 'widgets':
 										$this->render_tab_widgets();
@@ -279,6 +329,34 @@ class Core_Diet_Admin {
 			</div><!-- .core-diet-layout -->
 		</div>
 		<?php
+	}
+
+	/**
+	 * Confirm a per-tab restore, once.
+	 *
+	 * Restoring defaults used to say nothing at all: the page reloaded, in the
+	 * same scroll position, with no way to tell whether anything happened.
+	 */
+	private function render_restored_notice() {
+		$key = 'core_diet_restored_notice_' . get_current_user_id();
+		$tab = get_transient( $key );
+
+		if ( ! $tab ) {
+			return;
+		}
+
+		delete_transient( $key );
+
+		$tabs  = $this->get_tabs();
+		$label = isset( $tabs[ $tab ] ) ? $tabs[ $tab ] : $tab;
+
+		echo '<div class="notice notice-success is-dismissible"><p>';
+		printf(
+			/* translators: %s: tab name, for example "Light". */
+			esc_html__( 'The %s tab is back to its default settings.', 'wpo-tweaks' ),
+			'<strong>' . esc_html( $label ) . '</strong>'
+		);
+		echo '</p></div>';
 	}
 
 	/**
@@ -543,21 +621,110 @@ class Core_Diet_Admin {
 		);
 		$this->render_card_group( $selective_fields );
 
-		// --- Server-level rules (.htaccess) ---
-		$this->render_section_title( __( 'Server-level rules (.htaccess)', 'wpo-tweaks' ) );
+		// --- Compression and connections (.htaccess) ---
+		//
+		// What is written to .htaccess but is not caching stays here, where the
+		// whole block used to live, with a master of its own. The caching half
+		// moved to the Cache tab with its own master, so either group can be on
+		// without the other.
+		$this->render_section_title( __( 'Compression and connections (.htaccess)', 'wpo-tweaks' ) );
 
 		$htaccess_fields = array(
-			'htaccess_rules'          => __( 'Write server performance rules to .htaccess', 'wpo-tweaks' ),
-			'htaccess_expires'        => __( 'Browser caching (mod_expires)', 'wpo-tweaks' ),
-			'htaccess_gzip'           => __( 'GZIP compression (mod_deflate)', 'wpo-tweaks' ),
-			'htaccess_brotli'         => __( 'Brotli compression (mod_brotli)', 'wpo-tweaks' ),
-			'htaccess_cache_headers'  => __( 'Cache-Control, Vary and ETag headers (mod_headers)', 'wpo-tweaks' ),
-			'htaccess_cors_fonts'     => __( 'Cross-origin font loading (CORS)', 'wpo-tweaks' ),
-			'htaccess_keepalive'      => __( 'Keep-alive connections', 'wpo-tweaks' ),
+			'htaccess_rules'      => __( 'Write compression rules to .htaccess', 'wpo-tweaks' ),
+			'htaccess_gzip'       => __( 'GZIP compression (mod_deflate)', 'wpo-tweaks' ),
+			'htaccess_brotli'     => __( 'Brotli compression (mod_brotli)', 'wpo-tweaks' ),
+			'htaccess_cors_fonts' => __( 'Cross-origin font loading (CORS)', 'wpo-tweaks' ),
+			'htaccess_keepalive'  => __( 'Keep-alive connections', 'wpo-tweaks' ),
 		);
 		$this->render_card_group( $htaccess_fields, array( 'htaccess_rules' ) );
 
 		echo '</div>'; // End cards grid.
+	}
+
+	/**
+	 * The browser caching rules, rendered by the Cache tab.
+	 *
+	 * Only what caches: the Expires rules with a lifetime per family of files,
+	 * and the Cache-Control headers. Compression and keep-alive stayed in
+	 * Strict, because they are written to the same file but are not caching.
+	 */
+	public function render_browser_cache_group() {
+		echo '<div class="core-diet-cards-grid">';
+
+		// The master first, pinned, so the two options it governs never appear
+		// above the switch that explains why they are inactive.
+		$this->render_card_group(
+			array(
+				'htaccess_browser_cache' => __( 'Write browser cache rules to .htaccess', 'wpo-tweaks' ),
+				'htaccess_expires'       => __( 'Browser caching (mod_expires)', 'wpo-tweaks' ),
+				'htaccess_cache_headers' => __( 'Cache-Control and Vary headers (mod_headers)', 'wpo-tweaks' ),
+			),
+			array( 'htaccess_browser_cache' )
+		);
+
+		// How long each family of files is kept. Three groups rather than one
+		// figure, because the right answer is different for each: media is
+		// replaced by hand and cannot be cache-busted, while styles, scripts
+		// and fonts carry a version in their URL and can be kept for a year.
+		$choices  = Core_Diet_Settings::get_expires_choices();
+		$defaults = Core_Diet_Settings::get_defaults();
+
+		$this->render_select_card(
+			'htaccess_expires_media',
+			__( 'Keep images, video and PDFs for', 'wpo-tweaks' ),
+			$this->label_default( $choices, $defaults['htaccess_expires_media'] ),
+			__( 'Replacing one of these keeps the same URL, so a visitor who already has it will not see the new version until this runs out. A month is a safe middle ground.', 'wpo-tweaks' )
+		);
+
+		$this->render_select_card(
+			'htaccess_expires_assets',
+			__( 'Keep styles and scripts for', 'wpo-tweaks' ),
+			$this->label_default( $choices, $defaults['htaccess_expires_assets'] ),
+			__( 'WordPress adds a version to these URLs and changes it on every update, so a long lifetime costs nothing and saves a request on every visit.', 'wpo-tweaks' )
+		);
+
+		$this->render_select_card(
+			'htaccess_expires_fonts',
+			__( 'Keep fonts for', 'wpo-tweaks' ),
+			$this->label_default( $choices, $defaults['htaccess_expires_fonts'] ),
+			__( 'Fonts almost never change. A year is the usual recommendation.', 'wpo-tweaks' )
+		);
+
+
+		$this->render_select_card(
+			'htaccess_html_maxage',
+			__( 'Let browsers keep the HTML for', 'wpo-tweaks' ),
+			$this->label_default( Core_Diet_Settings::get_html_maxage_choices(), $defaults['htaccess_html_maxage'] ),
+			__( 'Recommended: leave it on "Always revalidate", which is not the same as sending nothing and lets an edit reach visitors at once. Raise it only for a site that almost never changes.', 'wpo-tweaks' )
+		);
+
+		$this->render_card_group(
+			array(
+				'htaccess_etag' => __( 'Remove ETags from static files', 'wpo-tweaks' ),
+			)
+		);
+
+
+		echo '</div>';
+	}
+
+	/**
+	 * Mark which choice is the built-in default, in its own label.
+	 *
+	 * @param array  $choices Value => label.
+	 * @param string $default The default value.
+	 * @return array
+	 */
+	private function label_default( $choices, $default ) {
+		if ( isset( $choices[ $default ] ) ) {
+			$choices[ $default ] = sprintf(
+				/* translators: %s: a lifetime such as "1 year". */
+				__( '%s (default)', 'wpo-tweaks' ),
+				$choices[ $default ]
+			);
+		}
+
+		return $choices;
 	}
 
 	/**
@@ -759,17 +926,31 @@ class Core_Diet_Admin {
 	 */
 	private function render_toggle_card( $key, $label, $description = '' ) {
 		$settings = Core_Diet_Settings::get_instance();
-		$checked  = $settings->is_enabled( $key );
 		$field_id = 'core_diet_' . $key;
 		$name     = Core_Diet_Settings::OPTION_NAME . '[' . $key . ']';
 		$notice   = Core_Diet_Settings::get_notice( $key );
 		$type     = $notice ? $notice['type'] : '';
 		$locked   = 'locked' === $type;
 
-		// The stored value survives a hard lock: the disabled checkbox is never
-		// submitted, so a hidden field carries it through and the preference is
-		// still there when the lock lifts.
-		$stored = (bool) $settings->get( $key, false );
+		/*
+		 * The checkbox shows what is STORED, never what currently applies.
+		 *
+		 * Those are different questions and the card answers both: the box is
+		 * the preference, which is what a save will write back, and the note
+		 * underneath is whether it can do anything right now. Ticking the box
+		 * from is_enabled() looked equivalent and was not, because is_enabled()
+		 * returns false for anything under a lock. A soft lock leaves the box
+		 * enabled and submittable, so it rendered unticked, and the very next
+		 * save wrote that false over the site's real preference. Switching the
+		 * governing option back on then restored nothing, because there was
+		 * nothing left to restore.
+		 *
+		 * A hard lock was already immune, by accident rather than design: its
+		 * box is disabled, never submitted, and a hidden field carries the
+		 * stored value through. Both cases read the same value now.
+		 */
+		$stored  = (bool) $settings->get( $key );
+		$checked = $stored;
 
 		$card_class = 'core-diet-option-card';
 		if ( $locked ) {
@@ -855,8 +1036,24 @@ class Core_Diet_Admin {
 		$current  = $settings->get( $key );
 		$field_id = 'core_diet_' . $key;
 		$name     = Core_Diet_Settings::OPTION_NAME . '[' . $key . ']';
+
+		// Selects can be governed by another option too, and used to be the only
+		// control that never said so: a lifetime under a switched-off master
+		// looked perfectly applicable and did nothing.
+		$rules     = Core_Diet_Settings::get_lock_rules();
+		$locked    = '' !== Core_Diet_Settings::get_lock_group_for_state( $key );
+		$lock_on   = isset( $rules[ $key ] ) ? 'core_diet_' . $rules[ $key ][0] : '';
+		$lock_when = isset( $rules[ $key ] ) && $rules[ $key ][1] ? '1' : '0';
+		$lock_mode = isset( $rules[ $key ] ) ? $rules[ $key ][3] : '';
+		$lock_text = $lock_on ? Core_Diet_Settings::get_lock_text_for( $key ) : '';
 		?>
-		<div class="core-diet-option-card">
+		<div class="core-diet-option-card<?php echo $locked ? ' core-diet-option-inactive' : ''; ?>"
+			<?php if ( $lock_on ) : ?>
+				data-lock-on="<?php echo esc_attr( $lock_on ); ?>"
+				data-lock-when="<?php echo esc_attr( $lock_when ); ?>"
+				data-lock-mode="<?php echo esc_attr( $lock_mode ); ?>"
+				data-lock-text="<?php echo esc_attr( $lock_text ); ?>"
+			<?php endif; ?>>
 			<label class="core-diet-option-label" for="<?php echo esc_attr( $field_id ); ?>">
 				<?php echo esc_html( $label ); ?>
 			</label>
@@ -871,6 +1068,12 @@ class Core_Diet_Admin {
 			</select>
 			<?php if ( $description ) : ?>
 				<p class="core-diet-option-desc"><?php echo esc_html( $description ); ?></p>
+			<?php endif; ?>
+			<?php if ( $lock_on ) : ?>
+				<p class="core-diet-option-notice core-diet-option-notice-inactive" <?php echo $locked ? '' : 'hidden'; ?>>
+					<span class="dashicons dashicons-warning" aria-hidden="true"></span>
+					<span class="core-diet-option-notice-text"><?php echo $locked ? esc_html( $lock_text ) : ''; ?></span>
+				</p>
 			<?php endif; ?>
 		</div>
 		<?php
@@ -1002,8 +1205,10 @@ class Core_Diet_Admin {
 	 * @return string
 	 */
 	private function get_current_tab() {
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Tab display only.
-		$tab = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : 'scale';
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Which tab to draw. No state changes, and the value is checked against the tab list below before it is used, so a nonce here would only break bookmarks.
+		$tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'scale';
+
+		// Allowlist: anything that is not one of our own tabs falls back.
 		return array_key_exists( $tab, $this->get_tabs() ) ? $tab : 'scale';
 	}
 }
