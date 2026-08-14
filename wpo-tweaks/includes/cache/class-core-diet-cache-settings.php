@@ -179,6 +179,32 @@ class Core_Diet_Cache_Settings {
 	}
 
 	/**
+	 * Whether a parameter name may never be added to the ignore list.
+	 *
+	 * An entry ending in an underscore is a prefix, not a name. WooCommerce
+	 * layered navigation sends one parameter per attribute (filter_color,
+	 * filter_size, and as many more as the shop has), so the list can only ever
+	 * carry "filter_": comparing for equality let filter_color through, and a
+	 * filtered shop page was then answered with the unfiltered one.
+	 *
+	 * @param string $name Parameter name.
+	 * @return bool
+	 */
+	private static function is_protected_param( $name ) {
+		foreach ( self::get_protected_params() as $protected ) {
+			if ( '_' === substr( $protected, -1 ) ) {
+				if ( 0 === strpos( $name, $protected ) ) {
+					return true;
+				}
+			} elseif ( $name === $protected ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
 	 * The full ignore list: built-in tracking parameters plus the site's own.
 	 *
 	 * @return array
@@ -198,7 +224,21 @@ class Core_Diet_Cache_Settings {
 		 */
 		$params = apply_filters( 'dietpress_cache_ignored_params', $params );
 
-		return array_diff( array_unique( array_map( 'strval', $params ) ), self::get_protected_params() );
+		$params = array_unique( array_map( 'strval', $params ) );
+
+		// The filter runs before this, on purpose: a site that adds a
+		// parameter of its own still cannot hand itself the wrong page.
+		return array_values( array_filter( $params, array( __CLASS__, 'is_allowed_param' ) ) );
+	}
+
+	/**
+	 * Callback form of the protected check, for array_filter().
+	 *
+	 * @param string $name Parameter name.
+	 * @return bool
+	 */
+	public static function is_allowed_param( $name ) {
+		return ! self::is_protected_param( (string) $name );
 	}
 
 	/**
@@ -319,7 +359,13 @@ class Core_Diet_Cache_Settings {
 				$line   = is_string( $parsed ) ? $parsed : '';
 			}
 
-			$line = preg_replace( '#[^A-Za-z0-9_\-/.*%~]#', '', $line );
+			// Stored decoded, which is the form the request path is compared
+			// in. It also makes both spellings of a non ASCII path converge:
+			// the address bar shows "/café/" and the clipboard usually holds
+			// "/caf%C3%A9/", and until now the second one was the only one that
+			// survived, because the accented bytes were stripped.
+			$line = rawurldecode( $line );
+			$line = preg_replace( '#[^A-Za-z0-9_\-/.*%~\x80-\xFF]#', '', $line );
 			if ( '' === $line ) {
 				continue;
 			}
@@ -340,12 +386,11 @@ class Core_Diet_Cache_Settings {
 	 * @return string
 	 */
 	private static function sanitize_params( $value ) {
-		$protected = self::get_protected_params();
-		$out       = array();
+		$out = array();
 
 		foreach ( self::parse_lines( (string) $value ) as $line ) {
 			$line = preg_replace( '/[^A-Za-z0-9_\-\[\]]/', '', $line );
-			if ( '' === $line || in_array( $line, $protected, true ) ) {
+			if ( '' === $line || self::is_protected_param( $line ) ) {
 				continue;
 			}
 			$out[] = $line;

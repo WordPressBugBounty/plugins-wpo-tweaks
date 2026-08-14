@@ -4,7 +4,7 @@ Tags: performance, cache, optimization, cleanup, speed
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 7.0
-Stable tag: 3.5.0
+Stable tag: 3.5.1
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -15,8 +15,6 @@ Page cache, browser cache, defer JS, critical CSS, lazy load and WordPress clean
 **DietPress is a free WordPress speed optimization plugin with a built-in page cache.** Page caching, browser caching, GZIP and Brotli compression, deferred JavaScript, critical CSS, image loading attributes, preloading, locally hosted Google Fonts and selective asset loading, all in one plugin and all free.
 
 And it goes further than a caching plugin: it also puts WordPress itself on a diet, switching off the features your site never uses. It pairs that with a clean, risk-based interface. Everything is configurable, the optimizations are already on by default, and nothing is hidden behind a paid tier. Activate it and your site is faster, or open the settings and tune every detail.
-
-> **Coming from "Zero Config Performance Optimization"?** This is the same plugin, now called DietPress and fully configurable. All your previous optimizations stay active by default; you just gained a settings page and a whole new set of WordPress-diet options.
 
 By default WordPress loads functions, services and scripts that most sites do not need. They slow down loading times and consume hosting resources. DietPress lets you trim that fat and apply battle-tested performance tweaks, with a clear description of what each option does and what might break, organized by risk level so you always know what is safe.
 
@@ -43,13 +41,7 @@ Server response time, the same pages with the page cache off and on:
 
 The interesting part is not the percentage, it is that the cached figure barely moves. Serving a stored file costs the same whether the page was cheap or expensive to build, so the saving grows with the size of your site rather than with the power of your server. The heaviest page in the test is the one that gained most.
 
-And what the server can take, 100 requests with 10 running in parallel:
-
-* **Home page** - 38 requests per second without, **213 with**
-* **WooCommerce shop** - 43 without, **216 with**
-* **A 110 KB article** - 46 without, **210 with**
-
-That five-fold headroom is what keeps a modest hosting plan standing up when one of your posts does well.
+It also changes how much traffic your hosting can take at once. In the same test the server went from serving about 40 visits a second to more than 210, **five times as many**, on exactly the same plan. That is what keeps a small site standing up when one of your posts does well.
 
 ### TWO THINGS IN ONE PLUGIN
 
@@ -202,21 +194,9 @@ They are the three measurements Google uses to judge how a page feels: how quick
 
 DietPress works on all three. The page cache and preloading cut the time to the first byte and to the largest element; deferring JavaScript and trimming what loads leaves the main thread free to answer clicks; and adding width and height to images that lack them stops the layout from shifting as they arrive.
 
-= I was using "Zero Config Performance Optimization". What changed? =
-
-It is the same plugin, now called DietPress. All the performance optimizations you had are still active by default, so nothing breaks on update. On top of that you now get a settings page, individual control over every optimization, and a complete set of options to disable unused WordPress features.
-
-= Is it still zero-config? =
+= Is it zero-config? =
 
 Yes, if you want it to be. The performance optimizations are on by default, so you can just activate and go. The difference is that now you can fine-tune everything and, optionally, put WordPress on a diet by disabling features you do not use.
-
-= I also have the standalone "DietPress" (core-diet) plugin installed. What do I do? =
-
-Nothing needs to be done by hand. When this plugin is active it detects the old "core-diet" plugin and deactivates it automatically (and core-diet 1.0.4 also steps aside on its own). Your settings are preserved because both plugins store them in the same place. The only thing left for you to do is delete the "core-diet" plugin whenever you like.
-
-= Where are the security options the standalone DietPress had? =
-
-They were intentionally left out. The standalone DietPress (core-diet) included a few security toggles (disable XML-RPC, hide login errors, disable Application Passwords, hide the WordPress version, close pingbacks). Security belongs in a security plugin, where those protections are implemented properly and maintained as such; we recommend our free [Vigilant](https://wordpress.org/plugins/vigilante/). If you migrate with any of those toggles enabled, DietPress shows you a one-time notice listing them, and those features simply return to the default WordPress behavior.
 
 = Will it break my site? =
 
@@ -297,6 +277,16 @@ Yes. See the filters listed in the description (the `dietpress_*` hooks). The pa
 
 == Changelog ==
 
+= 3.5.1 =
+* Improved: The Cache tab now says out loud when its cleanup is not running. The next cleanup figure tells a run that is due apart from one that is overdue and marks the overdue one, and a note underneath names the likely cause: WordPress cron switched off with no real cron behind it, a site too quiet for WordPress to fire its scheduled tasks at all, or no cleanup scheduled, which the tab itself can put right. While the schedule is being met it says nothing.
+* Fix: Pages whose address is not plain ASCII shared a single cached copy. The request path was cleaned with a function that deletes percent encoded characters, and that is exactly how a browser sends every byte of an accented or non Latin permalink, so /café/ and /cafá/ were stored as the same page, and a site whose slugs are written in Cyrillic, Greek, Arabic or CJK collapsed nearly every address onto one entry, the home page included. Languages WordPress transliterates into ASCII by itself, Spanish and French among them, were only affected where a slug had been edited by hand. The cache is emptied once when this version is installed, because a copy stored under the old rules can hold a different page altogether and there is no way to tell which from the file.
+* Fix: A URL exclusion pattern containing an accent or any non Latin character never matched anything, for the same reason: those characters were stripped when the pattern was saved. Both spellings work now and mean the same thing, the one the address bar shows and the one the clipboard usually holds.
+* Fix: Renaming or deleting a category or a tag left its old archive cached and still being served. It is the case renaming a post already handled: once the slug has changed, nothing can name the address the old page lived at, and nothing would ever rebuild it either.
+* Fix: Editing what a widget says purged nothing, so every page showing it kept the old text until it expired. Only adding, moving or removing a widget purged. Block based widgets are covered too, since they all share one option.
+* Fix: The browser caching rules handed HTML pages the lifetime chosen for media. The rule that covers every file type without one of its own covers the page itself too, and there was no rule for HTML. On an anonymous visit the Cache-Control header the plugin sends overrode it, which is why it went unnoticed; on a page viewed while logged in that header is deliberately not sent, and there a page could sit in the browser for a month. HTML now follows the lifetime chosen for it in the Cache tab.
+* Fix: The query parameters that may never be ignored treated filter_ as a whole name rather than a prefix, so a WooCommerce layered navigation parameter such as filter_color could be added to the ignore list, and a filtered shop page was then answered with the unfiltered one.
+* Fix: The next cleanup figure on the Cache tab could not tell a late cleanup from a coming one. It printed a bare time difference, and the WordPress function behind it carries no direction, so a cleanup that had run two days late and one due in two days both read as 2 days. The one figure that could have revealed a cron nobody was running was the one hiding it.
+
 = 3.5.0 =
 * New: Page cache. DietPress can now store a static copy of each page on disk and serve it to anonymous visitors without building the page again, from its own Cache tab in the DietPress settings, next to the diet levels, which also gathers the browser caching rules that used to live under Strict. It is off by default, it installs no drop-in file and it never writes to wp-config.php, so switching it off leaves the site exactly as it was. Logged in visitors, anyone carrying a cart, a password protected post and a comment awaiting moderation always get the live page. Every response carries an X-DietPress-Cache header, and every stored page a footprint comment, so a hit and a miss can be told apart at a glance.
 * New: Browser caching is now configurable rather than fixed: how long browsers keep your media, your styles and scripts, your fonts and the HTML itself, each on its own, plus a switch for the ETag header. Browser caching and compression also get a master switch each, so you can run one without the other; a site updating from 3.4.x keeps whatever its single switch said. The Cache-Control headers are built from those same lifetimes instead of a hardcoded year, which is a fix in itself: they used to contradict the Expires rules, and browsers obey Cache-Control when the two disagree. Only styles, scripts and fonts are marked immutable now, because they carry a version in their URL; an image keeps its URL when you replace it. The HTML lifetime is sent as an HTTP header instead of an .htaccess rule, which is a fix too: the old rule only matched files whose name ends in .html, so it never applied to a WordPress permalink at all.
@@ -310,8 +300,8 @@ For older changelog entries, please check the [changelog.txt](https://plugins.sv
 
 == Upgrade Notice ==
 
-= 3.5.0 =
-Adds an optional page cache that stores each page on disk and serves it to anonymous visitors. Off by default, with no drop-in file and no changes to wp-config.php. It refuses to run beside another cache plugin. Nothing changes until you switch it on.
+= 3.5.1 =
+Fixes the cache key for addresses that are not plain ASCII, which made accented and non Latin permalinks share one cached copy. Also purges category, tag and widget edits that were being missed, and stops the browser rules handing HTML the media lifetime. The cache is emptied once on update.
 
 == Support ==
 

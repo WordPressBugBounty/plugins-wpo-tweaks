@@ -542,9 +542,16 @@ class Core_Diet_Cache_Engine {
 		if ( ! isset( $_SERVER['REQUEST_URI'] ) ) {
 			return '/';
 		}
-		$uri   = sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) );
+
+		// sanitize_url() and not sanitize_text_field(), for the reason spelled
+		// out in Core_Diet_Cache_Store::dir_for_request(). Decoded on the way
+		// out so the exclusion patterns compare against the same spelling the
+		// site owner typed, and so "/wp-%61dmin/" cannot walk past the reserved
+		// path check below.
+		$uri   = sanitize_url( wp_unslash( $_SERVER['REQUEST_URI'] ) );
 		$parts = explode( '?', $uri, 2 );
-		return '' === $parts[0] ? '/' : $parts[0];
+
+		return '' === $parts[0] ? '/' : rawurldecode( $parts[0] );
 	}
 
 	/**

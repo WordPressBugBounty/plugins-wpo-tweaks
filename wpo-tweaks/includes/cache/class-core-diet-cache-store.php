@@ -95,7 +95,17 @@ class Core_Diet_Cache_Store {
 			return false;
 		}
 
-		$uri = sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) );
+		/*
+		 * Not sanitize_text_field(): that one deletes every percent encoded
+		 * sequence it finds, and a browser percent encodes every byte of a
+		 * permalink that is not ASCII. So "/café/" arrived here as "/caf/" and
+		 * shared its cache entry with "/cafá/", and a slug written entirely in
+		 * a non Latin script (Cyrillic, Greek, CJK) collapsed to "/" and
+		 * overwrote the home page. sanitize_url() keeps both the escapes and
+		 * the raw high bytes; the segment allowlist in dir_for_path() is what
+		 * actually decides whether a path may be put on disk.
+		 */
+		$uri = sanitize_url( wp_unslash( $_SERVER['REQUEST_URI'] ) );
 		$uri = strtok( $uri, '?' );
 
 		return self::dir_for_path( (string) $uri, self::get_request_host() );
@@ -140,6 +150,20 @@ class Core_Diet_Cache_Store {
 	 */
 	private static function dir_for_path( $path, $host ) {
 		if ( '' === $host ) {
+			return false;
+		}
+
+		/*
+		 * An escaped separator is refused before anything is decoded. Decoding
+		 * it would turn one URL segment into two, so "/a%2Fb/" would land on
+		 * the directory of "/a/b/" and be answered with that page, when
+		 * WordPress resolves the two to different things and usually 404s the
+		 * first. Refusing costs nothing: the request falls through and is built
+		 * normally. "%5C" goes with it because Windows accepts it as a
+		 * separator, and "%00" because a truncated name is a name for another
+		 * file.
+		 */
+		if ( preg_match( '#%(2f|5c|00)#i', $path ) ) {
 			return false;
 		}
 

@@ -44,9 +44,21 @@ class Core_Diet_Cache_Purge {
 		add_action( 'edit_comment', array( $this, 'on_comment_edited' ) );
 		add_action( 'deleted_comment', array( $this, 'on_comment_edited' ) );
 
-		// Taxonomies.
+		// Taxonomies. The archive has to be purged twice, before and after,
+		// for the same reason a renamed post purges its old permalink: once
+		// the slug has changed or the term is gone, nothing can name the
+		// address the old page was cached under, and nothing would ever
+		// regenerate it either.
+		add_action( 'edit_terms', array( $this, 'on_term_editing' ), 10, 2 );
+		add_action( 'pre_delete_term', array( $this, 'on_term_deleting' ), 10, 2 );
 		add_action( 'edited_term', array( $this, 'on_term_changed' ), 10, 3 );
 		add_action( 'delete_term', array( $this, 'on_term_changed' ), 10, 3 );
+
+		// Widgets. sidebars_widgets only changes when one is added, moved or
+		// removed; editing what a widget says rewrites its own widget_* option
+		// and used to leave every page that shows it stale. Block based
+		// widgets all live in widget_block, so the prefix covers both editors.
+		add_action( 'updated_option', array( $this, 'on_option_updated' ) );
 
 		// Anything that changes every page at once. Cheap and safe: refining
 		// these into selective purges is a job for a later version, and getting
@@ -322,6 +334,58 @@ class Core_Diet_Cache_Purge {
 		$comment = get_comment( $comment_id );
 		if ( $comment ) {
 			$this->purge_post( (int) $comment->comment_post_ID );
+		}
+	}
+
+	/**
+	 * Purge a term's current archive before the term is edited.
+	 *
+	 * Hooked to edit_terms, which fires before the row is written, so the link
+	 * still resolves to the address the cached page lives at. edited_term, the
+	 * one that fires afterwards, can only ever name the new one.
+	 *
+	 * @param int    $term_id  Term ID.
+	 * @param string $taxonomy Taxonomy name.
+	 */
+	public function on_term_editing( $term_id, $taxonomy ) {
+		$this->purge_term_archive( $term_id, $taxonomy );
+	}
+
+	/**
+	 * Purge a term's archive before the term is deleted.
+	 *
+	 * @param int    $term_id  Term ID.
+	 * @param string $taxonomy Taxonomy name.
+	 */
+	public function on_term_deleting( $term_id, $taxonomy ) {
+		$this->purge_term_archive( $term_id, $taxonomy );
+	}
+
+	/**
+	 * Purge one term archive, when the term still has a resolvable link.
+	 *
+	 * @param int    $term_id  Term ID.
+	 * @param string $taxonomy Taxonomy name.
+	 * @return int Files deleted.
+	 */
+	private function purge_term_archive( $term_id, $taxonomy ) {
+		$link = get_term_link( (int) $term_id, (string) $taxonomy );
+
+		return is_wp_error( $link ) ? 0 : $this->purge_url( $link );
+	}
+
+	/**
+	 * Purge everything when a widget's own option is rewritten.
+	 *
+	 * A widget can appear on every page of the site, so there is nothing
+	 * cheaper to purge than all of it, which is the same call the rest of the
+	 * site-wide changes make.
+	 *
+	 * @param string $option Option name that was just updated.
+	 */
+	public function on_option_updated( $option ) {
+		if ( 0 === strpos( (string) $option, 'widget_' ) ) {
+			$this->purge_all();
 		}
 	}
 

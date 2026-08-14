@@ -288,6 +288,18 @@ class Core_Diet {
 		// (Re)write the current server-level performance rules.
 		$htaccess->on_settings_saved( array(), get_option( 'core_diet_settings', array() ) );
 
+		/*
+		 * Anything already on disk was written under the previous version's
+		 * rules, and 3.5.1 changed how a request is turned into a cache key:
+		 * pages whose address is not plain ASCII used to share an entry, so on
+		 * an affected site the copy stored for one address can be the page of
+		 * another one. Those files cannot be repaired, only discarded, and the
+		 * cache refills itself on the next visits.
+		 */
+		if ( class_exists( 'Core_Diet_Cache_Store' ) ) {
+			Core_Diet_Cache_Store::purge_all();
+		}
+
 		// Mark this version as fully upgraded.
 		update_option( 'core_diet_version', CORE_DIET_VERSION );
 	}

@@ -490,7 +490,7 @@ class Core_Diet_Cache_Admin {
 	private function render_status_panel( $blocking, $warnings ) {
 		$enabled = Core_Diet_Cache::is_enabled();
 		$stats   = Core_Diet_Cache_Store::get_stats();
-		$next_gc = wp_next_scheduled( Core_Diet_Cache::CRON_HOOK );
+		$gc      = self::describe_schedule( wp_next_scheduled( Core_Diet_Cache::CRON_HOOK ) );
 		$ttl     = (int) $this->settings->get( 'ttl_hours' );
 		?>
 		<div class="core-diet-cache-status">
@@ -519,12 +519,19 @@ class Core_Diet_Cache_Admin {
 						<span class="core-diet-savings-label"><?php esc_html_e( 'Pages expire after', 'wpo-tweaks' ); ?></span>
 					</div>
 					<div class="core-diet-savings-card">
-						<span class="core-diet-savings-value core-diet-cache-value-small">
-							<?php echo $next_gc ? esc_html( human_time_diff( $next_gc ) ) : esc_html__( 'not scheduled', 'wpo-tweaks' ); ?>
+						<span class="core-diet-savings-value core-diet-cache-value-small<?php echo $gc['late'] ? ' core-diet-cache-value-late' : ''; ?>">
+							<?php echo esc_html( $gc['text'] ); ?>
 						</span>
 						<span class="core-diet-savings-label"><?php esc_html_e( 'Next cleanup', 'wpo-tweaks' ); ?></span>
 					</div>
 				</div>
+
+				<?php foreach ( self::get_cron_warnings( $gc ) as $cron_warning ) : ?>
+					<p class="core-diet-option-notice core-diet-option-notice-warning core-diet-cache-block">
+						<span class="dashicons dashicons-warning" aria-hidden="true"></span>
+						<span class="core-diet-option-notice-text"><?php echo esc_html( $cron_warning ); ?></span>
+					</p>
+				<?php endforeach; ?>
 			<?php endif; ?>
 
 			<?php foreach ( $blocking as $reason ) : ?>
@@ -542,6 +549,95 @@ class Core_Diet_Cache_Admin {
 			<?php endforeach; ?>
 		</div>
 		<?php
+	}
+
+	/**
+	 * Describe the state of a scheduled event in one phrase.
+	 *
+	 * Written because the panel used to print human_time_diff() on its own, and
+	 * that function has no direction: it answers "2 days" whether the cleanup
+	 * runs in two days or ran two days late. So the one card that could have
+	 * revealed an unattended cron was the card that hid it, and it read as
+	 * healthy on exactly the sites where nothing was being collected.
+	 *
+	 * The hour of grace before calling it late is deliberate. WordPress fires
+	 * its scheduled tasks on visits, so a few minutes past the hour is normal
+	 * on any site and saying so would be noise.
+	 *
+	 * @param int|false $timestamp Next run, as wp_next_scheduled() returns it.
+	 * @return array {
+	 *     @type string $text      Phrase for the card.
+	 *     @type bool   $late      Whether it is late enough to be worth explaining.
+	 *     @type bool   $scheduled Whether there is an event at all.
+	 * }
+	 */
+	private static function describe_schedule( $timestamp ) {
+		if ( ! $timestamp ) {
+			return array(
+				'text'      => __( 'not scheduled', 'wpo-tweaks' ),
+				'late'      => true,
+				'scheduled' => false,
+			);
+		}
+
+		$now = time();
+
+		if ( $timestamp > $now ) {
+			return array(
+				'text'      => sprintf(
+					/* translators: %s: time until the next run, for example "6 hours". */
+					__( 'in %s', 'wpo-tweaks' ),
+					human_time_diff( $now, $timestamp )
+				),
+				'late'      => false,
+				'scheduled' => true,
+			);
+		}
+
+		return array(
+			'text'      => sprintf(
+				/* translators: %s: how long the run is overdue, for example "2 days". */
+				__( '%s late', 'wpo-tweaks' ),
+				human_time_diff( $timestamp, $now )
+			),
+			'late'      => ( $now - $timestamp ) > HOUR_IN_SECONDS,
+			'scheduled' => true,
+		);
+	}
+
+	/**
+	 * What to say when the cleanup is not running, if it is not.
+	 *
+	 * Only speaks when the event is actually overdue. A site with DISABLE_WP_CRON
+	 * and a real system cron behind it is correctly configured, and warning it
+	 * about a schedule that is being met would be the kind of permanent notice
+	 * people learn to scroll past.
+	 *
+	 * @param array $gc Output of describe_schedule() for the collector.
+	 * @return array Sentences to show.
+	 */
+	private static function get_cron_warnings( $gc ) {
+		if ( empty( $gc['late'] ) ) {
+			return array();
+		}
+
+		// No event at all is a different problem from an event nobody runs, and
+		// it has a fix the site owner can apply from this very screen.
+		if ( empty( $gc['scheduled'] ) ) {
+			return array(
+				__( 'There is no cleanup scheduled, so cached pages are never removed once they expire. Switching the page cache off and back on from this tab schedules it again.', 'wpo-tweaks' ),
+			);
+		}
+
+		if ( defined( 'DISABLE_WP_CRON' ) && DISABLE_WP_CRON ) {
+			return array(
+				__( 'The cleanup is overdue and WordPress cron is switched off on this site (DISABLE_WP_CRON), which is very likely the reason. With it off, the plugin scheduled tasks, this cleanup and the daily transient cleanup, only run if your server calls wp-cron.php on a real schedule. Check that cron job with your host. Meanwhile nothing is lost: publishing, editing and commenting still purge what they change, and only the expiry by age is affected.', 'wpo-tweaks' ),
+			);
+		}
+
+		return array(
+			__( 'The cleanup is overdue. WordPress runs its scheduled tasks on visits, so a site with very little traffic can go a long time without one. Expired pages stay on disk until it runs, although publishing, editing and commenting still purge what they change.', 'wpo-tweaks' ),
+		);
 	}
 
 	/**

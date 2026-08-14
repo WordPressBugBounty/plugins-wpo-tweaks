@@ -3,7 +3,7 @@
  * Plugin Name:       DietPress
  * Plugin URI:        https://servicios.ayudawp.com
  * Description:       Put your WordPress on a diet and speed it up. Disable unnecessary core features and enable performance optimizations, fully configurable.
- * Version:           3.5.0
+ * Version:           3.5.1
  * Requires at least: 6.3
  * Requires PHP:      7.4
  * Author:            Fernando Tellado
@@ -69,7 +69,7 @@ if ( class_exists( 'Core_Diet', false ) ) {
 }
 
 // Plugin constants.
-define( 'CORE_DIET_VERSION', '3.5.0' );
+define( 'CORE_DIET_VERSION', '3.5.1' );
 define( 'CORE_DIET_FILE', __FILE__ );
 define( 'CORE_DIET_DIR', plugin_dir_path( __FILE__ ) );
 define( 'CORE_DIET_URL', plugin_dir_url( __FILE__ ) );

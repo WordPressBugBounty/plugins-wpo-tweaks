@@ -952,6 +952,13 @@
 	line-height: 1.4;
 }
 
+/* An overdue or missing cleanup. Colour alone never carries the meaning: the
+   card already says "2 days late" or "not scheduled" in words, and a notice
+   below the grid explains it. */
+.core-diet-cache-value-late {
+	color: var(--dp-danger);
+}
+
 /* Outside a card these are blocks of their own, so the auto top margin that
    pins a note to the bottom of a card has to go, and they need real spacing
    instead of sitting flush against whatever comes next. */

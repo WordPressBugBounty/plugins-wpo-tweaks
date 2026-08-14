@@ -362,10 +362,31 @@ class Core_Diet_Htaccess {
 
 		// Expires Headers.
 		if ( $browser_cache && $this->settings->is_enabled( 'htaccess_expires' ) ) {
+			/*
+			 * The page itself, and it has to be stated. ExpiresDefault applies
+			 * to every content type that has no rule of its own, text/html
+			 * included, so without this line every page WordPress renders was
+			 * handed the media lifetime. On an anonymous hit the Cache-Control
+			 * sent from set_html_cache_control() overrides it in the browser,
+			 * which is why nobody sees it; on a logged in front-end view that
+			 * header is deliberately not sent, and there the month stuck.
+			 *
+			 * The value tracks the "let browsers keep the HTML for" setting so
+			 * the two never contradict each other.
+			 */
+			$html_choices = Core_Diet_Settings::get_html_maxage_choices();
+			$html_period  = (string) $this->settings->get( 'htaccess_html_maxage' );
+			$html_period  = isset( $html_choices[ $html_period ] ) ? $html_period : '0';
+			$html_age     = Core_Diet_Settings::period_to_seconds( $html_period );
+
 			$lines[] = '# Browser Caching with Expires Headers';
 			$lines[] = '<IfModule mod_expires.c>';
 			$lines[] = 'ExpiresActive On';
 			$lines[] = 'ExpiresDefault "access plus ' . $media . '"';
+			$lines[] = '';
+			$lines[] = '# HTML pages';
+			$lines[] = 'ExpiresByType text/html "access plus ' . $html_age . ' seconds"';
+			$lines[] = 'ExpiresByType application/xhtml+xml "access plus ' . $html_age . ' seconds"';
 			$lines[] = '';
 			$lines[] = '# Images';
 			$lines[] = 'ExpiresByType image/x-icon "access plus 1 year"';
