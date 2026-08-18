@@ -3,8 +3,8 @@ Contributors: fernandot, ayudawp
 Tags: performance, cache, optimization, cleanup, speed
 Requires at least: 6.3
 Requires PHP: 7.4
-Tested up to: 7.0
-Stable tag: 3.5.1
+Tested up to: 7.1
+Stable tag: 3.5.2
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -278,6 +278,11 @@ Yes. See the filters listed in the description (the `dietpress_*` hooks). The pa
 
 == Changelog ==
 
+= 3.5.2 =
+* Improved: Checked against WordPress 7.1 and marked compatible with it. Everything DietPress switches off still switches off there, and the one 7.1 change that touches a filter it uses only alters plugins that force comment notifications on, not ones like this that turn them off.
+* Fix: With emojis switched off, the resource hints were adding back the very DNS prefetch to s.w.org that switching emojis off had just removed, so the browser still resolved a domain nothing on the page would ever ask for, and the option contradicted its own description. The same happened to secure.gravatar.com with avatars switched off. Each of the two is now left out when the option that gives it a purpose is off, and either can still be put back with the dietpress_dns_prefetch_domains filter.
+* Fix: Stripping version strings from asset addresses never reached script modules, so the ones WordPress itself loads, the Interactivity API among them, kept their ?ver= while every style and script around them lost it. The option was listening for a filter name WordPress does not have, so that part of it had done nothing since the day it was written. It now uses the filter WordPress really provides, which covers the import map, the module tags and their preload links in one go. Assets belonging to plugins keep their version, exactly as before.
+
 = 3.5.1 =
 * Improved: The Cache tab now says out loud when its cleanup is not running. The next cleanup figure tells a run that is due apart from one that is overdue and marks the overdue one, and a note underneath names the likely cause: WordPress cron switched off with no real cron behind it, a site too quiet for WordPress to fire its scheduled tasks at all, or no cleanup scheduled, which the tab itself can put right. While the schedule is being met it says nothing.
 * Fix: Pages whose address is not plain ASCII shared a single cached copy. The request path was cleaned with a function that deletes percent encoded characters, and that is exactly how a browser sends every byte of an accented or non Latin permalink, so /café/ and /cafá/ were stored as the same page, and a site whose slugs are written in Cyrillic, Greek, Arabic or CJK collapsed nearly every address onto one entry, the home page included. Languages WordPress transliterates into ASCII by itself, Spanish and French among them, were only affected where a slug had been edited by hand. The cache is emptied once when this version is installed, because a copy stored under the old rules can hold a different page altogether and there is no way to tell which from the file.
@@ -301,8 +306,8 @@ For older changelog entries, please check the [changelog.txt](https://plugins.sv
 
 == Upgrade Notice ==
 
-= 3.5.1 =
-Fixes the cache key for addresses that are not plain ASCII, which made accented and non Latin permalinks share one cached copy. Also purges category, tag and widget edits that were being missed, and stops the browser rules handing HTML the media lifetime. The cache is emptied once on update.
+= 3.5.2 =
+Adds WordPress 7.1 compatibility. Also fixes the removal of version strings from asset addresses, which never reached the script modules WordPress itself loads, so those kept their ?ver= while every style and script around them lost it.
 
 == Support ==
 

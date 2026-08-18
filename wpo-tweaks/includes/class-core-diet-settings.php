@@ -1131,7 +1131,7 @@ class Core_Diet_Settings {
 	 */
 	public static function get_descriptions() {
 		return array(
-			'disable_emojis'          => __( 'Removes wp-emoji-release.min.js, related styles, and DNS prefetch to s.w.org. Modern browsers render emojis natively.', 'wpo-tweaks' ),
+			'disable_emojis'          => __( 'Removes wp-emoji-release.min.js, related styles, and DNS prefetch to s.w.org. Modern browsers render emojis natively.', 'wpo-tweaks' ), // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- Not offloading: the domain is named inside a translatable description of what this option removes.
 			'disable_rsd_link'        => __( 'Only needed for XML-RPC clients like Windows Live Writer. Safe to remove for most sites.', 'wpo-tweaks' ),
 			'disable_wlw_manifest'    => __( 'Windows Live Writer has been discontinued. This link serves no purpose.', 'wpo-tweaks' ),
 			'disable_shortlink'       => __( 'Removes the ?p=123 shortlink tag. Rarely used and adds nothing to SEO.', 'wpo-tweaks' ),

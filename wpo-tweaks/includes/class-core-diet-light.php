@@ -119,7 +119,7 @@ class Core_Diet_Light {
 	public function remove_emoji_dns_prefetch( $urls, $relation_type ) {
 		if ( 'dns-prefetch' === $relation_type ) {
 			$urls = array_filter( $urls, function( $url ) {
-				return ! is_string( $url ) || false === strpos( $url, 'https://s.w.org' );
+				return ! is_string( $url ) || false === strpos( $url, 'https://s.w.org' ); // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- Not offloading: the domain is matched in order to remove the core dns-prefetch hint, nothing is ever loaded from it.
 			} );
 		}
 		return $urls;

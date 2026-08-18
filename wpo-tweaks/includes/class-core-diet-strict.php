@@ -64,7 +64,14 @@ class Core_Diet_Strict {
 		if ( $this->settings->is_enabled( 'disable_version_params' ) ) {
 			add_filter( 'style_loader_src', array( $this, 'remove_version_param' ), 9999 );
 			add_filter( 'script_loader_src', array( $this, 'remove_version_param' ), 9999 );
-			add_filter( 'wp_get_script_modules_importmap', array( $this, 'clean_importmap' ) );
+			/*
+			 * Script modules (WP 6.5+) go through their own filter. It runs inside
+			 * WP_Script_Modules::get_src(), which feeds the import map, the
+			 * <script type="module"> tags and the modulepreload links alike, so
+			 * one filter covers all three. There is no filter over the finished
+			 * import map, so do not move this back to a map-level hook.
+			 */
+			add_filter( 'script_module_loader_src', array( $this, 'remove_version_param' ), 9999 );
 		}
 
 		if ( $this->settings->is_enabled( 'disable_privacy_tools' ) ) {
@@ -637,24 +644,6 @@ class Core_Diet_Strict {
 		$src      = preg_replace( $patterns, '', $src );
 
 		return $src;
-	}
-
-	/**
-	 * Remove version strings from script module importmaps (WordPress 6.5+).
-	 *
-	 * @param array $importmap The script modules importmap.
-	 * @return array
-	 */
-	public function clean_importmap( $importmap ) {
-		if ( is_admin() || ! is_array( $importmap ) || ! isset( $importmap['imports'] ) ) {
-			return $importmap;
-		}
-
-		foreach ( $importmap['imports'] as $key => $url ) {
-			$importmap['imports'][ $key ] = $this->remove_version_param( $url );
-		}
-
-		return $importmap;
 	}
 
 	/**

@@ -68,11 +68,29 @@ class Core_Diet_Perf_Hints {
 	 */
 	public function core_diet_add_dns_prefetch() {
 		$prefetch_domains = array(
-			'//ajax.googleapis.com',
+			'//ajax.googleapis.com', // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- Not offloading: dns-prefetch hint only, the plugin never requests an asset from this domain.
 			'//stats.wp.com',
 			'//secure.gravatar.com',
-			'//s.w.org',
+			'//s.w.org', // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- Not offloading: dns-prefetch hint only, the plugin never requests an asset from this domain.
 		);
+
+		/*
+		 * Do not warm up a domain the site has just been told never to contact.
+		 * On the front end s.w.org only ever serves the emoji images and
+		 * secure.gravatar.com only the avatars, so with either of those switched
+		 * off the hint resolves a host nothing will ever request, and it
+		 * contradicts what the option itself promises to remove: the emoji one
+		 * says out loud that it drops the DNS prefetch to s.w.org, and this
+		 * module was adding it straight back. Dropped before the filter runs, so
+		 * anyone who wants them anyway can add them with the filter below.
+		 */
+		if ( $this->settings->is_enabled( 'disable_emojis' ) ) {
+			$prefetch_domains = array_diff( $prefetch_domains, array( '//s.w.org' ) ); // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- Not offloading: the domain is named here in order to drop its dns-prefetch hint, nothing is ever loaded from it.
+		}
+
+		if ( $this->settings->is_enabled( 'disable_avatars' ) ) {
+			$prefetch_domains = array_diff( $prefetch_domains, array( '//secure.gravatar.com' ) );
+		}
 
 		$prefetch_domains = apply_filters( 'dietpress_dns_prefetch_domains', $prefetch_domains );
 
