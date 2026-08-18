@@ -274,6 +274,7 @@ Yes. See the filters listed in the description (the `dietpress_*` hooks). The pa
 4. Strict tab: frontend performance, server .htaccess rules and site-specific settings.
 5. Widgets tab: dashboard, block editor, Customizer and classic sidebar widgets.
 6. Emails tab: silence the automatic emails WordPress sends on its own, grouped by updates, comments, users and passwords.
+7. Cache tab: page cache settings with master switches and status cards
 
 == Changelog ==
 
