@@ -134,6 +134,7 @@ class Core_Diet_Perf_Selective {
 		return array(
 			'wc' => array(
 				'setting'       => 'selective_woocommerce',
+				'owner'         => array( 'woocommerce' ),
 				'active'        => array( $this, 'wc_is_active' ),
 				'detect'        => array( $this, 'wc_has_content' ),
 				'styles'        => array(
@@ -358,6 +359,12 @@ class Core_Diet_Perf_Selective {
 		 */
 		$scripts = (array) apply_filters( "dietpress_selective_{$slug}_scripts", $scripts );
 
+		// A handle says nothing about who serves the file behind it: a theme
+		// may have replaced it, or another plugin may have claimed it first.
+		// Removing those takes down somebody else's assets site-wide.
+		$styles  = $this->drop_foreign_assets( $styles, wp_styles(), $module );
+		$scripts = $this->drop_foreign_assets( $scripts, wp_scripts(), $module );
+
 		foreach ( $styles as $handle ) {
 			wp_dequeue_style( $handle );
 		}
@@ -374,6 +381,110 @@ class Core_Diet_Perf_Selective {
 		if ( isset( $module['after'] ) ) {
 			call_user_func( $module['after'] );
 		}
+	}
+
+	/**
+	 * Drop from the removal list every handle the module does not own.
+	 *
+	 * A handle is not a promise about who serves the file behind it. Two ways
+	 * it stops belonging to the plugin the module targets:
+	 *
+	 * - A theme replaces the stylesheet and keeps the handle, which WooCommerce
+	 *   invites through woocommerce_enqueue_styles and Astra, Storefront,
+	 *   OceanWP and Kadence all accept. Under Astra, woocommerce-general points
+	 *   at 119 KB of theme CSS holding every rule for the header cart, which
+	 *   renders on every page of the site.
+	 * - Another plugin claims a generic handle first. WooCommerce registers
+	 *   select2 and js-cookie, but so do form and field plugins, and whoever
+	 *   registers first keeps it.
+	 *
+	 * So a handle is only removed when its source sits inside a directory the
+	 * module declares as its own, or when it has no source at all, which is the
+	 * shape of the empty legacy aliases WooCommerce 11 registers on top of its
+	 * wc-* handles. Modules with no declared owner fall back to protecting the
+	 * theme, which is the case that breaks the front end.
+	 *
+	 * @since 3.5.3
+	 * @param array           $handles  Handles queued for removal.
+	 * @param WP_Dependencies $registry wp_styles() or wp_scripts().
+	 * @param array           $module   Module definition from the registry.
+	 * @return array Handles the module is entitled to remove.
+	 */
+	private function drop_foreign_assets( $handles, $registry, $module ) {
+		if ( empty( $handles ) || ! $registry instanceof WP_Dependencies ) {
+			return $handles;
+		}
+
+		$owned = array();
+
+		if ( ! empty( $module['owner'] ) ) {
+			foreach ( (array) $module['owner'] as $dir ) {
+				$owned[] = $this->strip_scheme( plugins_url( $dir ) ) . '/';
+			}
+		}
+
+		$theme_roots = array(
+			$this->strip_scheme( get_template_directory_uri() ),
+			$this->strip_scheme( get_stylesheet_directory_uri() ),
+		);
+
+		foreach ( $handles as $index => $handle ) {
+			if ( ! isset( $registry->registered[ $handle ] ) ) {
+				continue;
+			}
+
+			$src = (string) $registry->registered[ $handle ]->src;
+
+			// No source means an alias that only carries dependencies or inline
+			// code. Nobody else can have claimed it with a file of their own.
+			if ( '' === $src ) {
+				continue;
+			}
+
+			$src = $this->strip_scheme( $src );
+
+			if ( $owned ) {
+				if ( ! $this->src_starts_with( $src, $owned ) ) {
+					unset( $handles[ $index ] );
+				}
+				continue;
+			}
+
+			if ( $this->src_starts_with( $src, $theme_roots ) ) {
+				unset( $handles[ $index ] );
+			}
+		}
+
+		return array_values( $handles );
+	}
+
+	/**
+	 * Whether a source URL sits under any of the given roots.
+	 *
+	 * @since 3.5.3
+	 * @param string $src   Scheme-less source URL.
+	 * @param array  $roots Scheme-less directory URLs.
+	 * @return bool
+	 */
+	private function src_starts_with( $src, $roots ) {
+		foreach ( $roots as $root ) {
+			if ( '' !== $root && 0 === strpos( $src, $root ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Strip the scheme from a URL so http and https sources compare equal.
+	 *
+	 * @since 3.5.3
+	 * @param string $url URL to normalize.
+	 * @return string URL without its scheme.
+	 */
+	private function strip_scheme( $url ) {
+		return (string) preg_replace( '#^https?://#i', '', (string) $url );
 	}
 
 	/* ============================

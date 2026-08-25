@@ -4,7 +4,7 @@ Tags: performance, cache, optimization, cleanup, speed
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 7.1
-Stable tag: 3.5.2
+Stable tag: 3.5.3
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -278,6 +278,10 @@ Yes. See the filters listed in the description (the `dietpress_*` hooks). The pa
 
 == Changelog ==
 
+= 3.5.3 =
+* Fix: With the option to load WooCommerce assets only on store pages switched on, themes that ship their own WooCommerce stylesheets lost them everywhere else. WooCommerce invites a theme to replace those files while keeping the original handle names, and Astra, Storefront, OceanWP and Kadence all accept the invitation, so removing woocommerce-general on a page with no store content was removing theme CSS, not plugin CSS. Under Astra that is where every rule for the header cart lives, so the cart panel was left unstyled and permanently open on every page of the site. A handle is now only removed when the file behind it really belongs to WooCommerce.
+* Fix: That same option removed generic script handles such as select2 and js-cookie even when another plugin had registered them first. Those names are not reserved by WooCommerce, form and field plugins register them too, and whoever gets there first keeps the handle, so a plugin with nothing to do with the store lost its script on every page outside it. Only handles served from the WooCommerce directory are removed now.
+
 = 3.5.2 =
 * Improved: Checked against WordPress 7.1 and marked compatible with it. Everything DietPress switches off still switches off there, and the one 7.1 change that touches a filter it uses only alters plugins that force comment notifications on, not ones like this that turn them off.
 * Fix: With emojis switched off, the resource hints were adding back the very DNS prefetch to s.w.org that switching emojis off had just removed, so the browser still resolved a domain nothing on the page would ever ask for, and the option contradicted its own description. The same happened to secure.gravatar.com with avatars switched off. Each of the two is now left out when the option that gives it a purpose is off, and either can still be put back with the dietpress_dns_prefetch_domains filter.
@@ -306,8 +310,8 @@ For older changelog entries, please check the [changelog.txt](https://plugins.sv
 
 == Upgrade Notice ==
 
-= 3.5.2 =
-Adds WordPress 7.1 compatibility. Also fixes the removal of version strings from asset addresses, which never reached the script modules WordPress itself loads, so those kept their ?ver= while every style and script around them lost it.
+= 3.5.3 =
+Fixes the option that loads WooCommerce assets only on store pages. It was removing stylesheets the theme serves, leaving the header cart unstyled everywhere else in Astra, Storefront, OceanWP and Kadence, and also removing generic script handles that other plugins had registered first.
 
 == Support ==
 
