@@ -311,6 +311,20 @@ class Core_Diet_Cache_Engine {
 			return 'not a GET request';
 		}
 
+		/*
+		 * A request that asks for something other than HTML is not asking for
+		 * the page this cache stores. Markdown for AI agents is the live case:
+		 * VigIA and Visibility both answer `Accept: text/markdown` on the
+		 * ordinary post URL, from template_redirect, which is far later than
+		 * the HIT that has already been sent and ended the request. Without
+		 * this the agent silently receives the HTML copy and the negotiation
+		 * never happens at all. Reported against 3.5.3.
+		 */
+		$accept = $this->get_bypass_accept_type();
+		if ( '' !== $accept ) {
+			return 'Accept: ' . $accept;
+		}
+
 		// Basic auth means a staging site or a protected area; either way the
 		// response is not the public one.
 		if ( ! empty( $_SERVER['HTTP_AUTHORIZATION'] ) || ! empty( $_SERVER['PHP_AUTH_USER'] ) ) {
@@ -339,9 +353,73 @@ class Core_Diet_Cache_Engine {
 		}
 
 		// Feeds, sitemaps and robots.txt are either XML or tiny, and caching
-		// them is how a cache directory grows without anybody noticing.
-		if ( preg_match( '#/(feed|embed)/?$#', $path ) || preg_match( '#\.(php|xml|txt|xsl)$#i', $path ) ) {
+		// them is how a cache directory grows without anybody noticing. The .md
+		// here is the Markdown address a post gets from VigIA or Visibility: the
+		// output check rejects it at the end anyway, for not being an HTML
+		// document, so recognising it up front only saves opening a buffer and
+		// rendering a page that was always going to be thrown away.
+		if ( preg_match( '#/(feed|embed)/?$#', $path ) || preg_match( '#\.(php|xml|txt|xsl|md)$#i', $path ) ) {
 			return 'not an HTML page';
+		}
+
+		/**
+		 * Filter whether this request ignores the page cache altogether.
+		 *
+		 * `dietpress_cache_bypass` decides whether a rendered page is stored,
+		 * so it cannot stop a copy that is already on disk from being served.
+		 * This one runs before that, on plugins_loaded priority 1, and is the
+		 * hook for keeping a request from getting a HIT at all. WordPress and
+		 * the plugins are loaded by then, but the main query is not, so it can
+		 * read the request and nothing about the queried object.
+		 *
+		 * @param bool $bypass Whether to ignore the cache for this request.
+		 */
+		if ( apply_filters( 'dietpress_cache_bypass_request', false ) ) {
+			return 'dietpress_cache_bypass_request filter';
+		}
+
+		return '';
+	}
+
+	/**
+	 * The negotiated media type that takes this request out of the cache.
+	 *
+	 * Only types answered on the same URL as the HTML page belong here: a
+	 * dedicated address like /entry.md is a different cache entry already. No
+	 * browser asks for any of them, so ordinary traffic never matches.
+	 *
+	 * What comes back is the matched entry from the list, never the header it
+	 * was found in, so the bypass reason this feeds is a known literal and not
+	 * something a visitor chose. The reasons are not printed anywhere today,
+	 * and this is what keeps that safe to change.
+	 *
+	 * @return string Matched media type, or empty string.
+	 */
+	private function get_bypass_accept_type() {
+		if ( empty( $_SERVER['HTTP_ACCEPT'] ) ) {
+			return '';
+		}
+
+		/**
+		 * Filter the media types that keep a request out of the page cache.
+		 *
+		 * A plugin that answers a post URL with something other than its HTML
+		 * through content negotiation adds its media type here.
+		 *
+		 * @param array $types Media types matched against the Accept header.
+		 */
+		$types = apply_filters( 'dietpress_cache_bypass_accept', array( 'text/markdown' ) );
+		if ( ! is_array( $types ) || ! $types ) {
+			return '';
+		}
+
+		$accept = strtolower( sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) ) );
+
+		foreach ( $types as $type ) {
+			$type = strtolower( trim( (string) $type ) );
+			if ( '' !== $type && false !== strpos( $accept, $type ) ) {
+				return $type;
+			}
 		}
 
 		return '';

@@ -4,7 +4,7 @@ Tags: performance, cache, optimization, cleanup, speed
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 7.1
-Stable tag: 3.5.3
+Stable tag: 3.5.4
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -278,9 +278,14 @@ Yes. See the filters listed in the description (the `dietpress_*` hooks). The pa
 
 == Changelog ==
 
+= 3.5.4 =
+* New: Two filters for the page cache. `dietpress_cache_bypass_request` decides whether a request ignores the cache altogether, before anything is read from disk. The existing `dietpress_cache_bypass` could not do that, because it only decides whether a rendered page is stored. `dietpress_cache_bypass_accept` holds the media types that keep a request out of the cache, for plugins that answer a post URL with something other than its HTML.
+* Improved: A request for the Markdown address of a post (/entry.md) no longer opens an output buffer and renders a page that was always going to be discarded for not being an HTML document. That address is now recognised as non-HTML up front, the way feeds and XML sitemaps already were.
+* Fix: With the page cache on, a request asking for Markdown through `Accept: text/markdown` was answered with the cached HTML. The cache serves its copy on plugins_loaded and ends the request there, long before VigIA or Visibility negotiate the content on template_redirect, and the cache key did not include the Accept header, so both answers for that URL shared a single file. Those requests now bypass the cache, while the HTML copy of the same URL is still served to browsers.
+
 = 3.5.3 =
 * Fix: With the option to load WooCommerce assets only on store pages switched on, themes that ship their own WooCommerce stylesheets lost them everywhere else. WooCommerce invites a theme to replace those files while keeping the original handle names, and Astra, Storefront, OceanWP and Kadence all accept the invitation, so removing woocommerce-general on a page with no store content was removing theme CSS, not plugin CSS. Under Astra that is where every rule for the header cart lives, so the cart panel was left unstyled and permanently open on every page of the site. A handle is now only removed when the file behind it really belongs to WooCommerce.
-* Fix: That same option removed generic script handles such as select2 and js-cookie even when another plugin had registered them first. Those names are not reserved by WooCommerce, form and field plugins register them too, and whoever gets there first keeps the handle, so a plugin with nothing to do with the store lost its script on every page outside it. Only handles served from the WooCommerce directory are removed now.
+* Fix: With the option to load WooCommerce assets only on store pages switched on, removed generic script handles such as select2 and js-cookie even when another plugin had registered them first. Those names are not reserved by WooCommerce, form and field plugins register them too, and whoever gets there first keeps the handle, so a plugin with nothing to do with the store lost its script on every page outside it. Only handles served from the WooCommerce directory are removed now.
 
 = 3.5.2 =
 * Improved: Checked against WordPress 7.1 and marked compatible with it. Everything DietPress switches off still switches off there, and the one 7.1 change that touches a filter it uses only alters plugins that force comment notifications on, not ones like this that turn them off.
@@ -310,8 +315,8 @@ For older changelog entries, please check the [changelog.txt](https://plugins.sv
 
 == Upgrade Notice ==
 
-= 3.5.3 =
-Fixes the option that loads WooCommerce assets only on store pages. It was removing stylesheets the theme serves, leaving the header cart unstyled everywhere else in Astra, Storefront, OceanWP and Kadence, and also removing generic script handles that other plugins had registered first.
+= 3.5.4 =
+Fixes the page cache answering with cached HTML when the request asked for Markdown through Accept: text/markdown, so the Markdown modules of VigIA and Visibility reply normally again. Adds two filters to keep a request out of the cache before it is served.
 
 == Support ==
 
