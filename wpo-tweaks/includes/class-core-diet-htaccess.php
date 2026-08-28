@@ -135,6 +135,69 @@ class Core_Diet_Htaccess {
 	}
 
 	/**
+	 * Whether the current user may write the files this class touches.
+	 *
+	 * Every path here (the site .htaccess, wp-config.php, the obsolete backup/
+	 * directory) hangs off the root of the install, and in a network that root
+	 * is a single directory shared by every site: get_home_path() returns
+	 * ABSPATH whenever home and siteurl match, which in a subsite they always
+	 * do. The settings that drive the block, though, are stored per site, so
+	 * manage_options alone would let the administrator of any subsite rewrite
+	 * or delete the file the whole network is served from, and manage_options
+	 * is precisely the capability every subsite administrator has. In a network
+	 * the bar is therefore the network capability.
+	 *
+	 * @return bool
+	 */
+	private function can_write_shared_files() {
+		return is_multisite()
+			? current_user_can( 'manage_network_options' )
+			: current_user_can( 'manage_options' );
+	}
+
+	/**
+	 * Tell a subsite administrator why the server rules did not change.
+	 *
+	 * Only worth saying when they actually moved one of the toggles that feed
+	 * the block: the plugin has plenty of other settings, and a notice on every
+	 * save would be noise. Every key read by core_diet_get_htaccess_rules() is
+	 * prefixed htaccess_, so this keeps working as toggles are added.
+	 *
+	 * @param mixed $old Previous option value.
+	 * @param mixed $new New option value.
+	 */
+	private function notify_network_only( $old, $new ) {
+		$old = is_array( $old ) ? $old : array();
+		$new = is_array( $new ) ? $new : array();
+
+		$touched = false;
+		foreach ( array_keys( $old + $new ) as $key ) {
+			if ( 0 !== strpos( (string) $key, 'htaccess_' ) ) {
+				continue;
+			}
+
+			$before = isset( $old[ $key ] ) ? $old[ $key ] : null;
+			$after  = isset( $new[ $key ] ) ? $new[ $key ] : null;
+
+			if ( $before !== $after ) {
+				$touched = true;
+				break;
+			}
+		}
+
+		if ( ! $touched ) {
+			return;
+		}
+
+		add_settings_error(
+			Core_Diet_Settings::OPTION_NAME,
+			'core_diet_htaccess_network_only',
+			esc_html__( 'Your settings were saved, but the server rules were not: the .htaccess file sits at the root of the network and is shared by every site on it, so only a network administrator can write it.', 'wpo-tweaks' ),
+			'warning'
+		);
+	}
+
+	/**
 	 * Handle the settings being saved.
 	 *
 	 * Rewrites or cleans the plugin .htaccess block depending on the two master
@@ -144,8 +207,11 @@ class Core_Diet_Htaccess {
 	 * @param mixed $new New option value.
 	 */
 	public function on_settings_saved( $old, $new ) {
-		// Disk writes are privileged. Bail if the current request lacks the cap.
-		if ( ! current_user_can( 'manage_options' ) ) {
+		// Disk writes are privileged, and in a network the file is shared by
+		// every site, so the bar is the network capability. Say so instead of
+		// failing silently: the settings themselves were saved.
+		if ( ! $this->can_write_shared_files() ) {
+			$this->notify_network_only( $old, $new );
 			return;
 		}
 
@@ -225,9 +291,12 @@ class Core_Diet_Htaccess {
 	 * It is NOT called automatically.
 	 */
 	public function core_diet_cleanup_legacy_files() {
-		// Writing to wp-config.php and the plugin directory is privileged.
-		// Guard against unexpected callers.
-		if ( ! current_user_can( 'manage_options' ) ) {
+		// Writing to wp-config.php and the plugin directory is privileged, and
+		// in a network both are shared by every site: the upgrade routine that
+		// calls this runs off a per-site version option, so without the network
+		// bar the first subsite administrator to open their dashboard after an
+		// update would rewrite the root wp-config.php.
+		if ( ! $this->can_write_shared_files() ) {
 			return;
 		}
 
@@ -611,8 +680,11 @@ class Core_Diet_Htaccess {
 	 * uninstall.
 	 */
 	public function clean_htaccess() {
-		// Disk writes are privileged. Guard against unexpected callers.
-		if ( ! current_user_can( 'manage_options' ) ) {
+		// Disk writes are privileged, and in a network the file is shared. This
+		// also runs on deactivation, which a subsite administrator can trigger
+		// for their own site when the plugin is not network activated; removing
+		// the block there would strip the rules from every other site.
+		if ( ! $this->can_write_shared_files() ) {
 			return;
 		}
 

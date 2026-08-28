@@ -4,7 +4,7 @@ Tags: performance, cache, optimization, cleanup, speed
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 7.1
-Stable tag: 3.5.4
+Stable tag: 3.5.5
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -278,6 +278,9 @@ Yes. See the filters listed in the description (the `dietpress_*` hooks). The pa
 
 == Changelog ==
 
+= 3.5.5 =
+* Fix: On a multisite network, the administrator of any single site could rewrite or delete the .htaccess and the wp-config.php at the root of the installation, the ones every site on the network is served from. Both were guarded by manage_options, which in a network is the capability the administrator of each site holds, while the settings that drive the rules are stored per site: saving them on one site rewrote the server rules for all of them, and switching the two master toggles off removed the block from the whole network. The upgrade routine reached the root wp-config.php the same way, on the first dashboard visit after an update, without anyone having to ask for it. Writing those files now takes manage_network_options, the capability a network administrator has, and a site administrator who moves one of the rule toggles is told why the server rules did not change instead of the save going quiet. Single site installations behave exactly as before, where manage_options is still what decides.
+
 = 3.5.4 =
 * New: Two filters for the page cache. `dietpress_cache_bypass_request` decides whether a request ignores the cache altogether, before anything is read from disk. The existing `dietpress_cache_bypass` could not do that, because it only decides whether a rendered page is stored. `dietpress_cache_bypass_accept` holds the media types that keep a request out of the cache, for plugins that answer a post URL with something other than its HTML.
 * Improved: A request for the Markdown address of a post (/entry.md) no longer opens an output buffer and renders a page that was always going to be discarded for not being an HTML document. That address is now recognised as non-HTML up front, the way feeds and XML sitemaps already were.
@@ -315,8 +318,8 @@ For older changelog entries, please check the [changelog.txt](https://plugins.sv
 
 == Upgrade Notice ==
 
-= 3.5.4 =
-Fixes the page cache answering with cached HTML when the request asked for Markdown through Accept: text/markdown, so the Markdown modules of VigIA and Visibility reply normally again. Adds two filters to keep a request out of the cache before it is served.
+= 3.5.5 =
+Security fix for multisite: the administrator of any site on a network could rewrite or delete the .htaccess and wp-config.php at the root, which every site is served from. Writing them now takes network administrator capability. Single site installations are unaffected.
 
 == Support ==
 
