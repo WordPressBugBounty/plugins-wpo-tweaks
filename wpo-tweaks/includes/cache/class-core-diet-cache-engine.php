@@ -36,6 +36,21 @@ class Core_Diet_Cache_Engine {
 	/** @var array Cookie names exactly as the browser sent them. */
 	private $cookie_names = array();
 
+	/** @var string Bypass reason for proxy headers that disagree with WordPress. */
+	const PROXY_MISMATCH = 'proxy headers disagree with the HTTPS WordPress detects';
+
+	/** @var string Storage refusal when HTTPS changed after the lookup. */
+	const HTTPS_CHANGED = 'HTTPS changed after the cache lookup';
+
+	/** @var string Option holding when either of the two last happened. */
+	const PROXY_MISMATCH_OPTION = 'core_diet_cache_proxy_mismatch';
+
+	/** @var bool|null Whether this request's proxy headers disagreed with WordPress on plugins_loaded. */
+	private static $lookup_mismatch = null;
+
+	/** @var bool|null Whether WordPress saw HTTPS when the cache was looked up. */
+	private $lookup_https = null;
+
 	/**
 	 * Constructor.
 	 *
@@ -69,6 +84,12 @@ class Core_Diet_Cache_Engine {
 	 * Serve a cached page and stop, when there is one to serve.
 	 */
 	public function maybe_serve() {
+		// Noted before any early return: the capture at the end of the request
+		// compares against it, and a forced reload skips the lookup below but
+		// still stores the page it rebuilds.
+		$this->lookup_https    = $this->is_https();
+		self::$lookup_mismatch = self::proxy_contradicts_wordpress();
+
 		if ( '' !== $this->get_request_bypass_reason() ) {
 			return;
 		}
@@ -91,11 +112,10 @@ class Core_Diet_Cache_Engine {
 			return;
 		}
 
-		$is_https  = $this->is_https();
 		$is_mobile = $this->settings->is_enabled( 'separate_mobile' ) && wp_is_mobile();
 		$slash     = $this->has_trailing_slash();
 
-		$plain = $dir . '/' . Core_Diet_Cache_Store::filename( $is_https, $slash, $is_mobile, false );
+		$plain = $dir . '/' . Core_Diet_Cache_Store::filename( $this->lookup_https, $slash, $is_mobile, false );
 		if ( ! is_readable( $plain ) ) {
 			return;
 		}
@@ -196,7 +216,16 @@ class Core_Diet_Cache_Engine {
 	 * Open the output buffer that will store this page.
 	 */
 	public function maybe_start_capture() {
-		if ( '' !== $this->get_request_bypass_reason() ) {
+		$reason = $this->get_request_bypass_reason();
+		if ( '' !== $reason ) {
+			// Noted here and not on plugins_loaded: only now is it known that
+			// the page is not a 404, a search or a URL with a query string,
+			// which a forged header on any of them would otherwise turn into a
+			// note for the site owner. What only the response can rule out, a
+			// cookie or DONOTCACHEPAGE during the render, is not known yet.
+			if ( self::PROXY_MISMATCH === $reason && '' === $this->get_query_bypass_reason() && '' === $this->get_query_object_bypass_reason() ) {
+				self::note_proxy_mismatch();
+			}
 			return;
 		}
 		if ( '' !== $this->get_query_bypass_reason() ) {
@@ -204,6 +233,16 @@ class Core_Diet_Cache_Engine {
 		}
 		if ( '' !== $this->get_query_object_bypass_reason() ) {
 			return;
+		}
+
+		// HTTPS that changed since the lookup, switched on by a proxy fix that
+		// runs on init for instance, means capture() will refuse to store this
+		// page, and the site owner deserves the same note as for headers that
+		// disagree. Noted here and not there: capture() runs inside an output
+		// buffer handler, where a hook on a database write that opens a buffer
+		// of its own, or a wp_die() on PHP 7.4, takes the visitor's page down.
+		if ( null !== $this->lookup_https && $this->lookup_https !== $this->is_https() ) {
+			self::note_proxy_mismatch();
 		}
 
 		$dir = Core_Diet_Cache_Store::dir_for_request();
@@ -225,7 +264,11 @@ class Core_Diet_Cache_Engine {
 	 * Output buffer callback: store the page, then return it untouched.
 	 *
 	 * Runs at shutdown, which is the only moment the response status, the
-	 * headers and the full HTML are all known.
+	 * headers and the full HTML are all known. Nothing in here may write to
+	 * the database: inside an output buffer handler, a hook on that write
+	 * that opens a buffer of its own is a fatal error no catch can stop, and
+	 * so is the exit of a wp_die() on PHP 7.4, and the visitor gets an empty
+	 * page.
 	 *
 	 * @param string $buffer Rendered page.
 	 * @return string
@@ -272,7 +315,7 @@ class Core_Diet_Cache_Engine {
 				// anyone reading the source about how the site is configured.
 				return $buffer . "\n<!-- DietPress page cache: not stored (" . esc_html( $reason ) . ") -->\n";
 			}
-		} catch ( Exception $e ) {
+		} catch ( Throwable $e ) {
 			// A cache that cannot store must never break the page it failed to
 			// store. The buffer is returned untouched either way.
 			return $buffer;
@@ -376,6 +419,23 @@ class Core_Diet_Cache_Engine {
 		 */
 		if ( apply_filters( 'dietpress_cache_bypass_request', false ) ) {
 			return 'dietpress_cache_bypass_request filter';
+		}
+
+		/*
+		 * Proxy headers that disagree with the HTTPS WordPress detects leave the
+		 * request alone, neither served nor stored. They cannot pick a copy: the
+		 * scheme of a copy is the one WordPress detects (is_https()), and a
+		 * header the caller chooses may only ever keep a request out. Kept out,
+		 * and not given a copy of their own, because such a request can be a
+		 * forged one on a site that answers plain HTTP, a visit through a proxy
+		 * nobody translates for WordPress, or a visit whose HTTPS is switched on
+		 * later in the request, possibly only for trusted proxies, and nothing
+		 * at this point tells those apart. Checked last, so that only a request
+		 * that would otherwise have been cached leaves the note the Cache tab
+		 * reads: a login page or a foreign Host with a forged header does not.
+		 */
+		if ( self::proxy_contradicts_wordpress() ) {
+			return self::PROXY_MISMATCH;
 		}
 
 		return '';
@@ -509,6 +569,22 @@ class Core_Diet_Cache_Engine {
 			return 'dietpress_cache_bypass filter';
 		}
 
+		// A copy is filed under the scheme the page was built with and looked
+		// up under the one seen on plugins_loaded. Code that switches HTTPS on
+		// between the two, a proxy fix placed below the line of wp-config.php
+		// that loads WordPress for instance, makes them disagree, and storing
+		// would hand this page to requests of the other scheme. With no lookup
+		// at all there is nothing to compare, so nothing is stored either.
+		// Checked last, so that WP_DEBUG only names these reasons for a page
+		// nothing else rules out. The note for the Cache tab is left earlier,
+		// in maybe_start_capture().
+		if ( null === $this->lookup_https ) {
+			return 'the cache lookup did not run';
+		}
+		if ( $this->lookup_https !== $this->is_https() ) {
+			return self::HTTPS_CHANGED;
+		}
+
 		return '';
 	}
 
@@ -539,13 +615,42 @@ class Core_Diet_Cache_Engine {
 			return 'password protected';
 		}
 
-		// A store that has not opened yet renders a placeholder on every URL.
-		// Caching it means the placeholder outlives the launch.
-		if ( 'yes' === get_option( 'woocommerce_coming_soon' ) ) {
+		// A store that has not opened yet renders a placeholder instead of the
+		// page. Caching it means the placeholder outlives the launch.
+		if ( $this->is_woocommerce_coming_soon() ) {
 			return 'WooCommerce coming soon mode';
 		}
 
 		return '';
+	}
+
+	/**
+	 * Whether WooCommerce shows its coming soon page instead of this one.
+	 *
+	 * Asked the way WooCommerce decides it (ComingSoonHelper), because the
+	 * option alone says too much: it stays in the database after WooCommerce
+	 * is deactivated, where it no longer does anything, and with "store pages
+	 * only" every page that is not part of the store stays public. Up to 3.5.5
+	 * either case kept the whole site out of the cache without a word.
+	 * Logged-in managers, who WooCommerce lets through, never reach this.
+	 *
+	 * @return bool
+	 */
+	private function is_woocommerce_coming_soon() {
+		if ( 'yes' !== get_option( 'woocommerce_coming_soon' ) || ! class_exists( 'WooCommerce', false ) ) {
+			return false;
+		}
+		if ( 'yes' !== get_option( 'woocommerce_store_pages_only' ) ) {
+			return true;
+		}
+
+		$helper = 'Automattic\WooCommerce\Admin\WCAdminHelper';
+		if ( class_exists( $helper ) && method_exists( $helper, 'is_current_page_store_page' ) ) {
+			return (bool) call_user_func( array( $helper, 'is_current_page_store_page' ) );
+		}
+
+		// A WooCommerce too old or too new to ask: keep the page out, as before.
+		return true;
 	}
 
 	/**
@@ -643,25 +748,133 @@ class Core_Diet_Cache_Engine {
 	}
 
 	/**
-	 * Whether the request arrived over HTTPS, proxies included.
+	 * Whether this request gets the HTTPS copy.
+	 *
+	 * Asks WordPress, never the request. Up to 3.5.5 this also honoured
+	 * X-Forwarded-Proto, a header whoever sends the request chooses, while
+	 * WordPress builds the page's asset URLs from is_ssl(), which ignores it
+	 * (set_url_scheme() in wp-includes/link-template.php). On a site that also
+	 * answers plain HTTP, a request carrying that header was built with
+	 * http:// assets and filed as the HTTPS copy, and visitors on HTTPS were
+	 * then served a page whose styles and scripts the browser blocks. The
+	 * reproduction lives in the release checks, not here.
 	 *
 	 * @return bool
 	 */
 	private function is_https() {
-		if ( ! empty( $_SERVER['HTTPS'] ) && 'off' !== strtolower( sanitize_text_field( wp_unslash( $_SERVER['HTTPS'] ) ) ) ) {
-			return true;
-		}
-		if ( isset( $_SERVER['HTTP_X_FORWARDED_PROTO'] ) ) {
-			$proto = strtolower( sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_FORWARDED_PROTO'] ) ) );
-			if ( 'https' === $proto ) {
-				return true;
-			}
-		}
-		if ( ! isset( $_SERVER['SERVER_PORT'] ) ) {
+		return is_ssl();
+	}
+
+	/**
+	 * Whether this request's proxy headers disagree with the HTTPS WordPress detects.
+	 *
+	 * Two cases count. Headers that claim HTTPS while WordPress does not
+	 * detect it, whatever else they say. And headers that claim plain HTTP
+	 * when WordPress only knows about HTTPS from port 443: code that reads the
+	 * headers itself to build URLs (TranslatePress does whenever the HTTPS
+	 * variable is not set, and never looks at the port) can then build the
+	 * page for the other scheme. HTTPS set by the
+	 * server variable is final instead: WordPress and the code that asks it
+	 * agree whatever the headers say, which keeps a chain of proxies that
+	 * mixes values, a CDN in front of a local nginx for instance, cacheable.
+	 *
+	 * Public and static because the Cache tab asks it about the request that
+	 * loads the tab.
+	 *
+	 * @return bool
+	 */
+	public static function proxy_contradicts_wordpress() {
+		$claims = self::get_proxy_schemes();
+		if ( ! $claims ) {
 			return false;
 		}
 
-		return '443' === sanitize_text_field( wp_unslash( $_SERVER['SERVER_PORT'] ) );
+		if ( ! is_ssl() ) {
+			return in_array( 'https', $claims, true );
+		}
+
+		return ! isset( $_SERVER['HTTPS'] ) && in_array( 'http', $claims, true );
+	}
+
+	/**
+	 * Whether this request's proxy headers disagreed with WordPress on plugins_loaded.
+	 *
+	 * The Cache tab asks this instead of asking again when it draws itself,
+	 * because by then a proxy fix that runs late has switched HTTPS on, and
+	 * the request would look fixed while every visit through that proxy is
+	 * still kept out.
+	 *
+	 * @return bool|null Null when the cache lookup did not run on this request.
+	 */
+	public static function lookup_mismatch() {
+		return self::$lookup_mismatch;
+	}
+
+	/**
+	 * Remember that a visit was kept out of the cache for its proxy headers.
+	 *
+	 * Written at most once an hour and never autoloaded, so the requests that
+	 * trigger it do not all write to the database and the value does not ride
+	 * along on every page load; the Cache tab reads it to explain the fix.
+	 */
+	private static function note_proxy_mismatch() {
+		$last = (int) get_option( self::PROXY_MISMATCH_OPTION, 0 );
+
+		if ( time() - $last > HOUR_IN_SECONDS ) {
+			update_option( self::PROXY_MISMATCH_OPTION, time(), false );
+		}
+	}
+
+	/**
+	 * The schemes the proxy headers of this request claim.
+	 *
+	 * The same six headers SSL Insecure Content Fixer knows how to translate
+	 * into HTTPS, with the values it accepts as HTTPS. Any other value that is
+	 * present counts as plain HTTP rather than as nothing, because code that
+	 * reads the headers to build URLs treats it that way, and an unexpected
+	 * value is the easiest one to forge. A chain of proxies can send a list in
+	 * X-Forwarded-Proto, so every entry counts. Values are read through
+	 * sanitize_text_field(), as TranslatePress reads them too, so one made only
+	 * of markup counts as absent.
+	 *
+	 * @return array Unique values among 'http' and 'https'.
+	 */
+	private static function get_proxy_schemes() {
+		$claims = array();
+
+		$read = static function ( $key ) {
+			return isset( $_SERVER[ $key ] ) ? strtolower( trim( sanitize_text_field( wp_unslash( $_SERVER[ $key ] ) ) ) ) : '';
+		};
+
+		$proto = $read( 'HTTP_X_FORWARDED_PROTO' );
+		if ( '' !== $proto ) {
+			foreach ( explode( ',', $proto ) as $entry ) {
+				$claims[] = 'https' === trim( $entry ) ? 'https' : 'http';
+			}
+		}
+
+		foreach ( array( 'HTTP_CLOUDFRONT_FORWARDED_PROTO', 'HTTP_X_FORWARDED_SCHEME' ) as $key ) {
+			$value = $read( $key );
+			if ( '' !== $value ) {
+				$claims[] = 'https' === $value ? 'https' : 'http';
+			}
+		}
+
+		$ssl = $read( 'HTTP_X_FORWARDED_SSL' );
+		if ( '' !== $ssl ) {
+			$claims[] = ( 'on' === $ssl || '1' === $ssl ) ? 'https' : 'http';
+		}
+
+		$visitor = $read( 'HTTP_CF_VISITOR' );
+		if ( '' !== $visitor ) {
+			$claims[] = false !== strpos( $visitor, 'https' ) ? 'https' : 'http';
+		}
+
+		if ( '' !== $read( 'HTTP_X_ARR_SSL' ) ) {
+			$claims[] = 'https';
+		}
+
+		return array_values( array_unique( $claims ) );
 	}
 
 	/**

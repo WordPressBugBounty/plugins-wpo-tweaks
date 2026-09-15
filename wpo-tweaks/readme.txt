@@ -4,7 +4,7 @@ Tags: performance, cache, optimization, cleanup, speed
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 7.1
-Stable tag: 3.5.5
+Stable tag: 3.5.6
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -108,7 +108,7 @@ The plugin includes filters for developers:
 * Well-coded themes and page builders (Divi, Elementor, Beaver Builder, Bricks Gutenberg)
 * Cache plugins (WP Rocket, LiteSpeed Cache, W3 Total Cache, WP Super Cache, etc.). The one exception is the optional page cache module, which will not run beside another page cache and says so; everything else in DietPress works alongside them as it always has
 * Security plugins (DietPress focuses on performance and deliberately leaves security to them; we recommend our free Vigilant)
-* CDNs (Cloudflare, StackPath, KeyCDN, etc.) thanks to CORS and Vary headers
+* CDNs (Cloudflare, StackPath, KeyCDN, etc.) thanks to CORS and Vary headers. Behind a CDN or proxy, the page cache needs WordPress to know when a visit arrives over HTTPS, and the Cache tab tells you when it does not
 * WordPress Multisite (except the optional page cache module, which does not support it yet)
 
 ### HOW TO VERIFY THE OPTIMIZATIONS
@@ -230,7 +230,7 @@ Whatever you had saved is kept. An option that cannot apply is not switched off 
 
 = Is it compatible with caching plugins and CDNs? =
 
-Yes. DietPress works alongside caching plugins and includes CORS and Vary headers for full CDN compatibility.
+Yes. DietPress works alongside caching plugins and includes CORS and Vary headers for full CDN compatibility. Behind a CDN or proxy, the page cache needs WordPress to know when a visit arrives over HTTPS, as the rest of WordPress does: when the proxy headers disagree with the HTTPS WordPress detects, those visits are left out of the cache, and the Cache tab explains why and how to fix it.
 
 = Something went wrong after activation =
 
@@ -238,9 +238,9 @@ If a plugin or theme does not enqueue scripts correctly, the JavaScript defer ma
 
 = Why is a page not being cached? =
 
-Open DietPress and go to the Cache tab, then press "Test the cache now": the site asks itself for its own home page and tells you whether it was served from disk, rebuilt, or skipped entirely. If you need the exact reason for one particular page, turn `WP_DEBUG` on and read the last line of that page's HTML source: DietPress writes the reason there, for example that the response set a cookie or that a plugin declared the page uncacheable.
+Open DietPress and go to the Cache tab, then press "Test the cache now": the site asks itself for its own home page and tells you whether it was served from disk, rebuilt, or skipped entirely. If you need the exact reason for one particular page, turn `WP_DEBUG` on and read the last line of that page's HTML source: DietPress writes the reason there, for example that the response set a cookie or that a plugin declared the page uncacheable. A page that was stored gets no comment. And if you check the X-DietPress-Cache header in your browser's developer tools, untick Disable cache there first, and open the page again from a link or a new tab instead of reloading it: browsers ask for a fresh copy when you reload, DietPress rebuilds the page on purpose, and a reload always shows MISS.
 
-The three usual causes are a plugin that sets a cookie on every visit (a consent banner, some analytics scripts), a page that is genuinely personal (cart, checkout, my account, a password protected post), and a cache directory the server cannot write to. The status panel reports the third one on its own.
+The three usual causes are a plugin that sets a cookie on every visit (a consent banner, some analytics scripts), a page that is genuinely personal (cart, checkout, my account, a password protected post), and a cache directory the server cannot write to. The status panel reports the third one on its own. On a site behind a proxy or CDN there is a fourth one: proxy headers that disagree with the HTTPS WordPress detects keep those visits out of the cache. Those visits are left out before the page is built, so they get no comment in the HTML source, except when WordPress only learns about HTTPS later in the request, where the comment says that HTTPS changed after the cache lookup. Either way the Cache tab tells you about them, and how to fix it.
 
 = I published a change and visitors still see the old page =
 
@@ -277,6 +277,17 @@ Yes. See the filters listed in the description (the `dietpress_*` hooks). The pa
 7. Cache tab: page cache settings with master switches and status cards
 
 == Changelog ==
+
+= 3.5.6 =
+Page cache cleanup and security fixes, plus caching that no longer stops because of a WooCommerce coming soon setting.
+
+* Fix: On a site served over HTTPS that also answers plain HTTP without redirecting, and whose server does not translate the X-Forwarded-Proto header for WordPress, a request could plant a broken copy of any cached page for visitors on HTTPS. The cache chose the HTTPS copy from the X-Forwarded-Proto header, which whoever sends the request controls, while WordPress builds the page from the scheme it detects itself, so a plain HTTP request claiming HTTPS was stored under the HTTPS name with its styles and scripts pointing to http://, which browsers block on an HTTPS page. The HTTPS copy now follows what WordPress detects, and a request is kept out of the cache altogether when its proxy headers (X-Forwarded-Proto, X-Forwarded-Ssl, CloudFront-Forwarded-Proto, CF-Visitor, X-Forwarded-Scheme or X-ARR-SSL) claim HTTPS that WordPress does not detect, or claim plain HTTP where WordPress only knows about HTTPS from the port number. That changes two things on a site behind a proxy or CDN. If it does not tell WordPress that it is served over HTTPS, visits through it are no longer cached until WordPress is told. If WordPress only learns about HTTPS later in the request, for example from code placed below the line of wp-config.php that loads WordPress, those HTTPS pages are not stored either. The Cache tab says so in both cases. Copies stored before updating are emptied as the update runs, when it runs through WordPress (from the dashboard, as an automatic update or with WP-CLI), and otherwise the first time an administrator opens the dashboard. Present since 3.5.0.
+* Fix: With the page cache on, deactivating and reactivating the plugin from the Plugins screen left its cleanup unscheduled until the page cache was switched off and on again. The cleanup was only scheduled at the moment the cache was switched on, deactivating removed it while leaving the cache on, and nothing scheduled it again, so the Cache tab reported it as not scheduled and expired copies were never deleted from disk. Losing the scheduled task any other way had the same effect. It is now scheduled again on its own whenever it goes missing, to run an hour later, so a site already affected recovers after updating with nothing to do. Visitors were not served expired pages: the cache checks the age of a copy before serving it and rebuilds it when it is too old, so what piled up was disk space.
+* Fix: The notes the Cache tab shows when the cleanup is not running read as if expired pages were still being served, and the one for a missing cleanup advised switching the cache off and back on, which empties it. They now say that visitors are not affected. The note for an overdue cleanup also explains that a page served from the cache does not run the scheduled tasks of WordPress, which a well cached site with little other traffic can notice in its scheduled posts, and the note for WordPress cron switched off mentions those posts too.
+* Fix: The scheduled cleanup deleted the index.php file that keeps the cache folder from being listed, taking it for a cached page once it was older than the page lifetime. It now deletes cached pages only, and with the page cache on the file comes back after updating, at the latest the first time an administrator opens the dashboard. A cache folder deleted by hand or left out by a migration is also recreated with it now, and with the .htaccess that keeps it out of reach.
+* Fix: With the page cache on, a site whose woocommerce_coming_soon option was set to yes cached nothing at all, with no header and no note to explain it, even when WooCommerce showed its pages to everybody: with WooCommerce deactivated, where that option is only a leftover, or in the store pages only mode, where every page outside the store stays public. The cache now asks it the way WooCommerce 9.8 or later does, so it keeps out the pages WooCommerce hides behind its coming soon screen and caches the rest; with an older WooCommerce, the store pages only mode still keeps the whole site out, as before.
+* Fix: A PHP Error, such as a TypeError, thrown by another plugin while the page cache was storing a page, from a dietpress_cache_bypass filter for instance, ended that request with a fatal error right after the page was sent, so the tasks WordPress runs at the end of a request were skipped. The request now finishes normally, and that page is simply not stored.
+* Fix: The scheduled cleanup could stop with a fatal error when a cached file disappeared while it walked the cache folder, which a purge or a page being stored at that same moment can cause, and that also stopped every other scheduled task due in the same run. The cleanup, the purge that runs when content changes and the Cache tab could also stop with one when a folder inside the cache could not be read. A file that is gone is now skipped, and so is a folder that cannot be read, which stays as it is until its permissions are put right.
 
 = 3.5.5 =
 * Fix: On a multisite network, the administrator of any single site could rewrite or delete the .htaccess and the wp-config.php at the root of the installation, the ones every site on the network is served from. Both were guarded by manage_options, which in a network is the capability the administrator of each site holds, while the settings that drive the rules are stored per site: saving them on one site rewrote the server rules for all of them, and switching the two master toggles off removed the block from the whole network. The upgrade routine reached the root wp-config.php the same way, on the first dashboard visit after an update, without anyone having to ask for it. Writing those files now takes manage_network_options, the capability a network administrator has, and a site administrator who moves one of the rule toggles is told why the server rules did not change instead of the save going quiet. Single site installations behave exactly as before, where manage_options is still what decides.
@@ -318,8 +329,8 @@ For older changelog entries, please check the [changelog.txt](https://plugins.sv
 
 == Upgrade Notice ==
 
-= 3.5.5 =
-Security fix for multisite: the administrator of any site on a network could rewrite or delete the .htaccess and wp-config.php at the root, which every site is served from. Writing them now takes network administrator capability. Single site installations are unaffected.
+= 3.5.6 =
+Page cache cleanup and security fixes, plus caching that no longer stops because of a WooCommerce coming soon setting.
 
 == Support ==
 

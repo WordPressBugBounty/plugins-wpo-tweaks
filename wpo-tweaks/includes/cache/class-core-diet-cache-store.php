@@ -249,6 +249,13 @@ class Core_Diet_Cache_Store {
 	 * @return bool
 	 */
 	public static function write( $dir, $filename, $contents ) {
+		// The root comes with its hardening files, not as a side effect of
+		// creating a page directory: a cache folder deleted by hand or left out
+		// by a migration used to come back without its .htaccess and index.php.
+		if ( ! is_dir( self::get_root() ) && ! self::prepare() ) {
+			return false;
+		}
+
 		if ( ! is_dir( $dir ) && ! wp_mkdir_p( $dir ) ) {
 			return false;
 		}
@@ -397,21 +404,33 @@ class Core_Diet_Cache_Store {
 
 			$name = $item->getFilename();
 
+			$is_tmp = '.tmp' === substr( $name, -4 );
+
+			if ( ! $is_tmp && ! self::is_page_file( $name ) ) {
+				continue;
+			}
+
+			// A purge, or the rename() that finishes a write, can remove a file
+			// between the directory listing and this line, and getMTime()
+			// throws when there is nothing left to stat. Uncaught, that ended
+			// the whole wp-cron.php run.
+			try {
+				$age = $now - $item->getMTime();
+			} catch ( RuntimeException $e ) {
+				continue;
+			}
+
 			// A temporary file that outlived its request: the write died
 			// mid-way. Anything older than an hour is certainly abandoned.
-			if ( '.tmp' === substr( $name, -4 ) ) {
-				if ( $now - $item->getMTime() > HOUR_IN_SECONDS ) {
+			if ( $is_tmp ) {
+				if ( $age > HOUR_IN_SECONDS ) {
 					wp_delete_file( $path );
 					++$deleted;
 				}
 				continue;
 			}
 
-			if ( 0 !== strpos( $name, 'index' ) ) {
-				continue;
-			}
-
-			if ( $ttl > 0 && ( $now - $item->getMTime() ) > $ttl ) {
+			if ( $ttl > 0 && $age > $ttl ) {
 				wp_delete_file( $path );
 				++$deleted;
 			}
@@ -460,15 +479,19 @@ class Core_Diet_Cache_Store {
 				$name = $item->getFilename();
 
 				// index.php is the silence file of the root, not a cached page.
-				if ( ! $item->isFile() || 0 !== strpos( $name, 'index' ) ) {
+				if ( ! $item->isFile() || ! self::is_page_file( $name ) ) {
 					continue;
 				}
-				if ( '.html' !== substr( $name, -5 ) && '.html.gz' !== substr( $name, -8 ) ) {
+
+				// Same reason as in collect_garbage(): the file can be gone by now.
+				try {
+					$size = $item->getSize();
+				} catch ( RuntimeException $e ) {
 					continue;
 				}
 
 				++$stats['files'];
-				$stats['bytes'] += $item->getSize();
+				$stats['bytes'] += $size;
 				if ( '.html' === substr( $name, -5 ) ) {
 					++$stats['pages'];
 				}
@@ -481,11 +504,39 @@ class Core_Diet_Cache_Store {
 	}
 
 	/**
+	 * Whether a file name is one of the stored copies of a page.
+	 *
+	 * The garbage collector used to settle for the "index" prefix, and the
+	 * silence file of the cache root is called index.php, so the first cleanup
+	 * after it outlived the page lifetime deleted it. The counter above had
+	 * always ruled it out; both now ask the same question.
+	 *
+	 * @param string $name File name, without its directory.
+	 * @return bool
+	 */
+	private static function is_page_file( $name ) {
+		if ( 0 !== strpos( $name, 'index' ) ) {
+			return false;
+		}
+
+		return '.html' === substr( $name, -5 ) || '.html.gz' === substr( $name, -8 );
+	}
+
+	/**
 	 * Build a recursive iterator over a directory, or null when it cannot be read.
 	 *
 	 * A directory the web user cannot open makes the constructor throw, and a
 	 * cache directory left behind by another user is common enough on shared
 	 * hosting that it must not take down a cron run or the settings screen.
+	 *
+	 * The try below only covers the directory the walk starts from. A
+	 * subdirectory that cannot be opened throws later, while the loop descends
+	 * into it, and that is what CATCH_GET_CHILD is for: the walk skips it and
+	 * carries on. Without it, one unreadable folder took down every cleanup
+	 * and the settings screen along with it. The purges walk the same way, so
+	 * a folder like that is left where it is instead of stopping the purge,
+	 * and its pages are neither counted nor collected until its permissions
+	 * are put right.
 	 *
 	 * @param string $dir  Directory to walk.
 	 * @param int    $mode RecursiveIteratorIterator mode.
@@ -499,7 +550,8 @@ class Core_Diet_Cache_Store {
 		try {
 			return new RecursiveIteratorIterator(
 				new RecursiveDirectoryIterator( $dir, FilesystemIterator::SKIP_DOTS ),
-				$mode
+				$mode,
+				RecursiveIteratorIterator::CATCH_GET_CHILD
 			);
 		} catch ( Exception $e ) {
 			return null;

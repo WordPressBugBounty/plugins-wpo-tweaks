@@ -216,6 +216,19 @@ class Core_Diet {
 		$htaccess = new Core_Diet_Htaccess( Core_Diet_Settings::get_instance() );
 		$htaccess->on_settings_saved( array(), get_option( 'core_diet_settings', array() ) );
 
+		// The page cache setting survives deactivation, so the cache comes back
+		// on with the plugin. Its collector is scheduled again on the next
+		// request (Core_Diet_Cache::maybe_schedule_gc()); the silence file of
+		// the cache folder, which the cleanup of 3.5.0 to 3.5.5 deleted, is put
+		// back here. Needed on activation because storing the version below
+		// means the upgrade routine, which also restores it, will not run.
+		// Only into a folder that already exists: activating from WP-CLI as
+		// another system user would otherwise create the folder with an owner
+		// PHP cannot write to, and the first page request does that correctly.
+		if ( class_exists( 'Core_Diet_Cache' ) && Core_Diet_Cache::is_enabled() && is_dir( Core_Diet_Cache_Store::get_root() ) ) {
+			Core_Diet_Cache_Store::prepare();
+		}
+
 		// Store version for future upgrades.
 		update_option( 'core_diet_version', CORE_DIET_VERSION );
 
@@ -298,6 +311,13 @@ class Core_Diet {
 		 */
 		if ( class_exists( 'Core_Diet_Cache_Store' ) ) {
 			Core_Diet_Cache_Store::purge_all();
+
+			// Up to 3.5.5 the scheduled cleanup deleted the silence file of the
+			// cache root, taking it for a cached page. prepare() only writes the
+			// hardening files that are missing.
+			if ( Core_Diet_Cache::is_enabled() ) {
+				Core_Diet_Cache_Store::prepare();
+			}
 		}
 
 		// Mark this version as fully upgraded.

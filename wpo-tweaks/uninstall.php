@@ -20,6 +20,7 @@ delete_option( 'core_diet_version' );
 // Page cache module: its own option, its bookkeeping and the whole cache tree.
 delete_option( 'core_diet_cache_settings' );
 delete_option( 'core_diet_cache_last_gc' );
+delete_option( 'core_diet_cache_proxy_mismatch' );
 delete_transient( 'core_diet_cache_auto_disabled' );
 wp_clear_scheduled_hook( 'core_diet_cache_gc' );
 

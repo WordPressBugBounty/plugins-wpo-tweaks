@@ -318,16 +318,23 @@ class Core_Diet_Cache_Admin {
 			);
 		}
 
+		// A visit kept out for its proxy headers leaves no HTML comment, and one
+		// whose HTTPS is switched on late comes back as a rebuilt page, so the
+		// usual advice alone would send the site owner looking for the wrong
+		// thing. Added to it rather than put in its place: the note behind it
+		// can also come from forged headers, and the other cause may be real.
+		$proxy = self::has_proxy_mismatch() ? ' ' . __( 'Visits with proxy headers that disagree with the HTTPS WordPress detects are also being kept out of the cache: if this test goes through a proxy or CDN, that is the likely reason, and the status block of this tab explains the fix.', 'wpo-tweaks' ) : '';
+
 		if ( 'MISS' === strtoupper( $header ) ) {
 			return array(
 				'ok'      => false,
-				'message' => __( 'The home page is cacheable but was rebuilt instead of served from disk. The most likely cause is that the cache directory cannot be written to, or that something purges the cache on every request.', 'wpo-tweaks' ),
+				'message' => __( 'The home page is cacheable but was rebuilt instead of served from disk. The most likely cause is that the cache directory cannot be written to, or that something purges the cache on every request.', 'wpo-tweaks' ) . $proxy,
 			);
 		}
 
 		return array(
 			'ok'      => false,
-			'message' => __( 'The home page is being skipped by the cache. The usual causes are a plugin that sets a cookie on every visit, a plugin that declares the page uncacheable, or the home page being excluded below. Enable WP_DEBUG and read the HTML comment at the end of the page source: it names the exact reason.', 'wpo-tweaks' ),
+			'message' => __( 'The home page is being skipped by the cache. The usual causes are a plugin that sets a cookie on every visit, a plugin that declares the page uncacheable, or the home page being excluded below. Enable WP_DEBUG and read the HTML comment at the end of the page source: it names the exact reason.', 'wpo-tweaks' ) . $proxy,
 		);
 	}
 
@@ -532,6 +539,13 @@ class Core_Diet_Cache_Admin {
 						<span class="core-diet-option-notice-text"><?php echo esc_html( $cron_warning ); ?></span>
 					</p>
 				<?php endforeach; ?>
+
+				<?php if ( self::has_proxy_mismatch() ) : ?>
+					<p class="core-diet-option-notice core-diet-option-notice-warning core-diet-cache-block">
+						<span class="dashicons dashicons-warning" aria-hidden="true"></span>
+						<span class="core-diet-option-notice-text"><?php esc_html_e( 'Some visits reached this site with proxy headers, such as X-Forwarded-Proto, that disagree with the HTTPS WordPress detects, or WordPress only switched HTTPS on or off after loading, so those visits were not cached: a copy stored from them could reach other visitors with the wrong scheme. If the site is behind a proxy or CDN, including one your hosting puts in front of it, tell WordPress that the connection is HTTPS before it loads, in the server configuration or near the top of wp-config.php, before the comment that says to stop editing. If there is no proxy, or WordPress is already told that way and the note keeps coming back, those visits did not come through the proxy and carried forged headers, and there is nothing to fix. This note stays while it keeps happening and clears itself a day after the last time.', 'wpo-tweaks' ); ?></span>
+					</p>
+				<?php endif; ?>
 			<?php endif; ?>
 
 			<?php foreach ( $blocking as $reason ) : ?>
@@ -608,10 +622,16 @@ class Core_Diet_Cache_Admin {
 	/**
 	 * What to say when the cleanup is not running, if it is not.
 	 *
-	 * Only speaks when the event is actually overdue. A site with DISABLE_WP_CRON
-	 * and a real system cron behind it is correctly configured, and warning it
-	 * about a schedule that is being met would be the kind of permanent notice
-	 * people learn to scroll past.
+	 * Only speaks when the event is actually overdue or missing. A site with
+	 * DISABLE_WP_CRON and a real system cron behind it is correctly configured,
+	 * and warning it about a schedule that is being met would be the kind of
+	 * permanent notice people learn to scroll past.
+	 *
+	 * Each sentence also says what is not affected. The engine checks the age
+	 * of a copy before serving it and rebuilds it when it is too old, so a
+	 * cleanup that does not run leaves expired copies taking up disk and
+	 * nothing else. The first wording left that out and read as if the expiry
+	 * itself had stopped working.
 	 *
 	 * @param array $gc Output of describe_schedule() for the collector.
 	 * @return array Sentences to show.
@@ -621,23 +641,61 @@ class Core_Diet_Cache_Admin {
 			return array();
 		}
 
-		// No event at all is a different problem from an event nobody runs, and
-		// it has a fix the site owner can apply from this very screen.
+		// Core_Diet_Cache::maybe_schedule_gc() has already run on this request,
+		// so an event still missing here was refused or removed again. The
+		// advice this used to give, switching the cache off and back on, only
+		// emptied the cache and ran into the same wall.
 		if ( empty( $gc['scheduled'] ) ) {
 			return array(
-				__( 'There is no cleanup scheduled, so cached pages are never removed once they expire. Switching the page cache off and back on from this tab schedules it again.', 'wpo-tweaks' ),
+				__( 'The cleanup is not scheduled, although DietPress schedules it again whenever it goes missing, so something on this site is removing it or keeping WordPress from saving it, usually a plugin that manages scheduled tasks. Visitors are not affected: an expired page is never served, it is rebuilt on its next visit. Expired copies only take up disk space until a cleanup runs.', 'wpo-tweaks' ),
 			);
 		}
 
 		if ( defined( 'DISABLE_WP_CRON' ) && DISABLE_WP_CRON ) {
 			return array(
-				__( 'The cleanup is overdue and WordPress cron is switched off on this site (DISABLE_WP_CRON), which is very likely the reason. With it off, the plugin scheduled tasks, this cleanup and the daily transient cleanup, only run if your server calls wp-cron.php on a real schedule. Check that cron job with your host. Meanwhile nothing is lost: publishing, editing and commenting still purge what they change, and only the expiry by age is affected.', 'wpo-tweaks' ),
+				__( 'The cleanup is overdue and WordPress cron is switched off on this site (DISABLE_WP_CRON), which is very likely the reason. With it off, no scheduled task runs unless your server calls wp-cron.php on a real schedule, and that includes scheduled posts, not only this cleanup. Check that cron job with your host. Visitors are not affected by the delay: an expired page is never served, it is rebuilt on its next visit. Expired copies only take up disk space until the cleanup runs.', 'wpo-tweaks' ),
 			);
 		}
 
 		return array(
-			__( 'The cleanup is overdue. WordPress runs its scheduled tasks on visits, so a site with very little traffic can go a long time without one. Expired pages stay on disk until it runs, although publishing, editing and commenting still purge what they change.', 'wpo-tweaks' ),
+			__( 'The cleanup is overdue. WordPress runs its scheduled tasks when a page is built, and a page served from the cache is not built, so a site whose visits are mostly served from the cache, or that has little traffic, can go a long time without running them. Scheduled posts wait too. Visitors are not affected by the cleanup delay: an expired page is never served, it is rebuilt on its next visit. Expired copies only take up disk space until the cleanup runs.', 'wpo-tweaks' ),
 		);
+	}
+
+	/**
+	 * Whether visits have been kept out of the cache for their proxy headers.
+	 *
+	 * Asked two ways because either can be the only one that knows: the
+	 * engine notes the last page it kept out, and the request that loads this
+	 * screen may come through that same proxy. For this request the answer is
+	 * the one the engine got on plugins_loaded, not a new one: a proxy fix
+	 * that runs late has switched HTTPS on by the time this screen is drawn,
+	 * and asking again would call the site fixed while its visits are still
+	 * being kept out. Without any of this, a site behind a CDN that does not
+	 * tell WordPress about HTTPS would stop caching those visits in silence,
+	 * while the self test went on reporting a working cache.
+	 *
+	 * The note can also be left by somebody sending forged headers, which is
+	 * why it lasts a day and the text says so.
+	 *
+	 * @return bool
+	 */
+	private static function has_proxy_mismatch() {
+		if ( ! class_exists( 'Core_Diet_Cache_Engine' ) ) {
+			return false;
+		}
+
+		$now = Core_Diet_Cache_Engine::lookup_mismatch();
+		if ( null === $now ) {
+			$now = Core_Diet_Cache_Engine::proxy_contradicts_wordpress();
+		}
+		if ( $now ) {
+			return true;
+		}
+
+		$last = (int) get_option( Core_Diet_Cache_Engine::PROXY_MISMATCH_OPTION, 0 );
+
+		return $last > 0 && ( time() - $last ) < DAY_IN_SECONDS;
 	}
 
 	/**

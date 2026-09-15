@@ -89,6 +89,19 @@ class Core_Diet_Cache {
 
 		$engine->init();
 		$purge->init();
+
+		/*
+		 * The collector used to be scheduled only when the module was switched
+		 * on, the one moment its option changes. Deactivating the plugin clears
+		 * the event and keeps the module on, so a plugin deactivated and
+		 * reactivated from the Plugins screen went on caching with nothing left
+		 * to delete what expired, and so did a site that lost the event any
+		 * other way. Checked on init rather than here: a plugin that replaces
+		 * WP-Cron has registered its filters by then, and a cached hit has
+		 * already been served and ended the request, so the check costs nothing
+		 * on the requests the cache exists for.
+		 */
+		add_action( 'init', array( __CLASS__, 'maybe_schedule_gc' ) );
 	}
 
 	/**
@@ -170,10 +183,24 @@ class Core_Diet_Cache {
 	 */
 	public static function on_enable() {
 		Core_Diet_Cache_Store::prepare();
+		self::maybe_schedule_gc();
+	}
 
-		if ( ! wp_next_scheduled( self::CRON_HOOK ) ) {
-			wp_schedule_event( time() + HOUR_IN_SECONDS, 'twicedaily', self::CRON_HOOK );
+	/**
+	 * Schedule the garbage collector unless it already is.
+	 *
+	 * An event that is overdue still counts as scheduled: it is WP-Cron that is
+	 * late, and adding a second event would only run the cleanup twice once it
+	 * catches up. Concurrent repairs on a busy site do not stack duplicates
+	 * either, because every request saves the whole cron array from the copy it
+	 * loaded, so the last one to save wins (_set_cron_array()).
+	 */
+	public static function maybe_schedule_gc() {
+		if ( wp_next_scheduled( self::CRON_HOOK ) ) {
+			return;
 		}
+
+		wp_schedule_event( time() + HOUR_IN_SECONDS, 'twicedaily', self::CRON_HOOK );
 	}
 
 	/**
@@ -186,6 +213,10 @@ class Core_Diet_Cache {
 
 	/**
 	 * Plugin deactivation: leave nothing being served behind our back.
+	 *
+	 * The module setting is kept, so the cache comes back on with the plugin,
+	 * and maybe_schedule_gc() puts the collector back on the first request
+	 * after that.
 	 */
 	public static function deactivate() {
 		if ( ! class_exists( 'Core_Diet_Cache_Store', false ) ) {
