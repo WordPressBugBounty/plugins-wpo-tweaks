@@ -58,6 +58,9 @@ class Core_Diet_Cache_Settings {
 			'exclude_urls'        => '',
 			'ignore_query_params' => '',
 			'host_cache_ack'      => false,
+			'accelerator'         => false,
+			'gc_frequency'        => 'twicedaily',
+			'gc_hour'             => -1,
 		);
 	}
 
@@ -286,8 +289,21 @@ class Core_Diet_Cache_Settings {
 
 		$clean = $defaults;
 
-		foreach ( array( 'enabled', 'separate_mobile', 'precompress_gzip', 'host_cache_ack' ) as $key ) {
+		foreach ( array( 'enabled', 'separate_mobile', 'precompress_gzip', 'host_cache_ack', 'accelerator' ) as $key ) {
 			$clean[ $key ] = ! empty( $input[ $key ] );
+		}
+
+		if ( isset( $input['gc_frequency'] ) ) {
+			$clean['gc_frequency'] = Core_Diet_Schedule::sanitize_frequency( $input['gc_frequency'], $defaults['gc_frequency'] );
+		}
+		// The hour select is disabled while the cleanup runs every hour, and a
+		// disabled field is not submitted: the hour already saved is kept, so a
+		// switch back to a daily run finds it.
+		if ( isset( $input['gc_hour'] ) ) {
+			$clean['gc_hour'] = Core_Diet_Schedule::sanitize_hour( $input['gc_hour'] );
+		} else {
+			$stored           = get_option( self::OPTION_NAME, array() );
+			$clean['gc_hour'] = is_array( $stored ) && isset( $stored['gc_hour'] ) ? Core_Diet_Schedule::sanitize_hour( $stored['gc_hour'] ) : $defaults['gc_hour'];
 		}
 
 		// 0 means "expire on events only". The ceiling is a month: past that the

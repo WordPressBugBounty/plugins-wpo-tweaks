@@ -212,7 +212,7 @@ class Core_Diet_Cache_Compat {
 		}
 
 		if ( self::is_litespeed() ) {
-			$warnings['litespeed'] = __( 'This server runs LiteSpeed. Its own LiteSpeed Cache plugin caches at server level, which is faster than any PHP cache including this one. We recommend using it instead.', 'wpo-tweaks' );
+			$warnings['litespeed'] = __( 'This server runs LiteSpeed, whose own LiteSpeed Cache plugin caches pages at server level. This page cache works here too. Its accelerator reads the same rules as on Apache, and the test it runs when you switch it on tells whether LiteSpeed hands out the stored copies without PHP. Use one of the two page caches, never both.', 'wpo-tweaks' );
 		}
 
 		return $warnings;

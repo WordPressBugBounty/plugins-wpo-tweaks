@@ -206,6 +206,11 @@ class Core_Diet_Tools {
 			$message .= ' ' . __( 'The page cache was left off because your hosting already serves one: switch it on from the Page cache tab if you want it anyway.', 'wpo-tweaks' );
 		}
 
+		$accelerator = class_exists( 'Core_Diet_Cache_Accelerator' ) ? Core_Diet_Cache_Accelerator::get_last_result() : null;
+		if ( $accelerator ) {
+			$message .= ' ' . $accelerator['message'];
+		}
+
 		if ( $skipped ) {
 			$message .= ' ' . sprintf(
 				/* translators: %s: comma-separated list of option names. */
@@ -218,6 +223,12 @@ class Core_Diet_Tools {
 				implode( ', ', $skipped )
 			);
 		}
+
+		// The page reloads when this answers, so the message is also kept for
+		// the reload. Up to 3.5.6 it only travelled in this response, which
+		// the page never showed, and what happened to the page cache went
+		// unsaid.
+		self::queue_notice( $message, ( $accelerator && ! $accelerator['ok'] ) || in_array( $cache_result, array( 'blocked', 'needs_ack' ), true ) ? 'warning' : 'success' );
 
 		wp_send_json_success( array( 'message' => $message ) );
 	}
@@ -349,6 +360,7 @@ class Core_Diet_Tools {
 					'enabled'          => true,
 					'ttl_hours'        => 12,
 					'precompress_gzip' => true,
+					'accelerator'      => true,
 				),
 			),
 
@@ -401,6 +413,7 @@ class Core_Diet_Tools {
 					'enabled'          => true,
 					'ttl_hours'        => 6,
 					'precompress_gzip' => true,
+					'accelerator'      => true,
 				),
 			),
 
@@ -465,6 +478,7 @@ class Core_Diet_Tools {
 					'enabled'          => true,
 					'ttl_hours'        => 12,
 					'precompress_gzip' => true,
+					'accelerator'      => true,
 				),
 			),
 
@@ -551,6 +565,7 @@ class Core_Diet_Tools {
 					'enabled'          => true,
 					'ttl_hours'        => 12,
 					'precompress_gzip' => true,
+					'accelerator'      => true,
 				),
 			),
 		);
@@ -702,6 +717,15 @@ class Core_Diet_Tools {
 				continue;
 			}
 
+			if ( self::CACHE_ACCELERATOR_REC_KEY === $key ) {
+				self::set_cache_option( 'accelerator', (bool) $value );
+				$accelerator = Core_Diet_Cache_Accelerator::get_last_result();
+				if ( $accelerator ) {
+					self::queue_notice( $accelerator['message'], $accelerator['ok'] ? 'success' : 'warning' );
+				}
+				continue;
+			}
+
 			if ( ! array_key_exists( $key, $defaults ) ) {
 				continue;
 			}
@@ -786,6 +810,26 @@ class Core_Diet_Tools {
 	/** @var string Reserved recommendation key for the gzip precompression toggle. */
 	const CACHE_GZIP_REC_KEY = 'cache_precompress_gzip';
 
+	/** @var string Reserved recommendation key for the accelerator toggle. */
+	const CACHE_ACCELERATOR_REC_KEY = 'cache_accelerator';
+
+	/**
+	 * Keep a message for the next load of the settings page, for this user.
+	 *
+	 * @param string $message Message.
+	 * @param string $type    success or warning.
+	 */
+	private static function queue_notice( $message, $type = 'success' ) {
+		set_transient(
+			'core_diet_oneshot_notice_' . get_current_user_id(),
+			array(
+				'message' => (string) $message,
+				'type'    => 'warning' === $type ? 'warning' : 'success',
+			),
+			MINUTE_IN_SECONDS
+		);
+	}
+
 	/**
 	 * Recommendations for the Cache tab.
 	 *
@@ -818,6 +862,19 @@ class Core_Diet_Tools {
 					? __( 'Serving a stored copy is the single biggest speed gain available here. Your hosting already caches pages, though, so read the warning on the Cache tab before switching it on.', 'wpo-tweaks' )
 					: __( 'Serves anonymous visitors a copy stored on disk instead of building the page again. It is the single biggest speed gain available, and logged in visitors, carts and forms always get the live site.', 'wpo-tweaks' ),
 				'risk'   => $warnings ? 'moderate' : 'recommended',
+				'tab'    => 'cache',
+			);
+		}
+
+		// The accelerator, once the engine is on and only where it can run: the
+		// reason it cannot is on the Cache tab, and suggesting a switch that
+		// could only fail is what the analyzer never does elsewhere.
+		if ( $cache_on && ! $this->cache_setting_enabled( 'accelerator' ) && class_exists( 'Core_Diet_Cache_Accelerator' ) && '' === Core_Diet_Cache_Accelerator::get_unavailable_reason() ) {
+			$out[] = array(
+				'key'    => self::CACHE_ACCELERATOR_REC_KEY,
+				'label'  => __( 'Serve cached pages from the server', 'wpo-tweaks' ),
+				'reason' => __( 'The server hands out the stored copy by itself, without starting PHP or WordPress, which is the fastest a page can be served. It is tested on your home page before it stays on.', 'wpo-tweaks' ),
+				'risk'   => 'recommended',
 				'tab'    => 'cache',
 			);
 		}

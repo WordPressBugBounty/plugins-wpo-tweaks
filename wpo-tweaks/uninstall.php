@@ -21,10 +21,22 @@ delete_option( 'core_diet_version' );
 delete_option( 'core_diet_cache_settings' );
 delete_option( 'core_diet_cache_last_gc' );
 delete_option( 'core_diet_cache_proxy_mismatch' );
+delete_option( 'core_diet_cache_mobile_markup' );
+delete_option( 'core_diet_cache_clock_key' );
 delete_transient( 'core_diet_cache_auto_disabled' );
+delete_transient( 'core_diet_cache_diagnose' );
+delete_transient( 'core_diet_schedule_moved_core_diet_cache_gc' );
+delete_transient( 'core_diet_oneshot_notice_' . get_current_user_id() );
 wp_clear_scheduled_hook( 'core_diet_cache_gc' );
 
 require_once plugin_dir_path( __FILE__ ) . 'includes/cache/class-core-diet-cache-store.php';
+require_once plugin_dir_path( __FILE__ ) . 'includes/cache/class-core-diet-cache-accelerator.php';
+
+// The accelerator rules go before the files they serve: normally deactivation
+// took them out already, and this covers a plugin deleted some other way.
+if ( class_exists( 'Core_Diet_Cache_Accelerator' ) ) {
+	Core_Diet_Cache_Accelerator::remove();
+}
 
 if ( class_exists( 'Core_Diet_Cache_Store' ) ) {
 	Core_Diet_Cache_Store::purge_all();

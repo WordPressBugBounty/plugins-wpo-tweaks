@@ -229,6 +229,12 @@ class Core_Diet {
 			Core_Diet_Cache_Store::prepare();
 		}
 
+		// Deactivating took the accelerator rules out and kept the setting. On
+		// the same install, where they were tested, they come straight back.
+		if ( class_exists( 'Core_Diet_Cache_Accelerator' ) && Core_Diet_Cache_Accelerator::is_verified_here() ) {
+			Core_Diet_Cache_Accelerator::sync();
+		}
+
 		// Store version for future upgrades.
 		update_option( 'core_diet_version', CORE_DIET_VERSION );
 
@@ -240,6 +246,17 @@ class Core_Diet {
 	 * Deactivation callback.
 	 */
 	public static function deactivate() {
+		/*
+		 * Before the capability check, on purpose. Deactivating from WP-CLI
+		 * without --user has no current user, and returning here left the page
+		 * cache in place; with the accelerator on, Apache would then go on
+		 * serving the pages of a plugin that is off, with nothing left to expire
+		 * them. Taking the rules out and emptying the cache only stops things.
+		 */
+		if ( class_exists( 'Core_Diet_Cache' ) ) {
+			Core_Diet_Cache::deactivate();
+		}
+
 		if ( ! current_user_can( 'activate_plugins' ) ) {
 			return;
 		}
@@ -250,13 +267,6 @@ class Core_Diet {
 
 		// Unschedule the transient-cleanup cron event.
 		wp_clear_scheduled_hook( 'core_diet_clean_transients' );
-
-		// Empty the page cache and stop its garbage collector. Leaving cached
-		// HTML on disk while the plugin is inactive is harmless (nothing serves
-		// it), but it would be stale the moment the plugin came back.
-		if ( class_exists( 'Core_Diet_Cache' ) ) {
-			Core_Diet_Cache::deactivate();
-		}
 
 		// Remove our .htaccess rules so they do not linger while inactive.
 		$htaccess = new Core_Diet_Htaccess( Core_Diet_Settings::get_instance() );
@@ -313,10 +323,16 @@ class Core_Diet {
 			Core_Diet_Cache_Store::purge_all();
 
 			// Up to 3.5.5 the scheduled cleanup deleted the silence file of the
-			// cache root, taking it for a cached page. prepare() only writes the
-			// hardening files that are missing.
+			// cache root, taking it for a cached page. prepare() writes the
+			// hardening files that are missing or say something else.
 			if ( Core_Diet_Cache::is_enabled() ) {
 				Core_Diet_Cache_Store::prepare();
+			}
+
+			// The rules of the accelerator are rebuilt from the code of this
+			// version, the same as the browser caching block above.
+			if ( class_exists( 'Core_Diet_Cache_Accelerator' ) ) {
+				Core_Diet_Cache_Accelerator::sync();
 			}
 		}
 

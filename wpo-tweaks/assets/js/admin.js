@@ -781,6 +781,26 @@
 		}
 
 		initCacheSearch();
+		initCacheSchedule();
+	}
+
+	/**
+	 * The hour of the cleanup means nothing when it runs every hour.
+	 *
+	 * A disabled select is not submitted, and the setting keeps its value on
+	 * the server, so switching back to a daily run finds the hour it had.
+	 */
+	function initCacheSchedule() {
+		var frequency = document.getElementById( 'core_diet_cache_gc_frequency' );
+		var hour      = document.getElementById( 'core_diet_cache_gc_hour' );
+
+		if ( ! frequency || ! hour ) {
+			return;
+		}
+
+		frequency.addEventListener( 'change', function() {
+			hour.disabled = 'hourly' === frequency.value;
+		} );
 	}
 
 	/**

@@ -201,6 +201,7 @@ class Core_Diet_Admin {
 			 */
 			settings_errors();
 			$this->render_restored_notice();
+			$this->render_oneshot_notice();
 			?>
 
 			<div class="core-diet-layout">
@@ -329,6 +330,27 @@ class Core_Diet_Admin {
 			</div><!-- .core-diet-layout -->
 		</div>
 		<?php
+	}
+
+	/**
+	 * Show once what a profile or the analyzer did, after the page reloads.
+	 *
+	 * Both answer over AJAX and the page reloads right away, so a message that
+	 * only travels in the response is never read.
+	 */
+	private function render_oneshot_notice() {
+		$key    = 'core_diet_oneshot_notice_' . get_current_user_id();
+		$notice = get_transient( $key );
+
+		if ( ! is_array( $notice ) || empty( $notice['message'] ) ) {
+			return;
+		}
+
+		delete_transient( $key );
+
+		$type = isset( $notice['type'] ) && 'warning' === $notice['type'] ? 'warning' : 'success';
+
+		echo '<div class="notice notice-' . esc_attr( $type ) . ' is-dismissible"><p>' . esc_html( (string) $notice['message'] ) . '</p></div>';
 	}
 
 	/**

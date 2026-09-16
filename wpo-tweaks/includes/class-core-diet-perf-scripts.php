@@ -145,11 +145,11 @@ class Core_Diet_Perf_Scripts {
 			}
 		}
 
-		// Check user agent for IE9 compatibility
-		$user_agent = dietpress_get_user_agent();
-		if ( ! empty( $user_agent ) && strpos( $user_agent, 'MSIE 9.' ) !== false ) {
-			return $tag;
-		}
+		// There used to be an exception here for Internet Explorer 9, which
+		// left the scripts without defer when the User-Agent said "MSIE 9.".
+		// With the page cache on, that page was then stored for everybody, so
+		// anyone could strip defer from the copy every visitor got by sending
+		// that header. The browser has been unsupported for years.
 
 		// Add defer attribute
 		return str_replace( ' src', ' defer src', $tag );

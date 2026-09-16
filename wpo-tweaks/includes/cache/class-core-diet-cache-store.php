@@ -22,6 +22,14 @@ class Core_Diet_Cache_Store {
 	const MAX_DEPTH = 12;
 
 	/**
+	 * Rules for the .htaccess of the cache root while nothing may be served from it.
+	 *
+	 * Byte for byte what 3.5.x wrote, so updating does not rewrite the file on
+	 * the sites that never switch the accelerator on.
+	 */
+	const DENY_RULES = "# DietPress page cache. Files here are served by PHP, never directly.\n<IfModule mod_authz_core.c>\n\tRequire all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n\tOrder allow,deny\n\tDeny from all\n</IfModule>\n";
+
+	/**
 	 * Absolute path of the cache root, with no trailing slash.
 	 *
 	 * @return string
@@ -54,26 +62,32 @@ class Core_Diet_Cache_Store {
 	/**
 	 * Create the cache root and its hardening files.
 	 *
+	 * The .htaccess of the folder closes it to the web, except for the copies
+	 * the accelerator serves when it is on; both Apache syntaxes are written
+	 * because 2.2 and 2.4 are still both out there on shared hosting. It is
+	 * rewritten when it no longer says what it should, and left alone when it
+	 * does.
+	 *
+	 * @param string|null $rules Rules for the folder. Null asks the accelerator,
+	 *                           which reads options; the capture passes them
+	 *                           in, because it runs inside an output buffer
+	 *                           handler where no option may be touched.
 	 * @return bool True when the root exists and is usable afterwards.
 	 */
-	public static function prepare() {
+	public static function prepare( $rules = null ) {
 		$root = self::get_root();
 
 		if ( ! is_dir( $root ) && ! wp_mkdir_p( $root ) ) {
 			return false;
 		}
 
-		// Nothing here is meant to be reachable over HTTP: the module serves the
-		// files through PHP. Both Apache syntaxes are written because 2.2 and
-		// 2.4 are still both out there on shared hosting.
-		$htaccess = $root . '/.htaccess';
-		if ( ! file_exists( $htaccess ) ) {
-			$rules = "# DietPress page cache. Files here are served by PHP, never directly.\n"
-				. "<IfModule mod_authz_core.c>\n\tRequire all denied\n</IfModule>\n"
-				. "<IfModule !mod_authz_core.c>\n\tOrder allow,deny\n\tDeny from all\n</IfModule>\n";
-			// phpcs:ignore PluginCheck.CodeAnalysis.WriteFile.FileWriteFound, WordPress.WP.AlternativeFunctions -- Hardening file for the plugin's own cache directory; WP_Filesystem needs credentials this context does not have.
-			@file_put_contents( $htaccess, $rules, LOCK_EX );
+		if ( null === $rules ) {
+			$rules = class_exists( 'Core_Diet_Cache_Accelerator', false )
+				? Core_Diet_Cache_Accelerator::current_cache_dir_rules()
+				: self::DENY_RULES;
 		}
+
+		self::write_hardening( $rules );
 
 		$index = $root . '/index.php';
 		if ( ! file_exists( $index ) ) {
@@ -82,6 +96,45 @@ class Core_Diet_Cache_Store {
 		}
 
 		return is_dir( $root ) && wp_is_writable( $root );
+	}
+
+	/**
+	 * Write the .htaccess of the cache root when it says something else.
+	 *
+	 * Through a temporary file and rename(), so the server never reads half a
+	 * file: with the accelerator on, a torn .htaccess here is an error 500 on
+	 * every page it serves.
+	 *
+	 * @param string $rules Content.
+	 * @return bool Whether the file holds that content afterwards.
+	 */
+	public static function write_hardening( $rules ) {
+		$root = self::get_root();
+		if ( ! is_dir( $root ) ) {
+			return false;
+		}
+
+		$file = $root . '/.htaccess';
+
+		// phpcs:disable WordPress.WP.AlternativeFunctions, WordPress.PHP.NoSilencedErrors.Discouraged, PluginCheck.CodeAnalysis.WriteFile.FileWriteFound -- Hardening file for the plugin's own cache directory, written during requests where WP_Filesystem has no credentials.
+		if ( is_readable( $file ) && (string) @file_get_contents( $file ) === (string) $rules ) {
+			return true;
+		}
+
+		$tmp = $root . '/.' . uniqid( 'dp', true ) . '.tmp';
+		if ( false === @file_put_contents( $tmp, (string) $rules, LOCK_EX ) ) {
+			return false;
+		}
+
+		@chmod( $tmp, defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644 );
+
+		if ( ! @rename( $tmp, $file ) ) {
+			wp_delete_file( $tmp );
+			return false;
+		}
+		// phpcs:enable WordPress.WP.AlternativeFunctions, WordPress.PHP.NoSilencedErrors.Discouraged, PluginCheck.CodeAnalysis.WriteFile.FileWriteFound
+
+		return true;
 	}
 
 	/**
@@ -105,8 +158,23 @@ class Core_Diet_Cache_Store {
 		 * the raw high bytes; the segment allowlist in dir_for_path() is what
 		 * actually decides whether a path may be put on disk.
 		 */
-		$uri = sanitize_url( wp_unslash( $_SERVER['REQUEST_URI'] ) );
-		$uri = strtok( $uri, '?' );
+		return self::dir_for_uri( sanitize_url( wp_unslash( $_SERVER['REQUEST_URI'] ) ) );
+	}
+
+	/**
+	 * Map a request URI, as sanitize_url() leaves it, to its cache directory.
+	 *
+	 * The engine photographs the URI when the plugin loads and maps that, so
+	 * code that rewrites REQUEST_URI during the request (a language plugin
+	 * routing /en/about/ to the page of /about/, for instance) cannot make the
+	 * copy be filed under another address. It is also the address the server
+	 * sees, which is what the accelerator looks the copy up under.
+	 *
+	 * @param string $uri Request URI.
+	 * @return string|false
+	 */
+	public static function dir_for_uri( $uri ) {
+		$uri = strtok( (string) $uri, '?' );
 
 		return self::dir_for_path( (string) $uri, self::get_request_host() );
 	}
@@ -238,21 +306,47 @@ class Core_Diet_Cache_Store {
 	}
 
 	/**
+	 * Start of the names a copy gets for the hours it is valid in.
+	 *
+	 * The copy built for a phone has its own names, so the server hands each
+	 * device the copy WordPress would have built for it.
+	 *
+	 * @param bool $https          HTTPS copy.
+	 * @param bool $trailing_slash Trailing slash copy.
+	 * @param bool $mobile         Copy built for a phone.
+	 * @return string
+	 */
+	public static function hour_name_base( $https, $trailing_slash, $mobile = false ) {
+		return 'index' . ( $trailing_slash ? '' : '-ns' ) . ( $mobile ? '-mobile' : '' ) . ( $https ? '-https' : '' );
+	}
+
+	/**
+	 * Whether a file name is one of those hour names.
+	 *
+	 * @param string $name File name, without its directory.
+	 * @return bool
+	 */
+	public static function is_hour_name( $name ) {
+		return (bool) preg_match( '/^index(-ns)?(-mobile)?(-https)?\.[0-9]{10}\.html$/', (string) $name );
+	}
+
+	/**
 	 * Write a cached page and, optionally, its gzipped twin.
 	 *
 	 * The write is atomic: a temporary file in the same directory followed by
 	 * rename(), so a visitor can never be served a half-written page.
 	 *
-	 * @param string $dir      Target directory.
-	 * @param string $filename Target file name.
-	 * @param string $contents Page HTML.
+	 * @param string      $dir       Target directory.
+	 * @param string      $filename  Target file name.
+	 * @param string      $contents  Page HTML.
+	 * @param string|null $hardening Rules for the root, if it has to be created.
 	 * @return bool
 	 */
-	public static function write( $dir, $filename, $contents ) {
+	public static function write( $dir, $filename, $contents, $hardening = null ) {
 		// The root comes with its hardening files, not as a side effect of
 		// creating a page directory: a cache folder deleted by hand or left out
 		// by a migration used to come back without its .htaccess and index.php.
-		if ( ! is_dir( self::get_root() ) && ! self::prepare() ) {
+		if ( ! is_dir( self::get_root() ) && ! self::prepare( null === $hardening ? self::DENY_RULES : $hardening ) ) {
 			return false;
 		}
 
@@ -296,13 +390,28 @@ class Core_Diet_Cache_Store {
 
 		$deleted = 0;
 
+		// The copies first, their hour names after, and those listed again. glob()
+		// sorts every name before its copy, and a capture that linked names to the
+		// copy between the two deletes left them pointing at the page the purge
+		// was removing, which the server then served until they ran out. Once the
+		// copy is gone nothing can link to it, so the second listing catches every
+		// name made in between.
 		foreach ( (array) glob( $dir . '/index*.html' ) as $file ) {
+			if ( self::is_hour_name( basename( (string) $file ) ) ) {
+				continue;
+			}
 			wp_delete_file( $file );
 			++$deleted;
 		}
 		foreach ( (array) glob( $dir . '/index*.html.gz' ) as $file ) {
 			wp_delete_file( $file );
 			++$deleted;
+		}
+		foreach ( (array) glob( $dir . '/index*.html' ) as $file ) {
+			if ( self::is_hour_name( basename( (string) $file ) ) ) {
+				wp_delete_file( $file );
+				++$deleted;
+			}
 		}
 
 		// Pagination and comment pagination of this very page. Two globs rather
@@ -404,6 +513,20 @@ class Core_Diet_Cache_Store {
 
 			$name = $item->getFilename();
 
+			// The names a copy has for the hours it is valid in carry their hour,
+			// so they go once that hour is long over, whatever the lifetime. The
+			// hour is the server's, which can be up to fourteen hours either side
+			// of UTC, hence the margin; until then they only keep a copy on disk.
+			if ( self::is_hour_name( $name ) ) {
+				preg_match( '/\.(\d{4})(\d{2})(\d{2})(\d{2})\.html$/', $name, $hour );
+				$stamp = gmmktime( (int) $hour[4], 0, 0, (int) $hour[2], (int) $hour[3], (int) $hour[1] );
+				if ( $stamp < $now - 16 * HOUR_IN_SECONDS ) {
+					wp_delete_file( $path );
+					++$deleted;
+				}
+				continue;
+			}
+
 			$is_tmp = '.tmp' === substr( $name, -4 );
 
 			if ( ! $is_tmp && ! self::is_page_file( $name ) ) {
@@ -432,6 +555,35 @@ class Core_Diet_Cache_Store {
 
 			if ( $ttl > 0 && $age > $ttl ) {
 				wp_delete_file( $path );
+				++$deleted;
+			}
+		}
+
+		return $deleted;
+	}
+
+	/**
+	 * Delete every name a copy has for the hours it is valid in.
+	 *
+	 * The pages themselves stay, and PHP keeps serving them. What goes is what
+	 * lets a server serve them without PHP, which matters where the rules cannot
+	 * be taken out from here: on nginx they live in its configuration, so
+	 * switching the accelerator off, or a test that fails, has to leave them
+	 * nothing to find.
+	 *
+	 * @return int Names deleted.
+	 */
+	public static function delete_hour_names() {
+		$items = self::get_iterator( self::get_root(), RecursiveIteratorIterator::LEAVES_ONLY );
+		if ( ! $items ) {
+			return 0;
+		}
+
+		$deleted = 0;
+
+		foreach ( $items as $item ) {
+			if ( $item->isFile() && self::is_hour_name( $item->getFilename() ) ) {
+				wp_delete_file( $item->getPathname() );
 				++$deleted;
 			}
 		}
@@ -515,7 +667,7 @@ class Core_Diet_Cache_Store {
 	 * @return bool
 	 */
 	private static function is_page_file( $name ) {
-		if ( 0 !== strpos( $name, 'index' ) ) {
+		if ( 0 !== strpos( $name, 'index' ) || self::is_hour_name( $name ) ) {
 			return false;
 		}
 
@@ -591,6 +743,54 @@ class Core_Diet_Cache_Store {
 			return '';
 		}
 		return self::normalize_host( sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) );
+	}
+
+	/**
+	 * Port the request names in its Host header, if it names one.
+	 *
+	 * @return int|null Null for none; -1 for something that is not a port.
+	 */
+	public static function get_request_port() {
+		if ( ! isset( $_SERVER['HTTP_HOST'] ) ) {
+			return null;
+		}
+		return self::port_of( sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) );
+	}
+
+	/**
+	 * Port of the site's home URL, if it names one.
+	 *
+	 * @return int|null
+	 */
+	public static function get_home_port() {
+		$port = wp_parse_url( home_url(), PHP_URL_PORT );
+		return is_int( $port ) ? $port : null;
+	}
+
+	/**
+	 * The port part of a host header.
+	 *
+	 * @param string $authority Host, with or without port, IPv6 in brackets.
+	 * @return int|null Null for none; -1 for something that is not a port.
+	 */
+	private static function port_of( $authority ) {
+		$authority = trim( (string) $authority );
+
+		if ( '[' === substr( $authority, 0, 1 ) ) {
+			$end  = strpos( $authority, ']' );
+			$rest = false === $end ? '' : substr( $authority, $end + 1 );
+		} else {
+			$colon = strpos( $authority, ':' );
+			$rest  = false === $colon ? '' : substr( $authority, $colon );
+		}
+
+		if ( '' === $rest ) {
+			return null;
+		}
+
+		$digits = substr( $rest, 1 );
+
+		return ( ':' === $rest[0] && '' !== $digits && ctype_digit( $digits ) ) ? (int) $digits : -1;
 	}
 
 	/**

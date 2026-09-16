@@ -46,9 +46,11 @@ class Core_Diet_Cache {
 	private function __construct() {
 		$dir = CORE_DIET_DIR . 'includes/cache/';
 
+		require_once CORE_DIET_DIR . 'includes/class-core-diet-schedule.php';
 		require_once $dir . 'class-core-diet-cache-settings.php';
 		require_once $dir . 'class-core-diet-cache-store.php';
 		require_once $dir . 'class-core-diet-cache-compat.php';
+		require_once $dir . 'class-core-diet-cache-accelerator.php';
 
 		$this->settings = Core_Diet_Cache_Settings::get_instance();
 
@@ -71,7 +73,19 @@ class Core_Diet_Cache {
 		 */
 		add_action( 'activated_plugin', array( __CLASS__, 'disable_on_new_conflict' ), 20 );
 
+		/*
+		 * The accelerator rules hold values that other settings decide: the
+		 * lifetime browsers may keep a page (the main option) and the address of
+		 * the site. Registered whether or not the cache is on, because the rules
+		 * can also have to go away.
+		 */
+		add_action( 'update_option_core_diet_settings', array( __CLASS__, 'on_rules_input_changed' ) );
+		add_action( 'update_option_home', array( __CLASS__, 'on_rules_input_changed' ) );
+		add_action( 'update_option_siteurl', array( __CLASS__, 'on_rules_input_changed' ) );
+
 		if ( is_admin() ) {
+			add_action( 'admin_init', array( 'Core_Diet_Cache_Accelerator', 'maybe_sync' ), 20 );
+
 			require_once $dir . 'class-core-diet-cache-admin.php';
 			$admin = new Core_Diet_Cache_Admin( $this->settings );
 			$admin->init();
@@ -133,36 +147,137 @@ class Core_Diet_Cache {
 	 * @param mixed $new New option value.
 	 */
 	public function on_settings_saved( $old, $new ) {
-		$was = is_array( $old ) && ! empty( $old['enabled'] );
-		$is  = is_array( $new ) && ! empty( $new['enabled'] );
+		$old = is_array( $old ) ? $old : array();
+		$new = is_array( $new ) ? $new : array();
+		$was = ! empty( $old['enabled'] );
+		$is  = ! empty( $new['enabled'] );
 
 		$this->settings->refresh();
 
-		if ( $is && ! $was ) {
+		if ( ! $is ) {
+			if ( $was ) {
+				self::on_disable();
+			}
+			return;
+		}
+
+		if ( ! $was ) {
 			self::on_enable();
-			return;
-		}
-
-		if ( ! $is && $was ) {
-			self::on_disable();
-			return;
-		}
-
-		// Still on, but something else changed. Only the settings that decide
-		// what gets written are worth a purge; wiping the cache every time the
-		// form is submitted makes the module look like it never fills up, which
-		// is the opposite of reassuring. The lifetime is read when a page is
-		// served, so changing it needs no purge at all.
-		if ( $is ) {
+		} else {
+			// Still on, but something else changed. Only the settings that
+			// decide what gets written are worth a purge; wiping the cache every
+			// time the form is submitted makes the module look like it never
+			// fills up, which is the opposite of reassuring. The lifetime is
+			// read when a page is served, so changing it needs no purge at all.
 			foreach ( array( 'exclude_urls', 'ignore_query_params', 'precompress_gzip', 'separate_mobile' ) as $key ) {
-				$before = isset( $old[ $key ] ) ? $old[ $key ] : null;
-				$after  = isset( $new[ $key ] ) ? $new[ $key ] : null;
-
-				if ( $before !== $after ) {
+				if ( self::changed( $old, $new, $key ) ) {
 					Core_Diet_Cache_Store::purge_all();
-					return;
+					break;
 				}
 			}
+
+			// With the accelerator on, the lifetime is baked into the names each
+			// copy has for the hours it is valid in, so a shorter one would not
+			// reach the copies the server already serves until those names ran
+			// out. Only a shorter lifetime purges: a longer one, or none, keeps
+			// every name valid.
+			if ( ! empty( $new['accelerator'] ) && self::changed( $old, $new, 'ttl_hours' ) ) {
+				$ttl_before = isset( $old['ttl_hours'] ) ? (int) $old['ttl_hours'] : 12;
+				$ttl_after  = isset( $new['ttl_hours'] ) ? (int) $new['ttl_hours'] : 12;
+				if ( $ttl_after > 0 && ( 0 === $ttl_before || $ttl_after < $ttl_before ) ) {
+					Core_Diet_Cache_Store::purge_all();
+				}
+			}
+
+			// Moved only when the schedule itself changed: rescheduling on every
+			// save would push the next cleanup forward each time.
+			if ( self::changed( $old, $new, 'gc_frequency' ) || self::changed( $old, $new, 'gc_hour' ) ) {
+				Core_Diet_Schedule::reschedule( self::CRON_HOOK, $this->settings->get( 'gc_frequency' ), $this->settings->get( 'gc_hour' ) );
+			}
+		}
+
+		$accelerator_was = $was && ! empty( $old['accelerator'] );
+		$accelerator_is  = ! empty( $new['accelerator'] );
+
+		if ( $accelerator_is && ! $accelerator_was ) {
+			self::switch_accelerator_on( $new );
+		} elseif ( ! $accelerator_is && $accelerator_was ) {
+			Core_Diet_Cache_Accelerator::remove();
+		} elseif ( $accelerator_is && ( self::changed( $old, $new, 'exclude_urls' ) || self::changed( $old, $new, 'separate_mobile' ) ) ) {
+			// The rules carry the exclusions and the mobile test.
+			Core_Diet_Cache_Accelerator::sync();
+		}
+	}
+
+	/**
+	 * Whether a key differs between two versions of the option.
+	 *
+	 * @param array  $old Previous value.
+	 * @param array  $new New value.
+	 * @param string $key Setting key.
+	 * @return bool
+	 */
+	private static function changed( $old, $new, $key ) {
+		// A key the stored option does not have yet holds its default: the
+		// option of 3.5.6 has no cleanup schedule, and reading that as a change
+		// moved the cleanup of every site on its first save after updating.
+		$defaults = Core_Diet_Cache_Settings::get_defaults();
+		$fallback = array_key_exists( $key, $defaults ) ? $defaults[ $key ] : null;
+		$before   = array_key_exists( $key, $old ) ? $old[ $key ] : $fallback;
+		$after    = array_key_exists( $key, $new ) ? $new[ $key ] : $fallback;
+
+		return $before !== $after;
+	}
+
+	/**
+	 * Switch the accelerator on, and back off when the site cannot prove it works.
+	 *
+	 * The setting was already saved when this runs, which is what lets the self
+	 * test inside find it on. On failure it is saved again without it; that
+	 * second save comes back here as "switched off" and removes whatever the
+	 * attempt left.
+	 *
+	 * @param array $new Saved option value.
+	 */
+	private static function switch_accelerator_on( $new ) {
+		$result = Core_Diet_Cache_Accelerator::enable();
+
+		if ( ! $result['ok'] ) {
+			$new['accelerator'] = false;
+			update_option( Core_Diet_Cache_Settings::OPTION_NAME, $new );
+		}
+
+		/*
+		 * Through the notice of the plugin itself, the same one the quick
+		 * profiles use, and not through add_settings_error(): that one comes out
+		 * in bold, because settings_errors() wraps the whole message in <strong>
+		 * (wp-admin/includes/template.php, get_settings_errors() and the printing
+		 * below it in WordPress 7.1), and it is only cleared on the load that
+		 * carries settings-updated, so it could stay on the screen after a plain
+		 * reload. This one is dismissible, reads like the rest and goes on the
+		 * first load that shows it. The profiles and the analyzer read
+		 * get_last_result(), and WP-CLI shows nothing. Escaped where it is
+		 * printed (render_oneshot_notice()), because part of it comes from the
+		 * answer the site gave to the self test.
+		 */
+		if ( function_exists( 'set_transient' ) && function_exists( 'get_current_user_id' ) && get_current_user_id() ) {
+			set_transient(
+				'core_diet_oneshot_notice_' . get_current_user_id(),
+				array(
+					'message' => (string) $result['message'],
+					'type'    => $result['ok'] ? 'success' : 'warning',
+				),
+				MINUTE_IN_SECONDS
+			);
+		}
+	}
+
+	/**
+	 * Rewrite the accelerator rules when something they are built from changed.
+	 */
+	public static function on_rules_input_changed() {
+		if ( Core_Diet_Cache_Accelerator::is_switched_on() || null !== Core_Diet_Cache_Accelerator::read_block() ) {
+			Core_Diet_Cache_Accelerator::sync();
 		}
 	}
 
@@ -173,8 +288,19 @@ class Core_Diet_Cache {
 	 * @param mixed  $value  Stored value.
 	 */
 	public function on_settings_added( $option, $value ) {
-		if ( is_array( $value ) && ! empty( $value['enabled'] ) ) {
-			self::on_enable();
+		if ( ! is_array( $value ) || empty( $value['enabled'] ) ) {
+			return;
+		}
+
+		self::on_enable();
+
+		// update_option() on an option that does not exist yet goes through
+		// add_option() (wp-includes/option.php:928-929), so a quick profile on a
+		// fresh install saved the accelerator on without writing its rules or
+		// testing them. It is switched on here the same way a save does.
+		if ( ! empty( $value['accelerator'] ) ) {
+			$this->settings->refresh();
+			self::switch_accelerator_on( $value );
 		}
 	}
 
@@ -196,17 +322,20 @@ class Core_Diet_Cache {
 	 * loaded, so the last one to save wins (_set_cron_array()).
 	 */
 	public static function maybe_schedule_gc() {
-		if ( wp_next_scheduled( self::CRON_HOOK ) ) {
-			return;
-		}
+		$settings = Core_Diet_Cache_Settings::get_instance();
 
-		wp_schedule_event( time() + HOUR_IN_SECONDS, 'twicedaily', self::CRON_HOOK );
+		Core_Diet_Schedule::ensure( self::CRON_HOOK, $settings->get( 'gc_frequency' ), $settings->get( 'gc_hour' ) );
 	}
 
 	/**
-	 * Empty the cache and stop the garbage collector.
+	 * Empty the cache, stop the garbage collector and take the rules out.
+	 *
+	 * The rules go first: with the accelerator on, the server serves from the
+	 * cache folder, and removing the files before the rules would leave a
+	 * window where it looks for copies that are being deleted.
 	 */
 	public static function on_disable() {
+		Core_Diet_Cache_Accelerator::remove( false );
 		Core_Diet_Cache_Store::purge_all();
 		wp_clear_scheduled_hook( self::CRON_HOOK );
 	}
@@ -221,6 +350,9 @@ class Core_Diet_Cache {
 	public static function deactivate() {
 		if ( ! class_exists( 'Core_Diet_Cache_Store', false ) ) {
 			require_once CORE_DIET_DIR . 'includes/cache/class-core-diet-cache-store.php';
+		}
+		if ( ! class_exists( 'Core_Diet_Cache_Accelerator', false ) ) {
+			require_once CORE_DIET_DIR . 'includes/cache/class-core-diet-cache-accelerator.php';
 		}
 		self::on_disable();
 	}

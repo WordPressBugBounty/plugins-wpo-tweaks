@@ -79,13 +79,23 @@ class Core_Diet_Cache_Purge {
 			'update_option_show_on_front',
 			'update_option_page_on_front',
 			'update_option_page_for_posts',
-			// A store that leaves "coming soon" mode renders different HTML on
-			// every URL. WooCommerce publishes this change but has no way to
-			// tell us, so the option itself is the signal.
-			'update_option_woocommerce_coming_soon',
-			'update_option_woocommerce_store_pages_only',
 		) as $hook ) {
 			add_action( $hook, array( $this, 'purge_all' ) );
+		}
+
+		/*
+		 * A store that leaves "coming soon" mode renders different HTML on every
+		 * URL. WooCommerce publishes this change but has no way to tell us, so
+		 * the options themselves are the signal. In "store pages only" mode the
+		 * rest of the site is cached, so a page that becomes the shop, the cart,
+		 * the checkout, the terms or the coming soon page (the list
+		 * WCAdminHelper::is_current_page_store_page() checks) would otherwise
+		 * keep its public copy until it expired. Both the update and the first
+		 * write, which goes through add_option() and fires another hook.
+		 */
+		foreach ( array( 'coming_soon', 'store_pages_only', 'shop_page_id', 'cart_page_id', 'checkout_page_id', 'terms_page_id', 'coming_soon_page_id' ) as $name ) {
+			add_action( 'update_option_woocommerce_' . $name, array( $this, 'purge_all' ) );
+			add_action( 'add_option_woocommerce_' . $name, array( $this, 'purge_all' ) );
 		}
 
 		// Public API.

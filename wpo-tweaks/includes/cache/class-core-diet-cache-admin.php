@@ -231,7 +231,7 @@ class Core_Diet_Cache_Admin {
 			wp_send_json_error( __( 'Unauthorized.', 'wpo-tweaks' ), 403 );
 		}
 
-		$result = $this->run_self_test();
+		$result = self::test_and_react();
 
 		$payload = array(
 			'message' => $result['message'],
@@ -246,6 +246,75 @@ class Core_Diet_Cache_Admin {
 	}
 
 	/**
+	 * Run the test of the Cache tab, and switch the accelerator off when it fails visitors.
+	 *
+	 * Apart from the AJAX handler, which checks the nonce and the capability
+	 * before calling it, so the release checks can run it as it runs there.
+	 *
+	 * @return array Result of the self test or of enable().
+	 */
+	public static function test_and_react() {
+		// A switched on accelerator that was tested somewhere else, a site that
+		// moved server or address, is tested again for real, which is what lets
+		// it serve again. Otherwise the test only reads what the site does.
+		if ( Core_Diet_Cache_Accelerator::is_switched_on() && ! Core_Diet_Cache_Accelerator::is_verified_here() ) {
+			$result = Core_Diet_Cache_Accelerator::enable();
+
+			// Failing here takes the setting off too, the same as when it is
+			// switched on from the form: a switch that says on and does
+			// nothing is the one thing the tab must never show.
+			if ( ! $result['ok'] ) {
+				Core_Diet_Tools::set_cache_option( 'accelerator', false );
+			}
+
+			return $result;
+		}
+
+		require_once CORE_DIET_DIR . 'includes/cache/class-core-diet-cache-self-test.php';
+		$result = Core_Diet_Cache_Self_Test::run();
+
+		// Switched on but unable to run: the rules are out and PHP serves, so
+		// what the test says about the rules is beside the point. The reason is.
+		// Unless the server still answered from the cache by itself, or failed
+		// where it does: names the pause did not reach (a link made by hand, a
+		// copy of the cache restored from a backup), or a pause that has not
+		// happened yet, because maybe_sync() does not run on this AJAX request.
+		// Either way visitors get that answer, so the pause happens now.
+		$reason = Core_Diet_Cache_Accelerator::is_switched_on() ? Core_Diet_Cache_Accelerator::get_unavailable_reason() : '';
+		if ( '' !== $reason ) {
+			$served  = ! empty( $result['static'] ) || ! empty( $result['broken'] ) || ! empty( $result['headerless'] );
+			$cleared = $served && Core_Diet_Cache_Accelerator::pause();
+
+			if ( $cleared ) {
+				$after = __( 'The server was still answering the home page from the cache by itself, so the names it finds the stored pages under have been removed, and PHP serves them again.', 'wpo-tweaks' );
+			} elseif ( ! $served && ! empty( $result['ok'] ) ) {
+				$after = __( 'Meanwhile the page cache is working through PHP.', 'wpo-tweaks' );
+			} else {
+				$after = $result['message'];
+			}
+
+			$result['message'] = sprintf(
+				/* translators: %s: why the accelerator cannot run, a full sentence. */
+				__( 'The accelerator is switched on but cannot run right now: %s', 'wpo-tweaks' ),
+				$reason
+			) . ' ' . $after;
+
+			return $result;
+		}
+
+		// The server stopped sending the headers the accelerator was tested with
+		// (a host that dropped mod_headers), or it answers from the cache folder
+		// with an error, or the home page fails with a server error: switched
+		// off, as a failed test would, because visitors get whatever came back.
+		if ( ( ! empty( $result['headerless'] ) || ! empty( $result['broken'] ) ) && Core_Diet_Cache_Accelerator::is_switched_on() ) {
+			Core_Diet_Tools::set_cache_option( 'accelerator', false );
+			$result['message'] .= ' ' . __( 'The accelerator has been switched off.', 'wpo-tweaks' );
+		}
+
+		return $result;
+	}
+
+	/**
 	 * Current figures, formatted for the status cards.
 	 *
 	 * @param bool $force Recount instead of reading the cached answer.
@@ -257,84 +326,6 @@ class Core_Diet_Cache_Admin {
 		return array(
 			'pages' => number_format_i18n( $stats['pages'] ),
 			'bytes' => size_format( $stats['bytes'], 1 ),
-		);
-	}
-
-	/**
-	 * Ask the site for its own home page twice and read the cache header.
-	 *
-	 * The first request should store the page and the second should be served
-	 * from disk. Doing it from the server side means the answer is about the
-	 * site, not about the browser the admin happens to be using, and it is the
-	 * only way to test as an anonymous visitor without logging out.
-	 *
-	 * @return array {
-	 *     @type bool   $ok      Whether the cache answered as expected.
-	 *     @type string $message Sentence to show.
-	 * }
-	 */
-	private function run_self_test() {
-		if ( ! Core_Diet_Cache::is_enabled() ) {
-			return array(
-				'ok'      => false,
-				'message' => __( 'The page cache is off, so there is nothing to test.', 'wpo-tweaks' ),
-			);
-		}
-
-		$args = array(
-			'timeout'    => 10,
-			'sslverify'  => false,
-			'headers'    => array( 'Accept-Encoding' => 'gzip' ),
-			'user-agent' => 'DietPress cache self test',
-		);
-
-		$first = wp_remote_get( home_url( '/' ), $args );
-		if ( is_wp_error( $first ) ) {
-			return array(
-				'ok'      => false,
-				'message' => sprintf(
-					/* translators: %s: error message. */
-					__( 'The site could not reach itself, so the test says nothing about the cache: %s', 'wpo-tweaks' ),
-					$first->get_error_message()
-				),
-			);
-		}
-
-		$second = wp_remote_get( home_url( '/' ), $args );
-		if ( is_wp_error( $second ) ) {
-			return array(
-				'ok'      => false,
-				'message' => $second->get_error_message(),
-			);
-		}
-
-		$header = wp_remote_retrieve_header( $second, 'x-dietpress-cache' );
-		$header = is_array( $header ) ? (string) reset( $header ) : (string) $header;
-
-		if ( 'HIT' === strtoupper( $header ) ) {
-			return array(
-				'ok'      => true,
-				'message' => __( 'The home page was served from the cache. The engine is working.', 'wpo-tweaks' ),
-			);
-		}
-
-		// A visit kept out for its proxy headers leaves no HTML comment, and one
-		// whose HTTPS is switched on late comes back as a rebuilt page, so the
-		// usual advice alone would send the site owner looking for the wrong
-		// thing. Added to it rather than put in its place: the note behind it
-		// can also come from forged headers, and the other cause may be real.
-		$proxy = self::has_proxy_mismatch() ? ' ' . __( 'Visits with proxy headers that disagree with the HTTPS WordPress detects are also being kept out of the cache: if this test goes through a proxy or CDN, that is the likely reason, and the status block of this tab explains the fix.', 'wpo-tweaks' ) : '';
-
-		if ( 'MISS' === strtoupper( $header ) ) {
-			return array(
-				'ok'      => false,
-				'message' => __( 'The home page is cacheable but was rebuilt instead of served from disk. The most likely cause is that the cache directory cannot be written to, or that something purges the cache on every request.', 'wpo-tweaks' ) . $proxy,
-			);
-		}
-
-		return array(
-			'ok'      => false,
-			'message' => __( 'The home page is being skipped by the cache. The usual causes are a plugin that sets a cookie on every visit, a plugin that declares the page uncacheable, or the home page being excluded below. Enable WP_DEBUG and read the HTML comment at the end of the page source: it names the exact reason.', 'wpo-tweaks' ) . $proxy,
 		);
 	}
 
@@ -357,6 +348,11 @@ class Core_Diet_Cache_Admin {
 
 		$blocking = Core_Diet_Cache_Compat::get_blocking_reasons();
 		$warnings = Core_Diet_Cache_Compat::get_warnings();
+
+		// The rules can drift from the settings without any save to notice it
+		// (a constant, a new address, another tool editing .htaccess), so the
+		// tab puts them right before it describes them.
+		Core_Diet_Cache_Accelerator::maybe_sync( true );
 		?>
 		<p class="core-diet-tab-description">
 			<?php esc_html_e( 'Stores a static copy of each page on disk and serves it to anonymous visitors without building the page again. Logged in visitors, carts and forms always get the live site.', 'wpo-tweaks' ); ?>
@@ -387,6 +383,8 @@ class Core_Diet_Cache_Admin {
 			(bool) $blocking
 		);
 
+		$this->render_accelerator_card( (bool) $blocking );
+
 		if ( $warnings ) {
 			$this->render_toggle(
 				'host_cache_ack',
@@ -394,14 +392,6 @@ class Core_Diet_Cache_Admin {
 				__( 'Required to enable the cache when your hosting already serves one. Purging DietPress does not purge your hosting cache.', 'wpo-tweaks' )
 			);
 		}
-
-		$this->render_number(
-			'ttl_hours',
-			__( 'Cached pages expire after', 'wpo-tweaks' ),
-			__( 'Hours. 0 keeps pages until an edit purges them. The default of 12 is deliberate: WordPress security tokens embedded in forms stay valid for a day, so a page older than that can carry an expired one and break a comment form or an add to cart button.', 'wpo-tweaks' ),
-			0,
-			720
-		);
 
 		$this->render_toggle(
 			'precompress_gzip',
@@ -414,6 +404,17 @@ class Core_Diet_Cache_Admin {
 			__( 'Separate cache for mobile', 'wpo-tweaks' ),
 			__( 'Only needed if your theme sends different HTML to phones. Responsive themes, which is nearly all of them today, do not: leaving this off halves the disk used.', 'wpo-tweaks' )
 		);
+
+		$this->render_number(
+			'ttl_hours',
+			__( 'Cached pages expire after', 'wpo-tweaks' ),
+			__( "0 keeps pages until an edit purges them. The default of 12 is deliberate: WordPress security tokens embedded in forms stay valid for a day, so a page older than that can carry an expired one and break a comment form or an add to cart button.\n\nThis is not the cleanup next to it: a page past this age is never served to anybody, whether the cleanup has run or not, and the cleanup only takes those copies off the disk.", 'wpo-tweaks' ),
+			0,
+			720,
+			__( 'Hours', 'wpo-tweaks' )
+		);
+
+		$this->render_schedule_card();
 		?>
 		</div>
 
@@ -540,6 +541,13 @@ class Core_Diet_Cache_Admin {
 					</p>
 				<?php endforeach; ?>
 
+				<?php if ( self::has_mobile_markup() ) : ?>
+					<p class="core-diet-option-notice core-diet-option-notice-warning core-diet-cache-block">
+						<span class="dashicons dashicons-warning" aria-hidden="true"></span>
+						<span class="core-diet-option-notice-text"><?php esc_html_e( 'Your theme or a plugin builds different HTML for phones: it asks WordPress whether the visitor is on a mobile device while the page is built. So that desktop visitors never get a page built for a phone, pages are only stored from desktop visits, and pages visited mostly from phones stay out of the cache. Switch on the separate cache for mobile below and phones get cached pages of their own.', 'wpo-tweaks' ); ?></span>
+					</p>
+				<?php endif; ?>
+
 				<?php if ( self::has_proxy_mismatch() ) : ?>
 					<p class="core-diet-option-notice core-diet-option-notice-warning core-diet-cache-block">
 						<span class="dashicons dashicons-warning" aria-hidden="true"></span>
@@ -663,6 +671,155 @@ class Core_Diet_Cache_Admin {
 	}
 
 	/**
+	 * Whether pages were recently kept out for being built for a phone.
+	 *
+	 * Only while the separate mobile cache is off, which is the case it is
+	 * about, and for two days after the last time, since the engine notes it at
+	 * most once a day.
+	 *
+	 * @return bool
+	 */
+	private function has_mobile_markup() {
+		if ( $this->settings->is_enabled( 'separate_mobile' ) || ! class_exists( 'Core_Diet_Cache_Engine' ) ) {
+			return false;
+		}
+
+		$last = (int) get_option( Core_Diet_Cache_Engine::MOBILE_MARKUP_OPTION, 0 );
+
+		return $last > 0 && ( time() - $last ) < 2 * DAY_IN_SECONDS;
+	}
+
+	/**
+	 * Render the accelerator card: its toggle, and what it is doing right now.
+	 *
+	 * @param bool $blocking Whether the page cache itself is blocked.
+	 */
+	private function render_accelerator_card( $blocking ) {
+		$reason   = Core_Diet_Cache_Accelerator::get_unavailable_reason();
+		$on       = $this->settings->is_enabled( 'accelerator' );
+		$verified = get_option( Core_Diet_Cache_Accelerator::VERIFIED_OPTION );
+
+		// Switched on but with the cache off, the reason is only "switch the
+		// cache on first": the setting is kept and shown as it is.
+		$cache_off = ! Core_Diet_Cache::is_enabled();
+		$locked    = $blocking || ( '' !== $reason && ! $cache_off );
+
+		$nginx = 'nginx' === Core_Diet_Cache_Accelerator::server();
+
+		$this->render_toggle(
+			'accelerator',
+			__( 'Serve cached pages from the server (accelerator)', 'wpo-tweaks' ),
+			$nginx
+				? __( 'The server answers with the stored copy by itself, without starting PHP or WordPress, which is the fastest a page can be served. nginx does not read .htaccess, so the rules are yours to paste: copy the block below into the configuration of this site as its comments say, reload nginx, and then switch this on. It is tested on your home page before it stays on.', 'wpo-tweaks' )
+				: __( 'The server answers with the stored copy by itself, without starting PHP or WordPress, which is the fastest a page can be served. Switching it on writes a block of rules to your .htaccess and tests them on your home page: if the test fails, it stays off and says why.', 'wpo-tweaks' ),
+			$locked,
+			$locked ? $reason : ''
+		);
+
+		if ( $nginx && ! $locked && ! $cache_off ) {
+			$this->render_nginx_rules( $on, $verified );
+		}
+
+		if ( ! $on || $locked || $cache_off ) {
+			return;
+		}
+
+		$pending = is_array( $verified ) && empty( $verified['time'] );
+
+		if ( ! Core_Diet_Cache_Accelerator::is_verified_here() ) {
+			$status  = $pending
+				? __( 'The last test of the accelerator did not finish, so cached pages are served by PHP for now. Press "Test the cache now" below to run it again.', 'wpo-tweaks' )
+				: __( 'The site moved to another server or address since the accelerator was tested, so cached pages are served by PHP for now. Press "Test the cache now" below to test it here.', 'wpo-tweaks' );
+			$variant = 'warning';
+		} elseif ( is_array( $verified ) && ! empty( $verified['time'] ) ) {
+			$status = sprintf(
+				/* translators: %s: date and time of the last successful test. */
+				__( 'Tested on %s: the server serves the cached pages.', 'wpo-tweaks' ),
+				wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), (int) $verified['time'] )
+			);
+			$variant = 'inactive';
+
+			if ( array_key_exists( 'compressed', $verified ) && false === $verified['compressed'] ) {
+				$status .= ' ' . __( 'They go out uncompressed, though: switch on the compression rules in the Strict tab, or ask your hosting to enable mod_deflate.', 'wpo-tweaks' );
+				$variant  = 'warning';
+			}
+		} else {
+			return;
+		}
+		?>
+		<p class="core-diet-option-notice core-diet-option-notice-<?php echo esc_attr( $variant ); ?> core-diet-cache-block core-diet-option-card-wide">
+			<span class="dashicons dashicons-<?php echo 'warning' === $variant ? 'warning' : 'info-outline'; ?>" aria-hidden="true"></span>
+			<span class="core-diet-option-notice-text"><?php echo esc_html( $status ); ?></span>
+		</p>
+		<?php
+	}
+
+	/**
+	 * Render the nginx rules to paste, and whether the pasted ones went stale.
+	 *
+	 * @param bool        $on       Whether the accelerator is switched on.
+	 * @param array|false $verified Last successful test.
+	 */
+	private function render_nginx_rules( $on, $verified ) {
+		$rules = Core_Diet_Cache_Accelerator::current_nginx_rules();
+		if ( '' === $rules ) {
+			return;
+		}
+
+		$stale = $on && is_array( $verified ) && ! empty( $verified['rules'] ) && md5( $rules ) !== $verified['rules'];
+		?>
+		<div class="core-diet-option-card core-diet-option-card-wide">
+			<label class="core-diet-option-label" for="core-diet-cache-nginx-rules"><?php esc_html_e( 'Rules for nginx', 'wpo-tweaks' ); ?></label>
+			<?php if ( $stale ) : ?>
+				<p class="core-diet-option-notice core-diet-option-notice-warning">
+					<span class="dashicons dashicons-warning" aria-hidden="true"></span>
+					<span class="core-diet-option-notice-text"><?php esc_html_e( 'These rules changed since the accelerator was tested, because an exclusion, a cookie that keeps visitors out, the mobile cache or the time browsers keep pages changed. Paste them again and reload nginx: until then nginx follows the old ones.', 'wpo-tweaks' ); ?></span>
+				</p>
+			<?php endif; ?>
+			<textarea id="core-diet-cache-nginx-rules" class="large-text code" rows="14" readonly><?php echo esc_textarea( $rules ); ?></textarea>
+			<p class="core-diet-option-desc"><?php esc_html_e( 'If your server block adds security headers with add_header, repeat them inside the location of part 2: nginx does not pass them down to a location that adds headers of its own. After pasting, check the configuration with nginx -t before reloading.', 'wpo-tweaks' ); ?></p>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Render the cleanup schedule card: how often and at what hour.
+	 */
+	private function render_schedule_card() {
+		$frequency = Core_Diet_Schedule::sanitize_frequency( $this->settings->get( 'gc_frequency' ) );
+		$hour      = Core_Diet_Schedule::sanitize_hour( $this->settings->get( 'gc_hour' ) );
+		$name      = Core_Diet_Cache_Settings::OPTION_NAME;
+		?>
+		<div class="core-diet-option-card">
+			<div class="core-diet-option-header">
+				<span class="core-diet-option-label"><?php esc_html_e( 'Clean up expired pages', 'wpo-tweaks' ); ?></span>
+			</div>
+			<p class="core-diet-cache-schedule">
+				<label class="screen-reader-text" for="core_diet_cache_gc_frequency"><?php esc_html_e( 'How often', 'wpo-tweaks' ); ?></label>
+				<select id="core_diet_cache_gc_frequency" name="<?php echo esc_attr( $name . '[gc_frequency]' ); ?>">
+					<?php foreach ( Core_Diet_Schedule::get_frequencies() as $value => $label ) : ?>
+						<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $frequency, $value ); ?>><?php echo esc_html( $label ); ?></option>
+					<?php endforeach; ?>
+				</select>
+				<label class="screen-reader-text" for="core_diet_cache_gc_hour"><?php esc_html_e( 'At what time', 'wpo-tweaks' ); ?></label>
+				<select id="core_diet_cache_gc_hour" name="<?php echo esc_attr( $name . '[gc_hour]' ); ?>" <?php disabled( 'hourly', $frequency ); ?>>
+					<option value="-1" <?php selected( Core_Diet_Schedule::AUTO_HOUR, $hour ); ?>><?php esc_html_e( 'at any time', 'wpo-tweaks' ); ?></option>
+					<?php for ( $h = 0; $h < 24; $h++ ) : ?>
+						<option value="<?php echo esc_attr( (string) $h ); ?>" <?php selected( $h, $hour ); ?>>
+							<?php
+							/* translators: %s: hour of the day, such as 04:00. */
+							echo esc_html( sprintf( __( 'from %s', 'wpo-tweaks' ), sprintf( '%02d:00', $h ) ) );
+							?>
+						</option>
+					<?php endfor; ?>
+				</select>
+			</p>
+			<p class="core-diet-option-desc"><?php esc_html_e( 'Removes expired copies from the disk; an expired page is never served in the meantime. The hour is in the time zone of the site, and twice a day means that hour and twelve hours later. WordPress runs scheduled tasks with the first page it builds after that time, so on a quiet site it can run later. At any time, it keeps the pace it already had.', 'wpo-tweaks' ); ?></p>
+		</div>
+		<?php
+	}
+
+	/**
 	 * Whether visits have been kept out of the cache for their proxy headers.
 	 *
 	 * Asked two ways because either can be the only one that knows: the
@@ -680,7 +837,7 @@ class Core_Diet_Cache_Admin {
 	 *
 	 * @return bool
 	 */
-	private static function has_proxy_mismatch() {
+	public static function has_proxy_mismatch() {
 		if ( ! class_exists( 'Core_Diet_Cache_Engine' ) ) {
 			return false;
 		}
@@ -759,11 +916,23 @@ class Core_Diet_Cache_Admin {
 	 * @param string $label       Field label.
 	 * @param string $description Help text.
 	 * @param bool   $disabled    Whether the control is locked.
+	 * @param string $locked_why  Why it is locked, shown under the help text.
 	 */
-	private function render_toggle( $key, $label, $description = '', $disabled = false ) {
+	private function render_toggle( $key, $label, $description = '', $disabled = false, $locked_why = '' ) {
 		$field_id = 'core_diet_cache_' . $key;
 		$name     = Core_Diet_Cache_Settings::OPTION_NAME . '[' . $key . ']';
-		$checked  = $this->settings->is_enabled( $key ) && ! $disabled;
+		$stored   = $this->settings->is_enabled( $key );
+
+		// A locked accelerator that is switched on stays a live checkbox, checked:
+		// a disabled one is not sent with the form, so the next save of any
+		// setting used to switch it off and forget its test, exactly while the
+		// .htaccess could not be written for a moment; and it has to stay
+		// possible to switch it off. The lock note says why it cannot run now.
+		// Only switching it on is locked.
+		if ( $disabled && $stored && 'accelerator' === $key ) {
+			$disabled = false;
+		}
+		$checked = $stored && ! $disabled;
 		?>
 		<div class="core-diet-option-card<?php echo $disabled ? ' core-diet-option-locked' : ''; ?>">
 			<div class="core-diet-option-header">
@@ -783,6 +952,12 @@ class Core_Diet_Cache_Admin {
 			<?php if ( $description ) : ?>
 				<p class="core-diet-option-desc"><?php echo esc_html( $description ); ?></p>
 			<?php endif; ?>
+			<?php if ( '' !== $locked_why ) : ?>
+				<p class="core-diet-option-notice core-diet-option-notice-locked">
+					<span class="dashicons dashicons-lock" aria-hidden="true"></span>
+					<span class="core-diet-option-notice-text"><?php echo esc_html( $locked_why ); ?></span>
+				</p>
+			<?php endif; ?>
 		</div>
 		<?php
 	}
@@ -796,15 +971,20 @@ class Core_Diet_Cache_Admin {
 	 * @param int    $min         Minimum accepted.
 	 * @param int    $max         Maximum accepted.
 	 */
-	private function render_number( $key, $label, $description, $min, $max ) {
+	private function render_number( $key, $label, $description, $min, $max, $unit = '' ) {
 		$field_id = 'core_diet_cache_' . $key;
 		$name     = Core_Diet_Cache_Settings::OPTION_NAME . '[' . $key . ']';
+		// The label takes the whole width and the field goes under it, with its
+		// unit beside it: with both on one line the label wrapped and the card
+		// read as a jumble. Two blank lines in the description start a paragraph.
 		?>
 		<div class="core-diet-option-card">
-			<div class="core-diet-option-header">
+			<div class="core-diet-option-header core-diet-option-header-stacked">
 				<label class="core-diet-option-label" for="<?php echo esc_attr( $field_id ); ?>">
 					<?php echo esc_html( $label ); ?>
 				</label>
+			</div>
+			<p class="core-diet-option-field">
 				<input type="number"
 				       id="<?php echo esc_attr( $field_id ); ?>"
 				       name="<?php echo esc_attr( $name ); ?>"
@@ -813,10 +993,13 @@ class Core_Diet_Cache_Admin {
 				       max="<?php echo esc_attr( (string) $max ); ?>"
 				       step="1"
 				       class="small-text">
-			</div>
-			<?php if ( $description ) : ?>
-				<p class="core-diet-option-desc"><?php echo esc_html( $description ); ?></p>
-			<?php endif; ?>
+				<?php if ( '' !== $unit ) : ?>
+					<span class="core-diet-option-unit"><?php echo esc_html( $unit ); ?></span>
+				<?php endif; ?>
+			</p>
+			<?php foreach ( preg_split( '/\n\s*\n/', (string) $description, -1, PREG_SPLIT_NO_EMPTY ) as $parrafo ) : ?>
+				<p class="core-diet-option-desc"><?php echo esc_html( trim( $parrafo ) ); ?></p>
+			<?php endforeach; ?>
 		</div>
 		<?php
 	}

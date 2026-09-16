@@ -51,6 +51,51 @@ class Core_Diet_Cache_Engine {
 	/** @var bool|null Whether WordPress saw HTTPS when the cache was looked up. */
 	private $lookup_https = null;
 
+	/** @var string Transient holding the token of a self test in progress. */
+	const DIAGNOSE_TRANSIENT = 'core_diet_cache_diagnose';
+
+	/** @var string Option noting when a page was kept out for being built for a phone. */
+	const MOBILE_MARKUP_OPTION = 'core_diet_cache_mobile_markup';
+
+	/** @var string|null Request URI as it arrived, sanitized, photographed when the plugin loads. */
+	private $request_uri = null;
+
+	/** @var string Query string as it arrived, photographed with the URI. */
+	private $query_string = '';
+
+	/** @var string|false|null Cache directory of the request, fixed at the lookup. */
+	private $lookup_dir = null;
+
+	/** @var bool Whether the request path ends with a slash, fixed at the lookup. */
+	private $lookup_slash = true;
+
+	/** @var bool Whether the request gets the mobile copy, fixed at the lookup. */
+	private $lookup_mobile = false;
+
+	/** @var bool Whether this request is the self test and may be told why it was skipped. */
+	private $diagnose = false;
+
+	/** @var bool Whether WordPress answered "mobile" to anybody during this request. */
+	private $built_for_mobile = false;
+
+	/** @var bool Whether the page was kept out only for being built for a phone. */
+	private $mobile_skipped = false;
+
+	/** @var bool Whether the buffer was flushed or cleaned before the end of the page. */
+	private $interrupted = false;
+
+	/** @var int Lifetime in seconds, read before the capture. */
+	private $ttl = 0;
+
+	/** @var bool Whether to store the gzip twin, read before the capture. */
+	private $compress = false;
+
+	/** @var int|null Server clock offset seen through the accelerator rules. */
+	private $clock_offset = null;
+
+	/** @var string Rules for the cache root, should the capture have to create it. */
+	private $hardening = '';
+
 	/**
 	 * Constructor.
 	 *
@@ -70,6 +115,22 @@ class Core_Diet_Cache_Engine {
 		 * Verified against WooCommerce 11.0.1.
 		 */
 		$this->cookie_names = ( isset( $_COOKIE ) && is_array( $_COOKIE ) ) ? array_keys( $_COOKIE ) : array();
+
+		/*
+		 * The address is photographed at the same moment and for a similar
+		 * reason. Code that rewrites REQUEST_URI during the request, such as a
+		 * language plugin that routes /en/about/ to the page of /about/, used to
+		 * make the capture file the page under the rewritten address, so the
+		 * English page ended up served at the Spanish URL. The copy belongs to
+		 * the address that was asked for, which is also the one the server
+		 * sees when the accelerator looks it up.
+		 */
+		if ( isset( $_SERVER['REQUEST_URI'] ) ) {
+			$this->request_uri = sanitize_url( wp_unslash( $_SERVER['REQUEST_URI'] ) );
+		}
+		if ( isset( $_SERVER['QUERY_STRING'] ) ) {
+			$this->query_string = sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) );
+		}
 	}
 
 	/**
@@ -90,13 +151,51 @@ class Core_Diet_Cache_Engine {
 		$this->lookup_https    = $this->is_https();
 		self::$lookup_mismatch = self::proxy_contradicts_wordpress();
 
-		if ( '' !== $this->get_request_bypass_reason() ) {
+		/*
+		 * The rest of the key is fixed here too, for the same reason: the copy
+		 * a request stores has to be the copy it looked up. The directory, the
+		 * trailing slash and the mobile variant used to be worked out again at
+		 * the end of the request, so code that rewrote REQUEST_URI or filtered
+		 * wp_is_mobile() in between filed the page under the key of another one.
+		 */
+		$this->lookup_dir    = null === $this->request_uri ? false : Core_Diet_Cache_Store::dir_for_uri( $this->request_uri );
+		$this->lookup_slash  = $this->has_trailing_slash();
+		$separate_mobile     = $this->settings->is_enabled( 'separate_mobile' );
+		$this->lookup_mobile = $separate_mobile && wp_is_mobile();
+		$this->diagnose      = self::is_diagnostic_request();
+
+		/*
+		 * Without a separate mobile cache, one copy serves every device, so it
+		 * has to be the one built for a desktop. A theme that asks
+		 * wp_is_mobile() while building the page sends phones different HTML
+		 * (Astra adds its mobile header class to the body, for one), and a phone
+		 * that happened to be the first visitor used to set that version for
+		 * everybody. The answer is watched for the whole request and the page is
+		 * not stored when it was "mobile".
+		 */
+		if ( ! $separate_mobile ) {
+			add_filter( 'wp_is_mobile', array( $this, 'watch_mobile' ), PHP_INT_MAX );
+		}
+
+		if ( $this->diagnose && ! headers_sent() ) {
+			// Never a name another header of the plugin starts with: replacing a
+			// header in PHP 8.5.3 also removes every header whose name starts with
+			// the one replaced, so X-DietPress-Cache-Clock vanished with the
+			// X-DietPress-Cache sent after it.
+			header( 'X-DietPress-Clock: ' . ( null === Core_Diet_Cache_Accelerator::server_clock_offset() ? 'missing' : 'seen' ) );
+		}
+
+		$reason = $this->get_request_bypass_reason();
+		if ( '' !== $reason ) {
+			$this->explain( $reason );
 			return;
 		}
 
 		// A query string that is nothing but tracking parameters is answered
 		// with the plain URL's copy; anything else is a different page.
-		if ( '' !== $this->get_query_bypass_reason() ) {
+		$reason = $this->get_query_bypass_reason();
+		if ( '' !== $reason ) {
+			$this->explain( $reason );
 			return;
 		}
 
@@ -107,15 +206,13 @@ class Core_Diet_Cache_Engine {
 			return;
 		}
 
-		$dir = Core_Diet_Cache_Store::dir_for_request();
+		$dir = $this->lookup_dir;
 		if ( ! $dir ) {
+			$this->explain( 'address cannot be stored on disk' );
 			return;
 		}
 
-		$is_mobile = $this->settings->is_enabled( 'separate_mobile' ) && wp_is_mobile();
-		$slash     = $this->has_trailing_slash();
-
-		$plain = $dir . '/' . Core_Diet_Cache_Store::filename( $this->lookup_https, $slash, $is_mobile, false );
+		$plain = $dir . '/' . Core_Diet_Cache_Store::filename( $this->lookup_https, $this->lookup_slash, $this->lookup_mobile, false );
 		if ( ! is_readable( $plain ) ) {
 			return;
 		}
@@ -130,7 +227,65 @@ class Core_Diet_Cache_Engine {
 			return;
 		}
 
+		// Served by PHP on a request that went through the accelerator rules
+		// means the server found no name for this hour: put them back, so the
+		// next visit is served without PHP. The copy built for a phone has its
+		// own names when the separate mobile cache is on.
+		Core_Diet_Cache_Accelerator::maybe_renew_hour_names( $dir, $this->lookup_https, $this->lookup_slash, $this->lookup_mobile, $plain, $mtime, $ttl, $this->diagnose );
+
 		$this->send_cached( $plain, $mtime );
+	}
+
+	/**
+	 * Remember whether WordPress called this request mobile.
+	 *
+	 * @param bool $is_mobile Final answer of wp_is_mobile().
+	 * @return bool The same answer.
+	 */
+	public function watch_mobile( $is_mobile ) {
+		if ( $is_mobile ) {
+			$this->built_for_mobile = true;
+		}
+
+		return $is_mobile;
+	}
+
+	/**
+	 * Whether this request is the self test of this site.
+	 *
+	 * Only a request carrying the token the test just stored may be told why it
+	 * was not served from the cache. Anyone else gets the page, as always.
+	 *
+	 * @return bool
+	 */
+	private static function is_diagnostic_request() {
+		if ( empty( $_SERVER['HTTP_X_DIETPRESS_DIAGNOSE'] ) ) {
+			return false;
+		}
+
+		$sent  = sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_DIETPRESS_DIAGNOSE'] ) );
+		$token = get_transient( self::DIAGNOSE_TRANSIENT );
+
+		return is_string( $token ) && strlen( $token ) >= 32 && hash_equals( $token, $sent );
+	}
+
+	/**
+	 * Tell the self test why this request is left out of the cache.
+	 *
+	 * The reasons are literals of this class, except for the name of a query
+	 * parameter, and the header is only sent to the request that carries the
+	 * token, but it is reduced to plain characters all the same.
+	 *
+	 * @param string $reason Reason.
+	 */
+	private function explain( $reason ) {
+		if ( ! $this->diagnose || headers_sent() ) {
+			return;
+		}
+
+		$reason = substr( (string) preg_replace( '#[^A-Za-z0-9 _.:/()=-]#', '', (string) $reason ), 0, 200 );
+
+		header( 'X-DietPress-Bypass: ' . $reason );
 	}
 
 	/**
@@ -153,14 +308,28 @@ class Core_Diet_Cache_Engine {
 		header( 'X-DietPress-Cache: HIT' );
 		header( 'Last-Modified: ' . $last_modified );
 
-		// The HTML must not linger in the browser on top of the disk copy, or a
-		// purge here would change nothing for a visitor who already has it. The
-		// cache directory has its own .htaccess so the max-age of the DietPress
-		// block never applies to these files.
-		header( 'Cache-Control: max-age=0, must-revalidate' );
+		// The same Cache-Control a page WordPress builds gets, and the same the
+		// server sends when the accelerator serves this copy, so a URL does not
+		// change how long browsers keep it depending on who answered. Up to
+		// 3.5.6 a hit always sent max-age=0, whatever the site had chosen for
+		// its pages. With that setting at its default, it still does: the HTML
+		// must not linger in the browser on top of the disk copy, or a purge
+		// here would change nothing for a visitor who already has it.
+		header( 'Cache-Control: ' . Core_Diet_Cache_Accelerator::hit_cache_control() );
 
+		$vary = array();
 		if ( $compress ) {
-			header( 'Vary: Accept-Encoding' );
+			$vary[] = 'Accept-Encoding';
+		}
+		// With a separate mobile cache the same address has a phone copy and a
+		// desktop one, and whatever caches in front (a CDN, a proxy) has to know,
+		// or it hands one of them to everybody. The server rules say the same.
+		if ( $this->settings->is_enabled( 'separate_mobile' ) ) {
+			$vary[] = 'Sec-CH-UA-Mobile';
+			$vary[] = 'User-Agent';
+		}
+		if ( $vary ) {
+			header( 'Vary: ' . implode( ', ', $vary ) );
 		}
 
 		if ( $this->client_has_current_copy( $mtime ) ) {
@@ -226,12 +395,17 @@ class Core_Diet_Cache_Engine {
 			if ( self::PROXY_MISMATCH === $reason && '' === $this->get_query_bypass_reason() && '' === $this->get_query_object_bypass_reason() ) {
 				self::note_proxy_mismatch();
 			}
+			$this->explain( $reason );
 			return;
 		}
-		if ( '' !== $this->get_query_bypass_reason() ) {
+		$reason = $this->get_query_bypass_reason();
+		if ( '' !== $reason ) {
+			$this->explain( $reason );
 			return;
 		}
-		if ( '' !== $this->get_query_object_bypass_reason() ) {
+		$reason = $this->get_query_object_bypass_reason();
+		if ( '' !== $reason ) {
+			$this->explain( $reason );
 			return;
 		}
 
@@ -245,10 +419,30 @@ class Core_Diet_Cache_Engine {
 			self::note_proxy_mismatch();
 		}
 
-		$dir = Core_Diet_Cache_Store::dir_for_request();
+		// The key the lookup fixed. Without a lookup there is none to reuse,
+		// and the capture refuses to store anyway (see
+		// get_output_bypass_reason()), so this only keeps the buffer and the
+		// reason it gives the same as before.
+		$dir = null === $this->lookup_dir && null !== $this->request_uri ? Core_Diet_Cache_Store::dir_for_uri( $this->request_uri ) : $this->lookup_dir;
 		if ( ! $dir ) {
+			$this->explain( 'address cannot be stored on disk' );
 			return;
 		}
+
+		/*
+		 * Everything the capture needs from the options is read now: it runs
+		 * inside an output buffer handler, where a hook on an option that opens
+		 * a buffer of its own, or a wp_die() on PHP 7.4, takes the page down.
+		 * The rules for the cache root follow the accelerator rules of this very
+		 * request, so a root deleted by hand comes back open to the server
+		 * exactly when the server is serving from it.
+		 */
+		$this->ttl          = $this->settings->get_ttl();
+		$this->compress     = $this->settings->is_enabled( 'precompress_gzip' ) && function_exists( 'gzencode' );
+		$this->clock_offset = Core_Diet_Cache_Accelerator::may_name_copies( $this->diagnose ) ? Core_Diet_Cache_Accelerator::server_clock_offset() : null;
+		$this->hardening    = null === $this->clock_offset
+			? Core_Diet_Cache_Store::DENY_RULES
+			: Core_Diet_Cache_Accelerator::get_cache_dir_rules( true, Core_Diet_Cache_Accelerator::hit_cache_control(), (string) get_bloginfo( 'charset' ), $this->settings->is_enabled( 'separate_mobile' ) );
 
 		$this->target_dir = $dir;
 		$this->capturing  = true;
@@ -257,7 +451,30 @@ class Core_Diet_Cache_Engine {
 			header( 'X-DietPress-Cache: MISS' );
 		}
 
+		// After wp_ob_end_flush_all(), which flushes the buffers on shutdown
+		// priority 1: by then the capture has run and a database write is safe.
+		add_action( 'shutdown', array( $this, 'after_capture' ), 20 );
+
 		ob_start( array( $this, 'capture' ) );
+	}
+
+	/**
+	 * Leave the notes the capture itself may not write.
+	 *
+	 * A page kept out only for being built for a phone is noted at most once a
+	 * day, so the Cache tab can suggest the separate mobile cache to a site
+	 * whose theme needs it.
+	 */
+	public function after_capture() {
+		if ( ! $this->mobile_skipped ) {
+			return;
+		}
+
+		$last = (int) get_option( self::MOBILE_MARKUP_OPTION, 0 );
+
+		if ( time() - $last > DAY_IN_SECONDS ) {
+			update_option( self::MOBILE_MARKUP_OPTION, time(), false );
+		}
 	}
 
 	/**
@@ -271,48 +488,77 @@ class Core_Diet_Cache_Engine {
 	 * page.
 	 *
 	 * @param string $buffer Rendered page.
+	 * @param int    $phase  Bitmask of PHP_OUTPUT_HANDLER_* flags.
 	 * @return string
 	 */
-	public function capture( $buffer ) {
+	public function capture( $buffer, $phase = PHP_OUTPUT_HANDLER_FINAL ) {
+		$phase = (int) $phase;
+
+		/*
+		 * An ob_flush() or ob_clean() in the middle of the page calls this
+		 * handler before the end, and what arrives at the end is then only the
+		 * rest of the page, which has a closing </html> and passes every check.
+		 * Up to 3.5.6 that tail was stored as the page. A buffer closed with
+		 * ob_end_clean() arrives here once, with the page the visitor never got.
+		 */
+		if ( ! ( $phase & PHP_OUTPUT_HANDLER_FINAL ) ) {
+			$this->interrupted = true;
+			return $buffer;
+		}
+		if ( $phase & PHP_OUTPUT_HANDLER_CLEAN ) {
+			$this->interrupted = true;
+		}
+
 		$this->capturing = false;
 
 		try {
 			$reason = $this->get_output_bypass_reason( $buffer );
 
 			if ( '' === $reason ) {
-				$stamp   = '<!-- Page cached by DietPress on ' . gmdate( 'Y-m-d H:i:s' ) . " UTC -->\n";
-				$stored  = $buffer . $stamp;
-				$is_gz   = false;
-				$slash   = $this->has_trailing_slash();
-				$mobile  = $this->settings->is_enabled( 'separate_mobile' ) && wp_is_mobile();
-				$https   = $this->is_https();
-				$plain   = Core_Diet_Cache_Store::filename( $https, $slash, $mobile, false );
+				$stamp  = '<!-- Page cached by DietPress on ' . gmdate( 'Y-m-d H:i:s' ) . " UTC -->\n";
+				$stored = $buffer . $stamp;
+				$slash  = $this->lookup_slash;
+				$mobile = $this->lookup_mobile;
+				$https  = (bool) $this->lookup_https;
+				$plain  = Core_Diet_Cache_Store::filename( $https, $slash, $mobile, false );
 
-				if ( Core_Diet_Cache_Store::write( $this->target_dir, $plain, $stored ) ) {
-					if ( $this->settings->is_enabled( 'precompress_gzip' ) && function_exists( 'gzencode' ) ) {
+				// The gzip twin of the previous version goes before the new
+				// page is written, not after: a request that dies in between
+				// leaves a page without a twin, which is served plain, instead
+				// of a fresh page next to the old twin, which every client that
+				// accepts gzip would get.
+				$leftover = $this->target_dir . '/' . Core_Diet_Cache_Store::filename( $https, $slash, $mobile, true );
+				if ( file_exists( $leftover ) ) {
+					wp_delete_file( $leftover );
+				}
+
+				if ( Core_Diet_Cache_Store::write( $this->target_dir, $plain, $stored, $this->hardening ) ) {
+					if ( $this->compress ) {
 						$gz = gzencode( $stored, 6 );
 						if ( false !== $gz ) {
-							$is_gz = Core_Diet_Cache_Store::write(
+							Core_Diet_Cache_Store::write(
 								$this->target_dir,
 								Core_Diet_Cache_Store::filename( $https, $slash, $mobile, true ),
-								$gz
+								$gz,
+								$this->hardening
 							);
 						}
 					}
 
-					// A stale gzip twin next to a fresh HTML file would be
-					// served to every client that accepts gzip, which is all of
-					// them. Better none than wrong.
-					if ( ! $is_gz ) {
-						$leftover = $this->target_dir . '/' . Core_Diet_Cache_Store::filename( $https, $slash, $mobile, true );
-						if ( file_exists( $leftover ) ) {
-							wp_delete_file( $leftover );
-						}
-					}
+					Core_Diet_Cache_Accelerator::link_hour_names(
+						$this->target_dir,
+						$https,
+						$slash,
+						$mobile,
+						$this->target_dir . '/' . $plain,
+						$this->ttl > 0 ? time() + $this->ttl : null,
+						$this->clock_offset
+					);
 				}
-			} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				// Only with debugging on: in production this would be a hint to
-				// anyone reading the source about how the site is configured.
+			} elseif ( $this->diagnose || ( defined( 'WP_DEBUG' ) && WP_DEBUG ) ) {
+				// Only with debugging on, or for the self test: in production
+				// this would be a hint to anyone reading the source about how
+				// the site is configured.
 				return $buffer . "\n<!-- DietPress page cache: not stored (" . esc_html( $reason ) . ") -->\n";
 			}
 		} catch ( Throwable $e ) {
@@ -376,6 +622,18 @@ class Core_Diet_Cache_Engine {
 
 		if ( Core_Diet_Cache_Store::get_request_host() !== Core_Diet_Cache_Store::get_home_host() ) {
 			return 'request host is not the site host';
+		}
+
+		/*
+		 * The port counts as much as the host. Apache takes SERVER_PORT from the
+		 * Host header, so a plain HTTP request for "site:443" makes is_ssl() true
+		 * with no proxy header anywhere, and a theme that prints HTTP_HOST puts
+		 * that port in every link. WordPress would redirect it to its canonical
+		 * address (wp-includes/canonical.php:612-617), but not with canonical
+		 * redirects switched off, and the copy would reach everybody.
+		 */
+		if ( Core_Diet_Cache_Store::get_request_port() !== Core_Diet_Cache_Store::get_home_port() ) {
+			return 'request port is not the site port';
 		}
 
 		$cookie = $this->get_bypass_cookie();
@@ -460,29 +718,54 @@ class Core_Diet_Cache_Engine {
 			return '';
 		}
 
-		/**
-		 * Filter the media types that keep a request out of the page cache.
-		 *
-		 * A plugin that answers a post URL with something other than its HTML
-		 * through content negotiation adds its media type here.
-		 *
-		 * @param array $types Media types matched against the Accept header.
-		 */
-		$types = apply_filters( 'dietpress_cache_bypass_accept', array( 'text/markdown' ) );
-		if ( ! is_array( $types ) || ! $types ) {
+		$types = self::get_bypass_accept_types();
+		if ( ! $types ) {
 			return '';
 		}
 
 		$accept = strtolower( sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) ) );
 
 		foreach ( $types as $type ) {
-			$type = strtolower( trim( (string) $type ) );
-			if ( '' !== $type && false !== strpos( $accept, $type ) ) {
+			if ( false !== strpos( $accept, $type ) ) {
 				return $type;
 			}
 		}
 
 		return '';
+	}
+
+	/**
+	 * Media types that keep a request out of the page cache, lowercased.
+	 *
+	 * Public because the accelerator writes the same list into its rules.
+	 *
+	 * @return string[]
+	 */
+	public static function get_bypass_accept_types() {
+		/**
+		 * Filter the media types that keep a request out of the page cache.
+		 *
+		 * A plugin that answers a post URL with something other than its HTML
+		 * through content negotiation adds its media type here. With the
+		 * accelerator on, the list is written into the server rules, so a type
+		 * added only on some requests will not reach them.
+		 *
+		 * @param array $types Media types matched against the Accept header.
+		 */
+		$types = apply_filters( 'dietpress_cache_bypass_accept', array( 'text/markdown' ) );
+		if ( ! is_array( $types ) ) {
+			return array();
+		}
+
+		$out = array();
+		foreach ( $types as $type ) {
+			$type = strtolower( trim( (string) $type ) );
+			if ( '' !== $type ) {
+				$out[] = $type;
+			}
+		}
+
+		return array_values( array_unique( $out ) );
 	}
 
 	/**
@@ -494,7 +777,7 @@ class Core_Diet_Cache_Engine {
 	 * @return string Empty when the query string is harmless.
 	 */
 	public function get_query_bypass_reason() {
-		$query = isset( $_SERVER['QUERY_STRING'] ) ? sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) : '';
+		$query = $this->query_string;
 		if ( '' === $query ) {
 			return '';
 		}
@@ -526,6 +809,9 @@ class Core_Diet_Cache_Engine {
 		if ( ! $this->target_dir ) {
 			return 'no target directory';
 		}
+		if ( $this->interrupted ) {
+			return 'output flushed or cleaned before the end of the page';
+		}
 		if ( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) {
 			// WooCommerce defines this on wp_headers priority 5 for the cart,
 			// the checkout and my account, and any plugin can define it later,
@@ -543,10 +829,15 @@ class Core_Diet_Cache_Engine {
 		}
 
 		// A response that sets a cookie is personalised almost by definition:
-		// storing it hands that cookie's page to the next visitor.
+		// storing it hands that cookie's page to the next visitor. And one that
+		// forbids shared caches to keep it, as nocache_headers() does, is not
+		// stored either: a hit would go out with the lifetime of the site instead.
 		foreach ( headers_list() as $header ) {
 			if ( 0 === stripos( $header, 'set-cookie:' ) ) {
 				return 'response sets a cookie';
+			}
+			if ( 0 === stripos( $header, 'cache-control:' ) && preg_match( '/\b(no-store|private)\b/i', $header ) ) {
+				return 'response is marked private or no-store';
 			}
 		}
 
@@ -560,6 +851,16 @@ class Core_Diet_Cache_Engine {
 			return 'not a complete HTML document';
 		}
 
+		// The coming soon page of WooCommerce, whatever route led to it. The
+		// query check keeps it out already; this catches a page that becomes a
+		// store page without anybody telling the cache, in "store pages only"
+		// mode. The meta tag itself, as ComingSoonRequestHandler prints it
+		// (WooCommerce 11.1), not the bare name: a post that writes about that
+		// tag has it escaped, and must still be cached.
+		if ( preg_match( '/<meta name=["\']woo-coming-soon-page["\']/', $buffer ) ) {
+			return 'WooCommerce coming soon page';
+		}
+
 		/**
 		 * Filter whether the current page is kept out of the cache.
 		 *
@@ -567,6 +868,11 @@ class Core_Diet_Cache_Engine {
 		 */
 		if ( apply_filters( 'dietpress_cache_bypass', false ) ) {
 			return 'dietpress_cache_bypass filter';
+		}
+
+		if ( $this->built_for_mobile ) {
+			$this->mobile_skipped = true;
+			return 'built for a mobile device';
 		}
 
 		// A copy is filed under the scheme the page was built with and looked
@@ -668,6 +974,30 @@ class Core_Diet_Cache_Engine {
 			return '';
 		}
 
+		foreach ( self::get_bypass_cookie_prefixes() as $prefix ) {
+			// PHP turns dots and spaces in a cookie name into underscores when it
+			// fills $_COOKIE, so a prefix with them is compared in that form too.
+			$as_php = strtr( $prefix, '. ', '__' );
+
+			foreach ( $this->cookie_names as $name ) {
+				$name = (string) $name;
+				if ( 0 === strpos( $name, $prefix ) || 0 === strpos( $name, $as_php ) ) {
+					return $prefix;
+				}
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * Cookie name prefixes that make a visitor non-anonymous.
+	 *
+	 * Public because the accelerator writes the same list into its rules.
+	 *
+	 * @return string[]
+	 */
+	public static function get_bypass_cookie_prefixes() {
 		$prefixes = array(
 			'wordpress_logged_in',       // Authenticated session.
 			'wp-postpass_',              // Unlocked a password protected post.
@@ -679,23 +1009,32 @@ class Core_Diet_Cache_Engine {
 			'wp-resetpass-',
 		);
 
+		// A site can rename its login cookie in wp-config.php, and a visitor who
+		// is logged in under that name would otherwise look anonymous to the
+		// lookup, which runs before WordPress can say who they are.
+		if ( defined( 'LOGGED_IN_COOKIE' ) && is_string( LOGGED_IN_COOKIE ) && '' !== LOGGED_IN_COOKIE && 0 !== strpos( LOGGED_IN_COOKIE, 'wordpress_logged_in' ) ) {
+			$prefixes[] = LOGGED_IN_COOKIE;
+		}
+
 		/**
 		 * Filter the cookie name prefixes that keep a visitor out of the cache.
+		 *
+		 * With the accelerator on, the list is written into the server rules,
+		 * so a prefix added only on some requests will not reach them.
 		 *
 		 * @param array $prefixes Cookie name prefixes.
 		 */
 		$prefixes = apply_filters( 'dietpress_cache_bypass_cookies', $prefixes );
 
-		foreach ( $this->cookie_names as $name ) {
-			$name = (string) $name;
-			foreach ( $prefixes as $prefix ) {
-				if ( 0 === strpos( $name, $prefix ) ) {
-					return $prefix;
-				}
+		$out = array();
+		foreach ( (array) $prefixes as $prefix ) {
+			$prefix = (string) $prefix;
+			if ( '' !== $prefix ) {
+				$out[] = $prefix;
 			}
 		}
 
-		return '';
+		return array_values( array_unique( $out ) );
 	}
 
 	/**
@@ -722,17 +1061,16 @@ class Core_Diet_Cache_Engine {
 	 * @return string
 	 */
 	private function get_request_path() {
-		if ( ! isset( $_SERVER['REQUEST_URI'] ) ) {
+		if ( null === $this->request_uri ) {
 			return '/';
 		}
 
 		// sanitize_url() and not sanitize_text_field(), for the reason spelled
-		// out in Core_Diet_Cache_Store::dir_for_request(). Decoded on the way
-		// out so the exclusion patterns compare against the same spelling the
-		// site owner typed, and so "/wp-%61dmin/" cannot walk past the reserved
-		// path check below.
-		$uri   = sanitize_url( wp_unslash( $_SERVER['REQUEST_URI'] ) );
-		$parts = explode( '?', $uri, 2 );
+		// out in Core_Diet_Cache_Store::dir_for_request(); the constructor
+		// photographed it that way. Decoded on the way out so the exclusion
+		// patterns compare against the same spelling the site owner typed, and
+		// so "/wp-%61dmin/" cannot walk past the reserved path check below.
+		$parts = explode( '?', $this->request_uri, 2 );
 
 		return '' === $parts[0] ? '/' : rawurldecode( $parts[0] );
 	}
@@ -880,12 +1218,18 @@ class Core_Diet_Cache_Engine {
 	/**
 	 * Whether the visitor asked the browser for a fresh copy.
 	 *
+	 * Only no-cache counts, which is what a forced reload sends. Up to 3.5.6
+	 * max-age=0 counted too, and browsers send that on an ordinary reload, so
+	 * any visitor who pressed reload rebuilt the page and stored it again
+	 * (reported by Fernando on aulawp.com: MISS on every reload, HIT on a plain
+	 * visit). The accelerator rules honour the same header.
+	 *
 	 * @return bool
 	 */
 	private function is_reload_forced() {
 		if ( isset( $_SERVER['HTTP_CACHE_CONTROL'] ) ) {
 			$value = strtolower( sanitize_text_field( wp_unslash( $_SERVER['HTTP_CACHE_CONTROL'] ) ) );
-			if ( false !== strpos( $value, 'no-cache' ) || false !== strpos( $value, 'no-store' ) || false !== strpos( $value, 'max-age=0' ) ) {
+			if ( false !== strpos( $value, 'no-cache' ) ) {
 				return true;
 			}
 		}

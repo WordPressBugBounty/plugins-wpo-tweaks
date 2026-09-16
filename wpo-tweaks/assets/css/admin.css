@@ -250,6 +250,30 @@
 	max-width: 100%;
 }
 
+/* A number field: label on its own line, then the box with its unit beside it. */
+.core-diet-option-header-stacked {
+	display: block;
+}
+
+.core-diet-option-field {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0 0 4px;
+}
+
+.core-diet-option-unit {
+	color: #50575e;
+	font-size: 13px;
+}
+
+/* Cleanup schedule: two selects, one under the other and separated, not glued. */
+.core-diet-cache-schedule {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
 /* Conditional fields (shown/hidden by JS) */
 .core-diet-conditional {
 	display: inline-flex;
