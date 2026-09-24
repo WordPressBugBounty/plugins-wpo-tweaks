@@ -84,6 +84,17 @@ class Core_Diet_Cache {
 		add_action( 'update_option_siteurl', array( __CLASS__, 'on_rules_input_changed' ) );
 
 		if ( is_admin() ) {
+			/*
+			 * The same check as on activated_plugin, because a cache does not
+			 * always arrive as a plugin activation. Switching the file cache of
+			 * a hosting plugin on writes advanced-cache.php and sets WP_CACHE
+			 * from its own settings screen, and until 3.7.0 nothing noticed:
+			 * the Cache tab said the module was blocked while the engine went
+			 * on answering every front-end request, so the site had two page
+			 * caches running and an X-DietPress-Cache header on a cache its
+			 * owner believed was off.
+			 */
+			add_action( 'admin_init', array( __CLASS__, 'disable_on_new_conflict' ), 5 );
 			add_action( 'admin_init', array( 'Core_Diet_Cache_Accelerator', 'maybe_sync' ), 20 );
 
 			require_once $dir . 'class-core-diet-cache-admin.php';
@@ -91,7 +102,7 @@ class Core_Diet_Cache {
 			$admin->init();
 		}
 
-		if ( ! self::is_enabled() ) {
+		if ( ! self::should_run() ) {
 			return;
 		}
 
@@ -119,11 +130,30 @@ class Core_Diet_Cache {
 	}
 
 	/**
-	 * Whether the engine should run on this request.
+	 * Whether the engine may run on this request.
+	 *
+	 * The option says yes and no other page cache is in charge. The second half
+	 * costs one stat call, which is what a foreign advanced-cache.php amounts
+	 * to, and it is the difference between a blocked module and a module that
+	 * says it is blocked while it answers every request.
+	 *
+	 * @return bool
+	 */
+	public static function should_run() {
+		return self::is_enabled() && ! Core_Diet_Cache_Compat::has_foreign_dropin();
+	}
+
+	/**
+	 * Whether the module is switched on.
+	 *
+	 * Says what the site owner chose, which is not always what this request
+	 * does: should_run() is what decides that. Everything that reports state,
+	 * schedules work or renders a screen asks this one.
 	 *
 	 * Deliberately cheap: one autoloaded option and two constant checks. The
 	 * conflict detection, which touches the filesystem, runs when the settings
-	 * are saved and when the settings page is rendered, not on every hit.
+	 * are saved, on admin_init and when the settings page is rendered, not on
+	 * every hit.
 	 *
 	 * @return bool
 	 */
@@ -365,7 +395,7 @@ class Core_Diet_Cache {
 			return;
 		}
 
-		$blocking = Core_Diet_Cache_Compat::get_blocking_reasons();
+		$blocking = Core_Diet_Cache_Compat::get_conflict_reasons();
 		if ( ! $blocking ) {
 			return;
 		}

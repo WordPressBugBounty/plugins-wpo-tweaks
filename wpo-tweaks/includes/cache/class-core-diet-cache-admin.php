@@ -451,7 +451,7 @@ class Core_Diet_Cache_Admin {
 		$this->render_section_title( __( 'Browser cache (.htaccess)', 'wpo-tweaks' ) );
 		?>
 		<p class="core-diet-tab-description">
-			<?php esc_html_e( 'Rules written to your .htaccess file that tell browsers and CDNs how long to keep your images, styles, scripts and fonts. Nothing here depends on the page cache: they work whether it is on or off. Compression and keep-alive are written to the same file, but they are not caching, so they stayed in the Strict tab.', 'wpo-tweaks' ); ?>
+			<?php esc_html_e( 'Rules written to your .htaccess file that tell browsers and CDNs how long to keep your images, styles, scripts and fonts. Nothing here depends on the page cache: they work whether it is on or off. Compression is written to the same file, but it is not caching, so it stayed in the Strict tab.', 'wpo-tweaks' ); ?>
 		</p>
 		<?php
 

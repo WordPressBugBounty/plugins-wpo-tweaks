@@ -674,7 +674,6 @@ class Core_Diet_Tools {
 			'htaccess_brotli'            => array( 0, 0, 0 ),
 			'htaccess_cache_headers'     => array( 0, 0, 0 ),
 			'htaccess_cors_fonts'        => array( 0, 0, 0 ),
-			'htaccess_keepalive'         => array( 0, 0, 0 ),
 		);
 	}
 
@@ -914,7 +913,6 @@ class Core_Diet_Tools {
 			'htaccess_cache_headers' => array( 'cache', 'htaccess_browser_cache', __( 'Adds the Cache-Control and Vary headers that make browsers and CDNs reuse files instead of asking again.', 'wpo-tweaks' ) ),
 			'htaccess_gzip'          => array( 'strict', 'htaccess_rules', __( 'Compresses HTML, CSS and JavaScript before sending them. Typically cuts their size by two thirds.', 'wpo-tweaks' ) ),
 			'htaccess_brotli'        => array( 'strict', 'htaccess_rules', __( 'Compresses better than GZIP on servers that support it, and falls back on its own where they do not.', 'wpo-tweaks' ) ),
-			'htaccess_keepalive'     => array( 'strict', 'htaccess_rules', __( 'Reuses the same connection for several files instead of opening one per file.', 'wpo-tweaks' ) ),
 		);
 
 		foreach ( $htaccess as $key => $entry ) {

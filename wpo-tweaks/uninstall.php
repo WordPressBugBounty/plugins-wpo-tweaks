@@ -16,6 +16,7 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 // Delete plugin options.
 delete_option( 'core_diet_settings' );
 delete_option( 'core_diet_version' );
+delete_option( 'core_diet_html_maxage_migrated' );
 
 // Page cache module: its own option, its bookkeeping and the whole cache tree.
 delete_option( 'core_diet_cache_settings' );
@@ -59,6 +60,7 @@ delete_option( 'ayudawp_wpotweaks_show_activation_notice' );
 // Delete any transients.
 delete_transient( 'core_diet_activation_notice' );
 delete_transient( 'core_diet_security_removed_notice' );
+delete_transient( 'core_diet_html_maxage_notice' );
 
 // Unschedule the transient-cleanup cron event.
 wp_clear_scheduled_hook( 'core_diet_clean_transients' );

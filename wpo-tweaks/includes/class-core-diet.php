@@ -197,6 +197,7 @@ class Core_Diet {
 
 		// One-time notice about the removed security toggles (see Vigilant).
 		add_action( 'admin_notices', array( __CLASS__, 'security_removed_notice' ) );
+		add_action( 'admin_notices', array( __CLASS__, 'html_maxage_notice' ) );
 	}
 
 	/**
@@ -264,6 +265,7 @@ class Core_Diet {
 		// Clear any transients.
 		delete_transient( 'core_diet_activation_notice' );
 		delete_transient( 'core_diet_security_removed_notice' );
+		delete_transient( 'core_diet_html_maxage_notice' );
 
 		// Unschedule the transient-cleanup cron event.
 		wp_clear_scheduled_hook( 'core_diet_clean_transients' );
@@ -302,6 +304,10 @@ class Core_Diet {
 		// now) and queue a one-time notice if any of them was enabled.
 		self::migrate_removed_security_settings();
 
+		// Must run before the rules are rewritten below, or the block goes to
+		// disk with the value this very function is about to change.
+		self::migrate_html_maxage_default();
+
 		$htaccess = new Core_Diet_Htaccess( Core_Diet_Settings::get_instance() );
 
 		// One-time removal of legacy on-disk artifacts: the old wp-config.php
@@ -338,6 +344,97 @@ class Core_Diet {
 
 		// Mark this version as fully upgraded.
 		update_option( 'core_diet_version', CORE_DIET_VERSION );
+	}
+
+	/**
+	 * Move sites off the old "Always revalidate" default for the HTML.
+	 *
+	 * Until 3.7.0 the default made every page say max-age=0 and, with the
+	 * Expires rules on, arrive with an Expires already in the past. A browser
+	 * reads that as "ask me again", which is what it was chosen for, and every
+	 * cache between the site and the visitor reads it as "do not store this",
+	 * which nobody chose: on a SiteGround store it left 2 cache hits in 480.000
+	 * requests, each miss paying for a full PHP render.
+	 *
+	 * Only the exact old default is moved, and only once, tracked by an option
+	 * of its own rather than by the version so a site that later picks
+	 * "Always revalidate" on purpose keeps it through the next update. A site
+	 * that had chosen 5 minutes, an hour or a day is left alone: those are
+	 * lifetimes a shared cache can work with.
+	 */
+	private static function migrate_html_maxage_default() {
+		if ( get_option( 'core_diet_html_maxage_migrated' ) ) {
+			return;
+		}
+
+		update_option( 'core_diet_html_maxage_migrated', CORE_DIET_VERSION, false );
+
+		$settings = get_option( 'core_diet_settings', array() );
+		if ( ! is_array( $settings ) || ! isset( $settings['htaccess_html_maxage'] ) ) {
+			return;
+		}
+
+		if ( '0' !== (string) $settings['htaccess_html_maxage'] ) {
+			return;
+		}
+
+		$settings['htaccess_html_maxage'] = Core_Diet_Htaccess::HTML_SEND_NOTHING;
+		update_option( 'core_diet_settings', $settings );
+
+		// The write above does not go through sanitize(), which is what clears
+		// this everywhere else, and the caller rewrites the .htaccess right
+		// after with the very instance that still holds the old value. Without
+		// this the option said "send nothing" and the file on disk still said
+		// zero seconds, which is the half of the bug that nobody would see.
+		Core_Diet_Settings::get_instance()->refresh();
+
+		set_transient( 'core_diet_html_maxage_notice', 1, MONTH_IN_SECONDS );
+	}
+
+	/**
+	 * Explain, once, that the HTML caching rules stopped being sent.
+	 */
+	public static function html_maxage_notice() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		if ( ! get_transient( 'core_diet_html_maxage_notice' ) ) {
+			return;
+		}
+
+		/*
+		 * Only on a screen where a notice is read, and this is not fussiness.
+		 * The upgrade routine that queues this runs on admin_init, and the
+		 * screen that fires it first is usually the one that updated the
+		 * plugin: "upload a plugin" and the updater both print admin notices,
+		 * in the middle of their own output and behind a progress view. The
+		 * notice was printed there, the transient was spent, and the site owner
+		 * never saw it. Measured on a real store on 23 sep 2026, where the
+		 * setting had migrated and no notice ever appeared.
+		 */
+		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+		$id     = $screen ? (string) $screen->id : '';
+
+		if ( ! in_array( $id, array( 'dashboard', 'dashboard-network', 'plugins', 'plugins-network' ), true )
+			&& false === strpos( $id, 'dietpress' ) ) {
+			return;
+		}
+
+		delete_transient( 'core_diet_html_maxage_notice' );
+
+		$settings_url = admin_url( 'admin.php?page=dietpress&tab=cache' );
+		?>
+		<div class="notice notice-info is-dismissible">
+			<p>
+				<strong><?php esc_html_e( 'DietPress no longer tells browsers how long to keep your pages.', 'wpo-tweaks' ); ?></strong>
+				<?php esc_html_e( 'The old default sent every page with a lifetime of zero, and that stopped any cache in front of your site, including the one your hosting runs, from storing a single page. Images, styles, scripts and fonts are unaffected and keep their lifetimes.', 'wpo-tweaks' ); ?>
+				<a href="<?php echo esc_url( $settings_url ); ?>">
+					<?php esc_html_e( 'See the Cache tab', 'wpo-tweaks' ); ?> &rarr;
+				</a>
+			</p>
+		</div>
+		<?php
 	}
 
 	/**

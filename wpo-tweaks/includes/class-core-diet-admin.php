@@ -656,7 +656,6 @@ class Core_Diet_Admin {
 			'htaccess_gzip'       => __( 'GZIP compression (mod_deflate)', 'wpo-tweaks' ),
 			'htaccess_brotli'     => __( 'Brotli compression (mod_brotli)', 'wpo-tweaks' ),
 			'htaccess_cors_fonts' => __( 'Cross-origin font loading (CORS)', 'wpo-tweaks' ),
-			'htaccess_keepalive'  => __( 'Keep-alive connections', 'wpo-tweaks' ),
 		);
 		$this->render_card_group( $htaccess_fields, array( 'htaccess_rules' ) );
 
@@ -667,8 +666,8 @@ class Core_Diet_Admin {
 	 * The browser caching rules, rendered by the Cache tab.
 	 *
 	 * Only what caches: the Expires rules with a lifetime per family of files,
-	 * and the Cache-Control headers. Compression and keep-alive stayed in
-	 * Strict, because they are written to the same file but are not caching.
+	 * and the Cache-Control headers. Compression stayed in Strict, because it
+	 * is written to the same file but is not caching.
 	 */
 	public function render_browser_cache_group() {
 		echo '<div class="core-diet-cards-grid">';
@@ -713,11 +712,25 @@ class Core_Diet_Admin {
 		);
 
 
+		$html_help = __( 'Leave it on "Send no rules for HTML" unless you know you need otherwise. Any other value makes every page say how long it may be kept, and a cache between your site and your visitors, which on most hosting is the hosting page cache itself, will not store a page that arrives with a lifetime of zero. Pick a lifetime only for a site with no cache in front of it that almost never changes.', 'wpo-tweaks' );
+
+		// Naming the cache that is actually running turns a general warning
+		// into one about this site. Only said when the current value is the one
+		// that would stop it: with nothing sent there is nothing to warn about.
+		$host_cache = class_exists( 'Core_Diet_Cache_Compat' ) ? Core_Diet_Cache_Compat::detect_host_cache() : '';
+		if ( $host_cache && '0' === (string) Core_Diet_Settings::get_instance()->get( 'htaccess_html_maxage' ) ) {
+			$html_help .= ' ' . sprintf(
+				/* translators: %s: name of the hosting cache. */
+				__( 'This site runs %s, and the value selected right now is stopping it from storing your pages.', 'wpo-tweaks' ),
+				$host_cache
+			);
+		}
+
 		$this->render_select_card(
 			'htaccess_html_maxage',
 			__( 'Let browsers keep the HTML for', 'wpo-tweaks' ),
 			$this->label_default( Core_Diet_Settings::get_html_maxage_choices(), $defaults['htaccess_html_maxage'] ),
-			__( 'Recommended: leave it on "Always revalidate", which is not the same as sending nothing and lets an edit reach visitors at once. Raise it only for a site that almost never changes.', 'wpo-tweaks' )
+			$html_help
 		);
 
 		$this->render_card_group(

@@ -779,6 +779,22 @@ class Core_Diet_Cache_Accelerator {
 			}
 		}
 
+		/*
+		 * "Send no rules for HTML", the default since 3.7.0, is honoured by
+		 * WordPress pages and not by the copies this module serves, and the
+		 * difference is Last-Modified. A page built by WordPress carries none,
+		 * so a browser with no Cache-Control has nothing to guess a lifetime
+		 * from and asks again. A stored copy carries the time it was written,
+		 * which is exactly the input heuristic caching uses (RFC 9111, section
+		 * 4.2.2), and a tenth of the age of a page stored last week is hours in
+		 * which purging here changes nothing for whoever already has it.
+		 *
+		 * The cost is that a cache in front of this one will not store these
+		 * responses either. That combination is not meant to exist: a page
+		 * cache belongs either here or at the hosting, never in both places,
+		 * and Core_Diet_Cache_Compat says so before this module can be switched
+		 * on.
+		 */
 		return 'max-age=0, must-revalidate';
 	}
 

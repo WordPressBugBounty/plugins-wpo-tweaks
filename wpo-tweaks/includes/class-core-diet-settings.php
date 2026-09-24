@@ -62,6 +62,18 @@ class Core_Diet_Settings {
 	}
 
 	/**
+	 * Drop the in-memory copy so the next read hits the database again.
+	 *
+	 * Anything that writes core_diet_settings without going through sanitize(),
+	 * which is where the rest of the plugin clears this, has to call it: the
+	 * instance keeps what it read the first time in the request, and code that
+	 * runs after the write would otherwise act on the value from before it.
+	 */
+	public function refresh() {
+		$this->settings = null;
+	}
+
+	/**
 	 * Check if a boolean toggle is enabled.
 	 *
 	 * A locked option never counts as enabled, whatever is stored for it: this
@@ -122,7 +134,6 @@ class Core_Diet_Settings {
 			'htaccess_gzip'              => array( 'htaccess_rules', false, 'htaccess', 'soft' ),
 			'htaccess_brotli'            => array( 'htaccess_rules', false, 'htaccess', 'soft' ),
 			'htaccess_cors_fonts'        => array( 'htaccess_rules', false, 'htaccess', 'soft' ),
-			'htaccess_keepalive'         => array( 'htaccess_rules', false, 'htaccess', 'soft' ),
 
 			'htaccess_expires'           => array( 'htaccess_browser_cache', false, 'browsercache', 'soft' ),
 			'htaccess_cache_headers'     => array( 'htaccess_browser_cache', false, 'browsercache', 'soft' ),
@@ -592,13 +603,12 @@ class Core_Diet_Settings {
 			'htaccess_expires_media'    => '1 month',
 			'htaccess_expires_assets'   => '1 year',
 			'htaccess_expires_fonts'    => '1 year',
-			'htaccess_html_maxage'      => '0',
+			'htaccess_html_maxage'      => 'none',
 			'htaccess_etag'             => true,
 			'htaccess_gzip'             => true,
 			'htaccess_brotli'           => true,
 			'htaccess_cache_headers'    => true,
 			'htaccess_cors_fonts'       => true,
-			'htaccess_keepalive'        => true,
 		);
 	}
 
@@ -678,7 +688,7 @@ class Core_Diet_Settings {
 			// true, which then survives the allowlist check further down
 			// because that check only ever writes a value it recognises.
 			'htaccess_rules', 'htaccess_browser_cache', 'htaccess_expires', 'htaccess_gzip', 'htaccess_brotli',
-			'htaccess_cache_headers', 'htaccess_cors_fonts', 'htaccess_keepalive',
+			'htaccess_cache_headers', 'htaccess_cors_fonts',
 			'htaccess_etag',
 		);
 	}
@@ -844,10 +854,18 @@ class Core_Diet_Settings {
 	/**
 	 * How long browsers may keep an HTML document.
 	 *
+	 * "none" is not a period, it is the absence of one: the plugin writes no
+	 * Expires rule for HTML and sends no Cache-Control of its own, so whatever
+	 * the site runs behind (a server cache, a CDN) decides. Every other value
+	 * makes the page arrive with an explicit lifetime, and a shared cache that
+	 * honours the response headers, which is all of them, refuses to store a
+	 * page that says max-age=0. That is why the default moved here in 3.7.0.
+	 *
 	 * @return array Period => label.
 	 */
 	public static function get_html_maxage_choices() {
 		return array(
+			'none'      => __( 'Send no rules for HTML', 'wpo-tweaks' ),
 			'0'         => __( 'Always revalidate', 'wpo-tweaks' ),
 			'5 minutes' => __( '5 minutes', 'wpo-tweaks' ),
 			'1 hour'   => __( '1 hour', 'wpo-tweaks' ),
@@ -951,7 +969,6 @@ class Core_Diet_Settings {
 					'htaccess_gzip',
 					'htaccess_brotli',
 					'htaccess_cors_fonts',
-					'htaccess_keepalive',
 				);
 
 			case 'cache':
@@ -1100,7 +1117,6 @@ class Core_Diet_Settings {
 			'htaccess_brotli'            => __( 'Brotli compression (mod_brotli) (.htaccess)', 'wpo-tweaks' ),
 			'htaccess_cache_headers'     => __( 'Cache-Control and Vary headers (mod_headers) (.htaccess)', 'wpo-tweaks' ),
 			'htaccess_cors_fonts'        => __( 'Cross-origin font loading (CORS) (.htaccess)', 'wpo-tweaks' ),
-			'htaccess_keepalive'         => __( 'Keep-alive connections (.htaccess)', 'wpo-tweaks' ),
 
 			// Emails.
 			'disable_auto_core_update_email'      => __( 'Core auto-update result email', 'wpo-tweaks' ),
@@ -1203,7 +1219,6 @@ class Core_Diet_Settings {
 			'htaccess_cache_headers' => __( 'Sends Cache-Control with the same lifetimes as the Expires rules above, marks versioned styles, scripts and fonts as immutable, and adds Vary Accept-Encoding (mod_headers).', 'wpo-tweaks' ),
 			'htaccess_etag' => __( 'Drops the ETag header from static files. With a max-age already set it adds nothing, and on some clustered hosting the value differs per server and defeats the cache.', 'wpo-tweaks' ),
 			'htaccess_cors_fonts' => __( 'Adds Access-Control-Allow-Origin to font files so they load from a CDN or different subdomain. Disable if your policy forbids a wildcard CORS origin.', 'wpo-tweaks' ),
-			'htaccess_keepalive' => __( 'Sends a Connection keep-alive header to encourage connection reuse. Some managed hosts manage keep-alive themselves and may ignore it.', 'wpo-tweaks' ),
 
 			// Emails.
 			'disable_auto_core_update_email' => __( 'Stops the email WordPress sends after an automatic core update. Critical failure notices are always kept.', 'wpo-tweaks' ),

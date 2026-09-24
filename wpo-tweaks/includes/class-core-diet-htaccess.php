@@ -3,7 +3,7 @@
  * DietPress .htaccess rules.
  *
  * Writes server-level performance directives (browser caching, GZIP/Brotli
- * compression, cache headers, CORS for fonts, keep-alive) into the site
+ * compression, cache headers, CORS for fonts) into the site
  * .htaccess via the WordPress markers API with idempotent writes.
  * insert_with_markers() only ever touches the plugin's own marked block, so the
  * rest of the site .htaccess is left untouched and no backup is needed.
@@ -26,6 +26,16 @@ class Core_Diet_Htaccess {
 	 * @var string
 	 */
 	private $htaccess_marker = 'DietPress';
+
+	/**
+	 * Value of htaccess_html_maxage that means "write and send nothing".
+	 *
+	 * Not a period, so it never reaches period_to_seconds(): every caller has
+	 * to recognise it first. Default since 3.7.0.
+	 *
+	 * @var string
+	 */
+	const HTML_SEND_NOTHING = 'none';
 
 	/**
 	 * Legacy marker names, cleaned up on every rewrite: the block written by
@@ -71,12 +81,22 @@ class Core_Diet_Htaccess {
 	 * nothing and the setting was very nearly inert. From here it applies to
 	 * every page WordPress renders, and it works on nginx too.
 	 *
-	 * Note that zero is not the same as sending nothing. With no Cache-Control
-	 * at all a browser falls back to heuristic caching, typically a tenth of
-	 * the age of the document, which can be hours and is entirely out of the
-	 * site's hands. "max-age=0, must-revalidate" makes it ask every time, and
-	 * the answer is usually a 304 of a few hundred bytes, so the page is not
-	 * re-downloaded either.
+	 * Since 3.7.0 the default is to send nothing at all, and the reason is what
+	 * the old default cost. "max-age=0, must-revalidate" is a correct answer
+	 * for a browser and a fatal one for everything else: a cache between the
+	 * site and the visitor, which on managed hosting means the hosting's own
+	 * page cache, will not store a response that arrives already stale. On a
+	 * SiteGround store the result was 2 hits in 480.000 requests, with every
+	 * visit costing a full PHP render. The setting is still there for a site
+	 * that wants it, but nobody gets it without choosing it.
+	 *
+	 * What sending nothing gives up is the guard against heuristic caching: a
+	 * browser with no freshness information of any kind may guess a lifetime of
+	 * its own (RFC 9111, section 4.2.2), normally from Last-Modified, which
+	 * WordPress does not send on an ordinary page. The copies this plugin's own
+	 * page cache serves do send it, and they keep sending an explicit
+	 * Cache-Control for exactly that reason; see
+	 * Core_Diet_Cache_Accelerator::hit_cache_control().
 	 *
 	 * @param array $headers Headers WordPress is about to send.
 	 * @return array
@@ -86,25 +106,91 @@ class Core_Diet_Htaccess {
 			return $headers;
 		}
 
+		$period = (string) $this->settings->get( 'htaccess_html_maxage' );
+
+		// Nothing to say about this response, which is the default.
+		if ( self::HTML_SEND_NOTHING === $period ) {
+			return $headers;
+		}
+
 		// A logged in visitor gets personalised pages, and anything that has
 		// declared itself uncacheable stays that way.
 		if ( is_user_logged_in() || ( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) ) {
 			return $headers;
 		}
 
-		// Something already spoke for this response, WooCommerce on the cart
-		// and the checkout being the usual case. Do not argue with it.
+		// Pages that are personal by definition, whatever their headers say.
+		// WooCommerce fixes the cart, the checkout and the account from this
+		// very filter on priority 5, so the check below already covered them;
+		// this states it, so a store stays right if that code ever moves to a
+		// hook this one does not see.
+		if ( $this->is_personal_page() ) {
+			return $headers;
+		}
+
+		// Something already spoke for this response. Do not argue with it.
 		if ( isset( $headers['Cache-Control'] ) ) {
 			return $headers;
 		}
 
-		$seconds = Core_Diet_Settings::period_to_seconds( (string) $this->settings->get( 'htaccess_html_maxage' ) );
+		// And the same for whatever did not come through this filter.
+		// nocache_headers() prints with header() and never reaches the array,
+		// so a plugin that called it before send_headers(), or a PHP session,
+		// used to be overwritten here without leaving a trace.
+		if ( self::cache_control_already_sent() ) {
+			return $headers;
+		}
+
+		$seconds = Core_Diet_Settings::period_to_seconds( $period );
 
 		$headers['Cache-Control'] = $seconds > 0
 			? 'max-age=' . $seconds . ', public'
 			: 'max-age=0, must-revalidate';
 
 		return $headers;
+	}
+
+	/**
+	 * Whether this response belongs to one visitor and nobody else.
+	 *
+	 * WooCommerce is the case that matters and the only one detected here; a
+	 * site with another kind of personal page says so through the filter.
+	 *
+	 * @return bool
+	 */
+	private function is_personal_page() {
+		$personal = function_exists( 'is_cart' )
+			&& function_exists( 'is_checkout' )
+			&& function_exists( 'is_account_page' )
+			&& ( is_cart() || is_checkout() || is_account_page() );
+
+		/**
+		 * Filters whether DietPress leaves this page's Cache-Control alone.
+		 *
+		 * @since 3.7.0
+		 *
+		 * @param bool $personal Whether the page is personal to one visitor.
+		 */
+		return (bool) apply_filters( 'dietpress_html_cache_control_skip', $personal );
+	}
+
+	/**
+	 * Whether a Cache-Control header has already gone out for this response.
+	 *
+	 * @return bool
+	 */
+	private static function cache_control_already_sent() {
+		if ( ! function_exists( 'headers_list' ) ) {
+			return false;
+		}
+
+		foreach ( headers_list() as $header ) {
+			if ( 0 === stripos( $header, 'cache-control:' ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -432,30 +518,28 @@ class Core_Diet_Htaccess {
 		// Expires Headers.
 		if ( $browser_cache && $this->settings->is_enabled( 'htaccess_expires' ) ) {
 			/*
-			 * The page itself, and it has to be stated. ExpiresDefault applies
-			 * to every content type that has no rule of its own, text/html
-			 * included, so without this line every page WordPress renders was
-			 * handed the media lifetime. On an anonymous hit the Cache-Control
-			 * sent from set_html_cache_control() overrides it in the browser,
-			 * which is why nobody sees it; on a logged in front-end view that
-			 * header is deliberately not sent, and there the month stuck.
+			 * There is no ExpiresDefault any more, and its absence is the fix.
+			 * It applied to every content type without a rule of its own, which
+			 * on a default install meant a month of browser caching for feeds
+			 * (application/rss+xml is not a type anyone lists), robots.txt,
+			 * ads.txt, llms.txt and every other text/plain file, none of which
+			 * anybody chose. What is meant to be cached is named below, one
+			 * type at a time, and what is not named is left alone.
 			 *
-			 * The value tracks the "let browsers keep the HTML for" setting so
-			 * the two never contradict each other.
+			 * text/html is not here at all, whatever the site chose. How long
+			 * a page may be kept is decided in set_html_cache_control(), which
+			 * knows what this file cannot: whether the visitor is logged in,
+			 * whether the page is a cart or a checkout, whether something
+			 * already declared the response uncacheable. mod_expires knows
+			 * none of that and adds a Cache-Control of its own on top of the
+			 * one PHP sent, so on a page another plugin had marked no-store the
+			 * response left with "private, max-age=0, no-store" and a second
+			 * Cache-Control saying max-age=3600 (measured on Testing, 22 sep
+			 * 2026). One lifetime, decided in one place.
 			 */
-			$html_choices = Core_Diet_Settings::get_html_maxage_choices();
-			$html_period  = (string) $this->settings->get( 'htaccess_html_maxage' );
-			$html_period  = isset( $html_choices[ $html_period ] ) ? $html_period : '0';
-			$html_age     = Core_Diet_Settings::period_to_seconds( $html_period );
-
 			$lines[] = '# Browser Caching with Expires Headers';
 			$lines[] = '<IfModule mod_expires.c>';
 			$lines[] = 'ExpiresActive On';
-			$lines[] = 'ExpiresDefault "access plus ' . $media . '"';
-			$lines[] = '';
-			$lines[] = '# HTML pages';
-			$lines[] = 'ExpiresByType text/html "access plus ' . $html_age . ' seconds"';
-			$lines[] = 'ExpiresByType application/xhtml+xml "access plus ' . $html_age . ' seconds"';
 			$lines[] = '';
 			$lines[] = '# Images';
 			$lines[] = 'ExpiresByType image/x-icon "access plus 1 year"';
@@ -471,7 +555,10 @@ class Core_Diet_Htaccess {
 			$lines[] = 'ExpiresByType video/mp4 "access plus ' . $media . '"';
 			$lines[] = 'ExpiresByType video/ogg "access plus ' . $media . '"';
 			$lines[] = 'ExpiresByType video/webm "access plus ' . $media . '"';
+			$lines[] = 'ExpiresByType video/quicktime "access plus ' . $media . '"';
 			$lines[] = 'ExpiresByType audio/ogg "access plus ' . $media . '"';
+			$lines[] = 'ExpiresByType audio/mpeg "access plus ' . $media . '"';
+			$lines[] = 'ExpiresByType audio/wav "access plus ' . $media . '"';
 			$lines[] = '';
 			$lines[] = '# CSS and JavaScript';
 			$lines[] = 'ExpiresByType text/css "access plus ' . $assets . '"';
@@ -493,21 +580,25 @@ class Core_Diet_Htaccess {
 			$lines[] = '# Other files';
 			$lines[] = 'ExpiresByType application/pdf "access plus ' . $media . '"';
 			$lines[] = 'ExpiresByType application/manifest+json "access plus 1 year"';
-			$lines[] = 'ExpiresByType application/x-web-app-manifest+json "access plus 0 seconds"';
-			$lines[] = 'ExpiresByType text/cache-manifest "access plus 0 seconds"';
-			$lines[] = 'ExpiresByType application/xml "access plus 0 seconds"';
-			$lines[] = 'ExpiresByType text/xml "access plus 0 seconds"';
-			$lines[] = 'ExpiresByType application/json "access plus 0 seconds"';
+			// Nothing is listed at "0 seconds" on purpose. Those lines were
+			// only ever fencing XML, JSON and the manifests off from
+			// ExpiresDefault, and with it gone they would do the one thing
+			// worth avoiding: hand a sitemap or a REST response an Expires in
+			// the past, which is what stops a CDN from storing it.
 			$lines[] = '</IfModule>';
 			$lines[] = '';
 		}
 
 		// GZIP Compression.
 		if ( $compression && $this->settings->is_enabled( 'htaccess_gzip' ) ) {
+			// No global SetOutputFilter DEFLATE. It compressed every response,
+			// including the types excluded right below and the ones the list
+			// further down already covers, and on some Apache builds having
+			// both means the filter runs twice on the same body. Behind nginx
+			// or Cloudflare the proxy compresses anyway, so the only thing the
+			// global filter reliably added was CPU per dynamic response.
 			$lines[] = '# GZIP Compression';
 			$lines[] = '<IfModule mod_deflate.c>';
-			$lines[] = 'SetOutputFilter DEFLATE';
-			$lines[] = '';
 			$lines[] = '# Exclude already compressed files';
 			$lines[] = 'SetEnvIfNoCase Request_URI \\.(?:gif|jpe?g|png|webp|avif)$ no-gzip dont-vary';
 			$lines[] = 'SetEnvIfNoCase Request_URI \\.(?:exe|t?gz|zip|bz2|sit|rar)$ no-gzip dont-vary';
@@ -553,19 +644,17 @@ class Core_Diet_Htaccess {
 		// Cache-Control Headers (mod_headers).
 		//
 		// This <IfModule> wraps several distinct concerns: immutable Cache-Control,
-		// Vary, ETag removal, CORS for fonts, and keep-alive. The block is opened
-		// when ANY of those sub-toggles is on, and each inner section is included
-		// only when its own toggle is enabled, so unrelated directives never leak
-		// in.
+		// Vary, ETag removal and CORS for fonts. The block is opened when ANY of
+		// those sub-toggles is on, and each inner section is included only when
+		// its own toggle is enabled, so unrelated directives never leak in.
 		$open_headers = (
 			( $browser_cache && $this->settings->is_enabled( 'htaccess_cache_headers' ) ) ||
-			( $compression && $this->settings->is_enabled( 'htaccess_cors_fonts' ) ) ||
-			( $compression && $this->settings->is_enabled( 'htaccess_keepalive' ) )
+			( $compression && $this->settings->is_enabled( 'htaccess_cors_fonts' ) )
 		);
 
 		if ( $open_headers ) {
 			// Named for what the block will hold: with browser caching off the
-			// only headers here are CORS and keep-alive.
+			// only headers here are the CORS ones for fonts.
 			$lines[] = ( $browser_cache && $this->settings->is_enabled( 'htaccess_cache_headers' ) )
 				? '# Cache-Control Headers'
 				: '# Response headers';
@@ -611,9 +700,14 @@ class Core_Diet_Htaccess {
 					$lines[] = '</FilesMatch>';
 					$lines[] = '';
 				}
+				// merge, not append, and no colon after the name. mod_deflate
+				// already adds Vary: Accept-Encoding to everything it
+				// compresses, and append would then send the field twice; merge
+				// is the directive that exists for exactly this and leaves one.
+				// The colon was accepted, but only Apache promises that.
 				$lines[] = '# Vary Accept-Encoding for better CDN caching';
 				$lines[] = '<FilesMatch "\\.(?:js|css|xml|gz|html|svg)$">';
-				$lines[] = 'Header append Vary: Accept-Encoding';
+				$lines[] = 'Header merge Vary Accept-Encoding';
 				$lines[] = '</FilesMatch>';
 				$lines[] = '';
 			}
@@ -626,12 +720,11 @@ class Core_Diet_Htaccess {
 				$lines[] = '';
 			}
 
-			if ( $compression && $this->settings->is_enabled( 'htaccess_keepalive' ) ) {
-				$lines[] = '# Keep-Alive for connection reuse';
-				$lines[] = 'Header set Connection keep-alive';
-				$lines[] = '';
-			}
-
+			// No "Header set Connection keep-alive". HTTP/2 forbids connection
+			// specific header fields outright (RFC 9113, section 8.2.2), on
+			// HTTP/1.1 the connection is kept alive by Apache's own KeepAlive
+			// directive and not by a header the application sets, and behind a
+			// proxy the connection the visitor uses is not this one at all.
 			$lines[] = '</IfModule>';
 		}
 

@@ -68,6 +68,16 @@ class Core_Diet_Cache_Compat {
 	 * @return string Display name, or empty string when none is detected.
 	 */
 	public static function detect_host_cache() {
+		/*
+		 * SiteGround first, and by its plugin rather than by a constant or a
+		 * header: the dynamic cache lives in the hosting's nginx, so nothing
+		 * about it reaches PHP, and Speed Optimizer is what switches it on and
+		 * purges it. Added in 3.7.0 after a store where DietPress was sending
+		 * headers that stopped that cache from storing a single page.
+		 */
+		if ( self::is_plugin_active( 'sg-cachepress' ) || class_exists( 'SiteGround_Optimizer\\Options\\Options' ) ) {
+			return 'SiteGround Speed Optimizer';
+		}
 		if ( isset( $_SERVER['KINSTA_CACHE_ZONE'] ) ) {
 			return 'Kinsta';
 		}
@@ -122,6 +132,27 @@ class Core_Diet_Cache_Compat {
 	}
 
 	/**
+	 * Whether a plugin is active, by the name of its directory.
+	 *
+	 * @param string $slug Plugin directory name.
+	 * @return bool
+	 */
+	public static function is_plugin_active( $slug ) {
+		$active = (array) get_option( 'active_plugins', array() );
+		if ( is_multisite() ) {
+			$active = array_merge( $active, array_keys( (array) get_site_option( 'active_sitewide_plugins', array() ) ) );
+		}
+
+		foreach ( $active as $plugin ) {
+			if ( strtok( $plugin, '/' ) === $slug ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
 	 * Active page cache plugins that conflict with this module.
 	 *
 	 * @return array Display names.
@@ -159,16 +190,18 @@ class Core_Diet_Cache_Compat {
 	}
 
 	/**
-	 * Reasons the module must not run at all.
+	 * The blocking reasons that mean another cache is in charge.
 	 *
-	 * @return array Human readable sentences, empty when the module can run.
+	 * A subset of get_blocking_reasons(), and the only part of it that may
+	 * switch the module off by itself. The rest describe the state of this
+	 * install at one instant: a cache directory that cannot be written to
+	 * during a deploy is a reason to stop serving, never a reason to change
+	 * what the site owner chose.
+	 *
+	 * @return array Human readable sentences.
 	 */
-	public static function get_blocking_reasons() {
+	public static function get_conflict_reasons() {
 		$reasons = array();
-
-		if ( is_multisite() ) {
-			$reasons['multisite'] = __( 'The page cache does not support multisite yet: one cache directory per site in a network needs a key design this version does not have. It is planned for a later release.', 'wpo-tweaks' );
-		}
 
 		$conflicts = self::get_active_conflicts();
 		if ( $conflicts ) {
@@ -180,8 +213,37 @@ class Core_Diet_Cache_Compat {
 		}
 
 		if ( self::has_foreign_dropin() ) {
-			$reasons['dropin'] = __( 'An advanced-cache.php drop-in from another plugin is active with WP_CACHE enabled. That drop-in runs before this module and would win every request.', 'wpo-tweaks' );
+			$host = self::detect_host_cache();
+
+			// Saying whose it is turns "something is in the way" into an
+			// instruction. On managed hosting the drop-in almost always belongs
+			// to the host's own cache plugin, and the site owner has no reason
+			// to connect the two by themselves.
+			$reasons['dropin'] = $host
+				? sprintf(
+					/* translators: %s: name of the hosting cache. */
+					__( 'An advanced-cache.php drop-in is active with WP_CACHE enabled, and %s is running on this site. That drop-in loads before this module and would win every request, so the page cache here stays off. Use one of the two, never both.', 'wpo-tweaks' ),
+					$host
+				)
+				: __( 'An advanced-cache.php drop-in from another plugin is active with WP_CACHE enabled. That drop-in runs before this module and would win every request.', 'wpo-tweaks' );
 		}
+
+		return $reasons;
+	}
+
+	/**
+	 * Reasons the module must not run at all.
+	 *
+	 * @return array Human readable sentences, empty when the module can run.
+	 */
+	public static function get_blocking_reasons() {
+		$reasons = array();
+
+		if ( is_multisite() ) {
+			$reasons['multisite'] = __( 'The page cache does not support multisite yet: one cache directory per site in a network needs a key design this version does not have. It is planned for a later release.', 'wpo-tweaks' );
+		}
+
+		$reasons = array_merge( $reasons, self::get_conflict_reasons() );
 
 		if ( ! Core_Diet_Cache_Store::is_writable() ) {
 			$reasons['writable'] = sprintf(
