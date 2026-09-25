@@ -1,6 +1,6 @@
 <?php
 /**
- * Page cache self test: the site asks for its own home page, as a stranger would.
+ * Page cache self test: the site asks for one of its pages, as a stranger would.
  *
  * Doing it from the server means the answer is about the site and not about
  * the browser of the administrator, who is logged in and never gets a cached
@@ -23,15 +23,25 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Core_Diet_Cache_Self_Test {
 
-	/** @var string Transient holding the token of the test in progress. */
+	/** @var string Prefix of the transients holding the token of each test in progress; see Core_Diet_Cache_Engine::diagnose_key(). */
 	const TOKEN_TRANSIENT = 'core_diet_cache_diagnose';
 
 	/** @var string Request header that carries the token. */
 	const TOKEN_HEADER = 'X-DietPress-Diagnose';
 
+	/** @var string Header with a value of its own for each request, which the engine sends back. */
+	const PROBE_HEADER = 'X-DietPress-Probe';
+
 	/**
-	 * Ask the site for its home page twice and explain what came back.
+	 * Ask the site for a page twice and explain what came back.
 	 *
+	 * The page chosen in the Cache tab, or the home page. The accelerator always
+	 * tests the home page (Core_Diet_Cache_Accelerator::enable()): whether the
+	 * server serves the copies is a property of the rules, and the home page is
+	 * the one every site has. Before 3.7.1 the button only ever tested the home
+	 * page, under the field where a page is chosen for the purge.
+	 *
+	 * @param string $url Page to test, relative or absolute; empty for the home page.
 	 * @return array {
 	 *     @type bool      $ok         Whether the page came from the cache.
 	 *     @type bool      $static     Whether the server served it without PHP.
@@ -39,14 +49,48 @@ class Core_Diet_Cache_Self_Test {
 	 *     @type string    $message    Sentence to show.
 	 * }
 	 */
-	public static function run() {
+	public static function run( $url = '' ) {
 		if ( ! Core_Diet_Cache::is_enabled() ) {
 			return self::result( false, false, null, __( 'The page cache is off, so there is nothing to test.', 'wpo-tweaks' ) );
 		}
 
-		$token = wp_generate_password( 40, false, false );
-		set_transient( self::TOKEN_TRANSIENT, $token, 2 * MINUTE_IN_SECONDS );
+		$url = self::address_to_test( $url );
+		if ( '' === $url ) {
+			return self::result( false, false, null, __( 'That address is not a page of this site that the cache can store. Pick a page from the search, or paste its full address.', 'wpo-tweaks' ) );
+		}
 
+		// The engine names the transient; it is not loaded where the page cache
+		// does not run on this request.
+		if ( ! class_exists( 'Core_Diet_Cache_Engine', false ) ) {
+			require_once CORE_DIET_DIR . 'includes/cache/class-core-diet-cache-engine.php';
+		}
+
+		// A transient of its own, so a test running at the same time neither
+		// replaces this token nor deletes it.
+		$token = wp_generate_password( 40, false, false );
+		$key   = Core_Diet_Cache_Engine::diagnose_key( $token );
+		set_transient( $key, $token, 2 * MINUTE_IN_SECONDS );
+
+		$result = self::ask( $url, $token );
+
+		delete_transient( $key );
+
+		// Every message speaks of "the page", so it says which one it was: the
+		// field it came from may have changed since the button was pressed.
+		/* translators: %s: address of the page the test asked for. */
+		$result['message'] .= ' ' . sprintf( __( 'Page tested: %s', 'wpo-tweaks' ), $url );
+
+		return $result;
+	}
+
+	/**
+	 * The two requests of the test, and what they say.
+	 *
+	 * @param string $url   Page to test.
+	 * @param string $token Token of this test.
+	 * @return array Result, as result() shapes it.
+	 */
+	private static function ask( $url, $token ) {
 		$args = array(
 			'timeout'    => 10,
 			'sslverify'  => false,
@@ -57,26 +101,77 @@ class Core_Diet_Cache_Self_Test {
 			'user-agent' => 'DietPress cache self test',
 		);
 
-		$url   = home_url( '/' );
+		$args['headers'][ self::PROBE_HEADER ] = wp_generate_password( 20, false, false );
+
 		$first = self::fetch( $url, $args );
 
 		if ( is_wp_error( $first['response'] ) ) {
-			delete_transient( self::TOKEN_TRANSIENT );
 			return self::result( false, false, null, self::describe_error( $first['response'] ) );
 		}
+
+		$probe                                 = wp_generate_password( 20, false, false );
+		$args['headers'][ self::PROBE_HEADER ] = $probe;
 
 		$second = self::fetch( $url, $args, $first['direct'] );
 
 		if ( is_wp_error( $second['response'] ) ) {
-			delete_transient( self::TOKEN_TRANSIENT );
 			return self::result( false, false, null, self::describe_error( $second['response'] ) );
 		}
 
-		$result = self::blame_error( self::read( $second['response'], $second['direct'] ), $second, $url, $args );
+		$front = self::answered_in_front( $second['response'], $probe, $second['direct'] );
+		if ( null !== $front ) {
+			return $front;
+		}
 
-		delete_transient( self::TOKEN_TRANSIENT );
+		return self::blame_error( self::read( $second['response'], $second['direct'], $url ), $second, $url, $args );
+	}
 
-		return $result;
+	/**
+	 * The address to test: the one chosen in the Cache tab, or the home page.
+	 *
+	 * Only a page of this very site the cache can store: the check the purge
+	 * makes (Core_Diet_Cache_Store::dir_for_url(), the same host and a path the
+	 * cache accepts), and under the address of the site, or a site in a subfolder
+	 * would test the one next to it on the same host, whose engine does not know
+	 * this token. The query string and the fragment go: the server never serves a
+	 * copy to an address with a query string, and the copy the test checks is
+	 * the one of the page itself.
+	 *
+	 * @param string $raw Address as typed or picked, relative or absolute.
+	 * @return string Absolute address, or empty when it is not one to test.
+	 */
+	private static function address_to_test( $raw ) {
+		$home = home_url( '/' );
+		$raw  = trim( (string) $raw );
+
+		if ( '' === $raw ) {
+			return $home;
+		}
+
+		if ( ! preg_match( '#^https?://#i', $raw ) ) {
+			$raw = home_url( '/' . ltrim( $raw, '/' ) );
+		}
+
+		$raw = substr( $raw, 0, strcspn( $raw, '?#' ) );
+
+		if ( ! Core_Diet_Cache_Store::dir_for_url( $raw ) ) {
+			return '';
+		}
+
+		$path      = (string) wp_parse_url( $raw, PHP_URL_PATH );
+		$path      = '' === $path ? '/' : $path;
+		$home_path = trailingslashit( (string) wp_parse_url( $home, PHP_URL_PATH ) );
+
+		if ( 0 !== strpos( trailingslashit( $path ), $home_path ) ) {
+			return '';
+		}
+
+		// The address asked for is the origin of the site and the path that was
+		// checked, never the text that arrived: whatever the HTTP client makes of
+		// a user name, a backslash or an odd scheme, the request goes to this site
+		// and nowhere else, and a pasted http:// address gets the scheme the site
+		// uses.
+		return (string) preg_replace( '#^(https?://[^/?\#]+).*$#i', '$1', $home ) . $path;
 	}
 
 	/**
@@ -116,7 +211,7 @@ class Core_Diet_Cache_Self_Test {
 			false,
 			null,
 			/* translators: %d: HTTP status code. */
-			sprintf( __( 'The server answers the home page with an error (%d) where the accelerator serves it, and with the page when the accelerator steps aside: it cannot read the stored copies, because the cache folder is a symbolic link it does not follow, for instance.', 'wpo-tweaks' ), $code ) . self::route_note( $second['direct'] )
+			sprintf( __( 'Where the accelerator serves the page, the server answers with an error (%d), and when the accelerator steps aside it answers with the page: it cannot read the stored copies, because the cache folder is a symbolic link it does not follow, for instance.', 'wpo-tweaks' ), $code ) . self::route_note( $second['direct'] )
 		);
 		$result['broken'] = true;
 
@@ -134,13 +229,100 @@ class Core_Diet_Cache_Self_Test {
 	}
 
 	/**
+	 * The result to give when the second answer was not built for this test.
+	 *
+	 * The engine sends back the probe of each request of the test, so a page PHP
+	 * built or served for that request carries it. An answer that says PHP built
+	 * it and carries another probe, or none, is a copy of an earlier visit that
+	 * something in front of the site kept and handed out. The dynamic cache of
+	 * SiteGround does that with every page that goes out without Cache-Control,
+	 * which is what WordPress pages do by default since 3.7.0, and until this
+	 * check the test read the MISS of that copy as its own and blamed the cache
+	 * folder (aulawp.com, 25 sep 2026).
+	 *
+	 * @param array  $response Second answer.
+	 * @param string $probe    Probe sent with it.
+	 * @param bool   $direct   Whether it went straight to this server.
+	 * @return array|null Result, or null when the answer was built for this test.
+	 */
+	private static function answered_in_front( $response, $probe, $direct ) {
+		$state = strtoupper( self::header( $response, 'x-dietpress-cache' ) );
+
+		// Only answers that say PHP built them or served them. HIT-STATIC is the
+		// server, which never runs PHP, and an answer without any header of the
+		// engine is explained by read().
+		if ( ! in_array( $state, array( 'HIT', 'MISS' ), true ) && '' === self::header( $response, 'x-dietpress-bypass' ) ) {
+			return null;
+		}
+
+		if ( '' === (string) $probe || hash_equals( (string) $probe, self::header( $response, strtolower( self::PROBE_HEADER ) ) ) ) {
+			return null;
+		}
+
+		return self::result( false, false, null, self::front_cache_message( self::front_cache_header( $response ) ) . self::route_note( $direct ) );
+	}
+
+	/**
+	 * The header that shows a cache in front of the site answered, if one does.
+	 *
+	 * The ones the usual hosting caches and CDNs send, and Age, which any shared
+	 * cache must send with a stored answer (RFC 9111, section 5.1). The value is
+	 * reduced to plain characters: it is shown to the administrator.
+	 *
+	 * @param array $response Response.
+	 * @return string "name: value", or empty.
+	 */
+	private static function front_cache_header( $response ) {
+		$names = array( 'x-proxy-cache', 'cf-cache-status', 'x-cache', 'x-cache-status', 'x-litespeed-cache', 'x-kinsta-cache', 'x-sucuri-cache', 'x-nginx-cache', 'x-fastcgi-cache', 'x-srcache-fetch-status', 'x-varnish-cache' );
+
+		foreach ( $names as $name ) {
+			$value = self::header( $response, $name );
+			if ( '' !== $value && preg_match( '/\bhit\b/i', $value ) ) {
+				return $name . ': ' . substr( (string) preg_replace( '#[^A-Za-z0-9 ,.:_/-]#', '', $value ), 0, 60 );
+			}
+		}
+
+		$age = self::header( $response, 'age' );
+		if ( '' !== $age && ctype_digit( $age ) && (int) $age > 0 ) {
+			return 'age: ' . (int) $age;
+		}
+
+		return '';
+	}
+
+	/**
+	 * Explain an answer that came from a cache in front of the site.
+	 *
+	 * @param string $front Header that gave it away, or empty.
+	 * @return string
+	 */
+	private static function front_cache_message( $front ) {
+		if ( '' === $front ) {
+			return __( 'The answer was not built for this test: it lacks the mark DietPress puts on the pages it builds for the test. Most likely a cache in front of the site answered with a copy of an earlier visit, so the test never reached WordPress: purge the cache of your hosting or CDN and test again. If there is no such cache, the site did not recognise the request of the test.', 'wpo-tweaks' );
+		}
+
+		$message = sprintf(
+			/* translators: %s: the response header that gave the cache away, such as "x-proxy-cache: HIT". */
+			__( 'The page came from a cache in front of the site (%s), with a copy of an earlier visit, so the test never reached WordPress. Purge that cache and test again. If it keeps answering first, it is storing the pages DietPress builds, and purging DietPress does not reach them: use one of the two page caches, not both.', 'wpo-tweaks' ),
+			$front
+		);
+
+		if ( 0 === strpos( $front, 'x-proxy-cache:' ) ) {
+			$message .= ' ' . __( 'On SiteGround that cache is its dynamic cache: purge it from Speed Optimizer or from Site Tools.', 'wpo-tweaks' );
+		}
+
+		return $message;
+	}
+
+	/**
 	 * Explain the second answer: the first one only puts a copy in place.
 	 *
-	 * @param array $second Second response.
-	 * @param bool  $direct Whether it had to go straight to this server.
+	 * @param array  $second Second response.
+	 * @param bool   $direct Whether it had to go straight to this server.
+	 * @param string $url    Page tested; empty for the home page.
 	 * @return array
 	 */
-	private static function read( $second, $direct ) {
+	private static function read( $second, $direct, $url = '' ) {
 		$code   = (int) wp_remote_retrieve_response_code( $second );
 		$state  = strtoupper( self::header( $second, 'x-dietpress-cache' ) );
 		$reason = self::header( $second, 'x-dietpress-bypass' );
@@ -160,9 +342,9 @@ class Core_Diet_Cache_Self_Test {
 				false,
 				null,
 				200 === $code
-					? __( 'The server answered the home page from the cache folder with something that is not a page DietPress stored, or a layer in front of the site removed the comment DietPress adds to every stored page, as some minifiers do.', 'wpo-tweaks' ) . $route
+					? __( 'The server answered the page from the cache folder with something that is not a page DietPress stored, or a layer in front of the site removed the comment DietPress adds to every stored page, as some minifiers do.', 'wpo-tweaks' ) . $route
 					/* translators: %d: HTTP status code. */
-					: sprintf( __( 'The server answered the home page from the cache folder with an error (%d) instead of the page: a rule of the server, or the permissions of the folder, keep it from reading the stored copy.', 'wpo-tweaks' ), $code ) . $route
+					: sprintf( __( 'The server answered from the cache folder with an error (%d) instead of the page: a rule of the server, or the permissions of the folder, keep it from reading the stored copy.', 'wpo-tweaks' ), $code ) . $route
 			);
 			$result['broken'] = true;
 			return $result;
@@ -174,13 +356,13 @@ class Core_Diet_Cache_Self_Test {
 				false,
 				null,
 				/* translators: %d: HTTP status code. */
-				sprintf( __( 'The home page answered with a server error (%d). Check the error log of your hosting.', 'wpo-tweaks' ), $code ) . $route
+				sprintf( __( 'The page answered with a server error (%d). Check the error log of your hosting.', 'wpo-tweaks' ), $code ) . $route
 			);
 			return $result;
 		}
 
 		if ( 403 === $code && 'HIT-STATIC' !== $state ) {
-			return self::result( false, false, null, __( 'The home page was refused (403). A firewall or security plugin may be blocking requests the site makes to itself.', 'wpo-tweaks' ) . $route );
+			return self::result( false, false, null, __( 'The page was refused (403). A firewall or security plugin may be blocking requests the site makes to itself.', 'wpo-tweaks' ) . $route );
 		}
 
 		if ( 'HIT-STATIC' === $state ) {
@@ -189,14 +371,14 @@ class Core_Diet_Cache_Self_Test {
 			// does (on nginx, a variable other than the one fastcgi_param HTTPS
 			// uses) serve the plain copy to HTTPS visitors, with its styles and
 			// scripts on http://, which browsers block.
-			$other = self::served_other_scheme( wp_remote_retrieve_body( $second ) );
+			$other = self::served_other_scheme( wp_remote_retrieve_body( $second ), $url );
 			if ( '' !== $other ) {
 				return self::result( false, false, null, $other . $route );
 			}
 
 			$encoding   = strtolower( self::header( $second, 'content-encoding' ) );
 			$compressed = '' !== $encoding && 'identity' !== $encoding;
-			$message    = __( 'The home page was served by the server straight from the cache, without starting PHP. The accelerator is working.', 'wpo-tweaks' );
+			$message    = __( 'The page was served by the server straight from the cache, without starting PHP. The accelerator is working.', 'wpo-tweaks' );
 
 			if ( ! $compressed ) {
 				$message .= ' ' . __( 'The server sent it uncompressed, though. Switching on the compression rules of DietPress, or asking your hosting to enable mod_deflate, would make it several times lighter.', 'wpo-tweaks' );
@@ -207,7 +389,7 @@ class Core_Diet_Cache_Self_Test {
 
 		if ( 'HIT' === $state ) {
 			if ( ! $on ) {
-				return self::result( true, false, null, __( 'The home page was served from the cache. The engine is working.', 'wpo-tweaks' ) . $route );
+				return self::result( true, false, null, __( 'The page was served from the cache. The engine is working.', 'wpo-tweaks' ) . $route );
 			}
 
 			if ( 'nginx' === Core_Diet_Cache_Accelerator::server() ) {
@@ -220,7 +402,7 @@ class Core_Diet_Cache_Self_Test {
 					: __( 'The server did not run the accelerator rules: mod_rewrite or mod_headers may be missing, the hosting may not allow rules in .htaccess, or another rule answers the request first.', 'wpo-tweaks' );
 			}
 
-			return self::result( true, false, null, __( 'The home page was served from the cache by PHP, not by the server.', 'wpo-tweaks' ) . ' ' . $why . $route );
+			return self::result( true, false, null, __( 'The page was served from the cache by PHP, not by the server.', 'wpo-tweaks' ) . ' ' . $why . $route );
 		}
 
 		$proxy = self::proxy_note();
@@ -231,7 +413,7 @@ class Core_Diet_Cache_Self_Test {
 				false,
 				null,
 				/* translators: %s: the reason the engine gave, in English, such as "cookie woocommerce_". */
-				sprintf( __( 'The home page is being skipped by the cache. Reason given by DietPress for this request: %s.', 'wpo-tweaks' ), $reason ) . ' ' . self::advice_for( $reason ) . $proxy . $route
+				sprintf( __( 'The page is being skipped by the cache. Reason given by DietPress for this request: %s.', 'wpo-tweaks' ), $reason ) . ' ' . self::advice_for( $reason ) . $proxy . $route
 			);
 		}
 
@@ -244,11 +426,11 @@ class Core_Diet_Cache_Self_Test {
 					false,
 					null,
 					/* translators: %s: the reason the engine gave, in English, such as "response sets a cookie". */
-					sprintf( __( 'The home page is cacheable, but it was not stored. Reason given by DietPress: %s.', 'wpo-tweaks' ), $stored ) . ' ' . self::advice_for( $stored ) . $proxy . $route
+					sprintf( __( 'The page is cacheable, but it was not stored. Reason given by DietPress: %s.', 'wpo-tweaks' ), $stored ) . ' ' . self::advice_for( $stored ) . $proxy . $route
 				);
 			}
 
-			return self::result( false, false, null, __( 'The home page is cacheable but was rebuilt instead of served from disk. The most likely cause is that the cache directory cannot be written to, or that something purges the cache on every request.', 'wpo-tweaks' ) . $proxy . $route );
+			return self::result( false, false, null, __( 'The page is cacheable but was rebuilt instead of served from disk. The most likely cause is that the cache directory cannot be written to, or that something purges the cache on every request.', 'wpo-tweaks' ) . $proxy . $route );
 		}
 
 		// A stored copy with none of the headers: the server served the file but
@@ -265,17 +447,23 @@ class Core_Diet_Cache_Self_Test {
 		// Nothing from DietPress at all: the request never reached the engine.
 		// An error says why better than a guess about static files does.
 		if ( 401 === $code ) {
-			return self::result( false, false, null, __( 'The home page asks for a password (401), as a site closed at server level while it is being built does, so the test cannot see it the way a visitor would. Test the cache again once the site is open.', 'wpo-tweaks' ) . $route );
+			return self::result( false, false, null, __( 'The page asks for a password (401), as a site closed at server level while it is being built does, so the test cannot see it the way a visitor would. Test the cache again once the site is open.', 'wpo-tweaks' ) . $route );
 		}
 		if ( 429 === $code ) {
-			return self::result( false, false, null, __( 'The home page was refused for too many requests (429). A firewall, a security plugin or a rate limit of the hosting may be blocking requests the site makes to itself.', 'wpo-tweaks' ) . $route );
+			return self::result( false, false, null, __( 'The page was refused for too many requests (429). A firewall, a security plugin or a rate limit of the hosting may be blocking requests the site makes to itself.', 'wpo-tweaks' ) . $route );
 		}
 		if ( 200 !== $code ) {
 			/* translators: %d: HTTP status code. */
-			return self::result( false, false, null, sprintf( __( 'The home page answered with an error (%d) that did not come from WordPress with DietPress, so the test cannot say anything about the cache.', 'wpo-tweaks' ), $code ) . $route );
+			return self::result( false, false, null, sprintf( __( 'The page answered with an error (%d) that did not come from WordPress with DietPress, so the test cannot say anything about the cache.', 'wpo-tweaks' ), $code ) . $route );
 		}
 
-		return self::result( false, false, null, __( 'The answer did not come from WordPress with DietPress. The home page may be a static file the server hands out by itself (an index.html in the root of the site, for instance), or a proxy or CDN may have answered from its own cache. In both cases the rest of the pages can still be cached normally.', 'wpo-tweaks' ) . $route );
+		// A cache in front that says so is named, instead of guessed at below.
+		$front = self::front_cache_header( $second );
+		if ( '' !== $front ) {
+			return self::result( false, false, null, self::front_cache_message( $front ) . $route );
+		}
+
+		return self::result( false, false, null, __( 'The answer did not come from WordPress with DietPress. The page may be a static file the server hands out by itself (an index.html in its folder, for instance), or a proxy or CDN may have answered from its own cache. In both cases the rest of the pages can still be cached normally.', 'wpo-tweaks' ) . $route );
 	}
 
 	/**
@@ -286,29 +474,40 @@ class Core_Diet_Cache_Self_Test {
 	 * it. When neither copy matches, a purge or a rebuild got in between, and the
 	 * test does not claim anything.
 	 *
+	 * Both names of each scheme are compared, with the trailing slash and
+	 * without: a page asked for without its slash is redirected to it, and the
+	 * copy served is then the one of the other name, which lives in the same
+	 * folder. Reading only the name of the address asked for skipped the check
+	 * without a word for those pages (second cross review of 3.7.1); the home
+	 * page, the only one tested before, always has its slash.
+	 *
 	 * @param string $body Body the server served.
+	 * @param string $url  Page tested; empty for the home page.
 	 * @return string Sentence explaining the mismatch, or empty.
 	 */
-	private static function served_other_scheme( $body ) {
-		$url = home_url( '/' );
+	private static function served_other_scheme( $body, $url = '' ) {
+		$url = '' === $url ? home_url( '/' ) : $url;
 		$dir = Core_Diet_Cache_Store::dir_for_url( $url );
 		if ( ! $dir || '' === (string) $body ) {
 			return '';
 		}
 
-		$https = 'https' === wp_parse_url( $url, PHP_URL_SCHEME );
-		$mine  = $dir . '/' . Core_Diet_Cache_Store::filename( $https, true );
-		$other = $dir . '/' . Core_Diet_Cache_Store::filename( ! $https, true );
-		$hash  = md5( (string) $body );
+		$https   = 'https' === wp_parse_url( $url, PHP_URL_SCHEME );
+		$hash    = md5( (string) $body );
+		$matches = static function ( $scheme_https ) use ( $dir, $hash ) {
+			foreach ( array( true, false ) as $slash ) {
+				$file = $dir . '/' . Core_Diet_Cache_Store::filename( $scheme_https, $slash );
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Comparing with the plugin's own cached copies on disk.
+				if ( is_readable( $file ) && md5( (string) file_get_contents( $file ) ) === $hash ) {
+					return true;
+				}
+			}
+			return false;
+		};
 
-		// phpcs:disable WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Comparing with the plugin's own cached copies on disk.
-		if ( is_readable( $mine ) && md5( (string) file_get_contents( $mine ) ) === $hash ) {
+		if ( $matches( $https ) || ! $matches( ! $https ) ) {
 			return '';
 		}
-		if ( ! is_readable( $other ) || md5( (string) file_get_contents( $other ) ) !== $hash ) {
-			return '';
-		}
-		// phpcs:enable WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
 
 		return 'nginx' === Core_Diet_Cache_Accelerator::server()
 			? __( 'nginx served the copy stored for the other scheme, so its rules read HTTPS from a different variable than the one PHP gets: in part 1, set $dietpress_https to the variable your fastcgi_param HTTPS uses, and reload nginx.', 'wpo-tweaks' )
@@ -326,7 +525,7 @@ class Core_Diet_Cache_Self_Test {
 			return __( 'A visitor carrying that cookie is not anonymous for the cache. The test sends no cookies, so something on the site is setting it during the request.', 'wpo-tweaks' );
 		}
 		if ( 'excluded URL' === $reason ) {
-			return __( 'The home page matches one of the patterns in the exclusions section of this tab.', 'wpo-tweaks' );
+			return __( 'The page matches one of the patterns in the exclusions section of this tab.', 'wpo-tweaks' );
 		}
 		if ( 0 === strpos( $reason, 'dietpress_cache_bypass' ) || 'DONOTCACHEPAGE' === $reason ) {
 			return __( 'A plugin or the theme declares the page uncacheable.', 'wpo-tweaks' );
@@ -337,8 +536,14 @@ class Core_Diet_Cache_Self_Test {
 		if ( 0 === strpos( $reason, 'request port' ) || 0 === strpos( $reason, 'request host' ) ) {
 			return __( 'The test reached the site under an address that is not the one set in Settings, General.', 'wpo-tweaks' );
 		}
-		if ( 'response sets a cookie' === $reason ) {
-			return __( 'A plugin sets a cookie on every visit, and a page that sets a cookie is personal by definition.', 'wpo-tweaks' );
+		if ( 0 === strpos( $reason, 'response sets a cookie' ) ) {
+			$advice = __( 'A plugin sets a cookie on every visit, and a page that sets a cookie is personal by definition.', 'wpo-tweaks' );
+
+			if ( 'response sets a cookie: PHPSESSID' === $reason ) {
+				return $advice . ' ' . __( 'PHPSESSID is the cookie of a PHP session, which some plugin opens on every visit whether it needs one or not.', 'wpo-tweaks' );
+			}
+
+			return 'response sets a cookie' === $reason ? $advice : $advice . ' ' . __( 'Its name usually tells which plugin sets it.', 'wpo-tweaks' );
 		}
 		if ( 'response is marked private or no-store' === $reason ) {
 			return __( 'A plugin or the theme sends a Cache-Control header that forbids shared caches to keep the page, usually with nocache_headers().', 'wpo-tweaks' );

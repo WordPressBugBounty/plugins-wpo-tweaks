@@ -222,7 +222,7 @@ class Core_Diet_Cache_Admin {
 	}
 
 	/**
-	 * AJAX: ask the site for its own home page and report what came back.
+	 * AJAX: ask the site for a page, the one in the field or the home page, and report what came back.
 	 */
 	public function ajax_test() {
 		check_ajax_referer( 'core_diet_tools_nonce', 'security' );
@@ -231,7 +231,11 @@ class Core_Diet_Cache_Admin {
 			wp_send_json_error( __( 'Unauthorized.', 'wpo-tweaks' ), 403 );
 		}
 
-		$result = self::test_and_react();
+		// Validated by the test itself (Core_Diet_Cache_Self_Test::address_to_test()):
+		// only a page of this site, the same check the purge makes.
+		$url = isset( $_POST['cache_url'] ) ? trim( sanitize_text_field( wp_unslash( $_POST['cache_url'] ) ) ) : '';
+
+		$result = self::test_and_react( $url );
 
 		$payload = array(
 			'message' => $result['message'],
@@ -251,9 +255,11 @@ class Core_Diet_Cache_Admin {
 	 * Apart from the AJAX handler, which checks the nonce and the capability
 	 * before calling it, so the release checks can run it as it runs there.
 	 *
+	 * @param string $url Page to test; empty for the home page. The accelerator is
+	 *                    switched on again with the home page, whatever page was chosen.
 	 * @return array Result of the self test or of enable().
 	 */
-	public static function test_and_react() {
+	public static function test_and_react( $url = '' ) {
 		// A switched on accelerator that was tested somewhere else, a site that
 		// moved server or address, is tested again for real, which is what lets
 		// it serve again. Otherwise the test only reads what the site does.
@@ -271,7 +277,7 @@ class Core_Diet_Cache_Admin {
 		}
 
 		require_once CORE_DIET_DIR . 'includes/cache/class-core-diet-cache-self-test.php';
-		$result = Core_Diet_Cache_Self_Test::run();
+		$result = Core_Diet_Cache_Self_Test::run( $url );
 
 		// Switched on but unable to run: the rules are out and PHP serves, so
 		// what the test says about the rules is beside the point. The reason is.
@@ -286,7 +292,7 @@ class Core_Diet_Cache_Admin {
 			$cleared = $served && Core_Diet_Cache_Accelerator::pause();
 
 			if ( $cleared ) {
-				$after = __( 'The server was still answering the home page from the cache by itself, so the names it finds the stored pages under have been removed, and PHP serves them again.', 'wpo-tweaks' );
+				$after = __( 'The server was still answering the page from the cache by itself, so the names it finds the stored pages under have been removed, and PHP serves them again.', 'wpo-tweaks' );
 			} elseif ( ! $served && ! empty( $result['ok'] ) ) {
 				$after = __( 'Meanwhile the page cache is working through PHP.', 'wpo-tweaks' );
 			} else {
@@ -348,6 +354,7 @@ class Core_Diet_Cache_Admin {
 
 		$blocking = Core_Diet_Cache_Compat::get_blocking_reasons();
 		$warnings = Core_Diet_Cache_Compat::get_warnings();
+		$notes    = Core_Diet_Cache_Compat::get_notes();
 
 		// The rules can drift from the settings without any save to notice it
 		// (a constant, a new address, another tool editing .htaccess), so the
@@ -371,27 +378,33 @@ class Core_Diet_Cache_Admin {
 		</p>
 
 		<?php
-		$this->render_status_panel( $blocking, $warnings );
+		// The warning about a cache of the hosting lives in the card of the page
+		// cache, next to its confirmation, and not in the panel as well.
+		$this->render_status_panel( $blocking, array(), $notes );
 		?>
 
 		<div class="core-diet-cards-grid">
 		<?php
+		// The confirmation of a second cache is a condition for switching this
+		// one on, so it is a checkbox inside its card, shown only while a cache of
+		// the hosting is on. Up to 3.7.0 it was a card of its own, dressed as a
+		// setting of the cache, and its warning stayed in the panel once accepted.
 		$this->render_toggle(
 			'enabled',
 			__( 'Enable the page cache', 'wpo-tweaks' ),
 			__( 'Off by default. Switching it off again empties the cache, so nothing stale is left on disk.', 'wpo-tweaks' ),
-			(bool) $blocking
+			(bool) $blocking,
+			'',
+			'',
+			'',
+			$warnings && ! $blocking
+				? function () use ( $warnings ) {
+					$this->render_host_ack( $warnings );
+				}
+				: null
 		);
 
 		$this->render_accelerator_card( (bool) $blocking );
-
-		if ( $warnings ) {
-			$this->render_toggle(
-				'host_cache_ack',
-				__( 'I understand the risk of a second cache', 'wpo-tweaks' ),
-				__( 'Required to enable the cache when your hosting already serves one. Purging DietPress does not purge your hosting cache.', 'wpo-tweaks' )
-			);
-		}
 
 		$this->render_toggle(
 			'precompress_gzip',
@@ -471,9 +484,12 @@ class Core_Diet_Cache_Admin {
 		<div class="core-diet-tools-section core-diet-savings-section">
 			<h2><?php esc_html_e( 'Page cache', 'wpo-tweaks' ); ?></h2>
 			<?php
+			// Here there is no card with the confirmation, so an unconfirmed cache
+			// of the hosting is said in the panel; a confirmed one, not again.
 			$this->render_status_panel(
 				Core_Diet_Cache_Compat::get_blocking_reasons(),
-				Core_Diet_Cache_Compat::get_warnings()
+				$this->settings->is_enabled( 'host_cache_ack' ) ? array() : Core_Diet_Cache_Compat::get_warnings(),
+				Core_Diet_Cache_Compat::get_notes()
 			);
 
 			if ( ! Core_Diet_Cache::is_enabled() && ! Core_Diet_Cache_Compat::get_blocking_reasons() ) {
@@ -494,8 +510,9 @@ class Core_Diet_Cache_Admin {
 	 *
 	 * @param array $blocking Blocking reasons.
 	 * @param array $warnings Non-blocking warnings.
+	 * @param array $notes    Notes that ask for nothing (Core_Diet_Cache_Compat::get_notes()).
 	 */
-	private function render_status_panel( $blocking, $warnings ) {
+	private function render_status_panel( $blocking, $warnings, $notes = array() ) {
 		$enabled = Core_Diet_Cache::is_enabled();
 		$stats   = Core_Diet_Cache_Store::get_stats();
 		$gc      = self::describe_schedule( wp_next_scheduled( Core_Diet_Cache::CRON_HOOK ) );
@@ -569,6 +586,44 @@ class Core_Diet_Cache_Admin {
 					<span class="core-diet-option-notice-text"><?php echo esc_html( $reason ); ?></span>
 				</p>
 			<?php endforeach; ?>
+
+			<?php foreach ( $notes as $note ) : ?>
+				<p class="core-diet-option-notice core-diet-option-notice-inactive core-diet-cache-block">
+					<span class="dashicons dashicons-info-outline" aria-hidden="true"></span>
+					<span class="core-diet-option-notice-text"><?php echo esc_html( $note ); ?></span>
+				</p>
+			<?php endforeach; ?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * The confirmation of a second cache, inside the card of the page cache.
+	 *
+	 * A checkbox and not a toggle, because it is not a setting of the cache but
+	 * the site owner saying they know. Unconfirmed, the warning reads as one;
+	 * confirmed, it stays next to the box as a plain note of what was accepted,
+	 * and nothing repeats it elsewhere on the tab.
+	 *
+	 * @param array $warnings Warnings from Core_Diet_Cache_Compat::get_warnings().
+	 */
+	private function render_host_ack( $warnings ) {
+		$name    = Core_Diet_Cache_Settings::OPTION_NAME . '[host_cache_ack]';
+		$checked = $this->settings->is_enabled( 'host_cache_ack' );
+		?>
+		<div class="core-diet-cache-ack">
+			<p class="core-diet-option-notice core-diet-option-notice-<?php echo $checked ? 'inactive' : 'warning'; ?>">
+				<span class="dashicons dashicons-<?php echo $checked ? 'info-outline' : 'warning'; ?>" aria-hidden="true"></span>
+				<span class="core-diet-option-notice-text"><?php echo esc_html( implode( ' ', $warnings ) ); ?></span>
+			</p>
+			<label class="core-diet-cache-ack-label" for="core_diet_cache_host_cache_ack">
+				<input type="checkbox"
+				       id="core_diet_cache_host_cache_ack"
+				       name="<?php echo esc_attr( $name ); ?>"
+				       value="1"
+				       <?php checked( $checked ); ?>>
+				<?php esc_html_e( 'I understand the risk of a second cache', 'wpo-tweaks' ); ?>
+			</label>
 		</div>
 		<?php
 	}
@@ -699,10 +754,17 @@ class Core_Diet_Cache_Admin {
 		$on       = $this->settings->is_enabled( 'accelerator' );
 		$verified = get_option( Core_Diet_Cache_Accelerator::VERIFIED_OPTION );
 
-		// Switched on but with the cache off, the reason is only "switch the
-		// cache on first": the setting is kept and shown as it is.
+		// The page cache being off locks the accelerator like any other reason,
+		// with one difference: it is the only lock this form lifts by itself, so
+		// the card follows the cache toggle above it without a reload, and both
+		// can be switched on in one save. Up to 3.7.0 that lock was left out, and
+		// the accelerator could be switched on with the cache off, showing on
+		// while nothing ran (reported on aulawp.com, 25 sep 2026). Switched on
+		// before the cache went off, it shows checked and greyed, and it is kept
+		// for when the cache comes back (render_toggle()).
 		$cache_off = ! Core_Diet_Cache::is_enabled();
-		$locked    = $blocking || ( '' !== $reason && ! $cache_off );
+		$locked    = $blocking || '' !== $reason;
+		$follows   = ! $blocking && '' === Core_Diet_Cache_Accelerator::get_unavailable_reason( true );
 
 		$nginx = 'nginx' === Core_Diet_Cache_Accelerator::server();
 
@@ -713,7 +775,9 @@ class Core_Diet_Cache_Admin {
 				? __( 'The server answers with the stored copy by itself, without starting PHP or WordPress, which is the fastest a page can be served. nginx does not read .htaccess, so the rules are yours to paste: copy the block below into the configuration of this site as its comments say, reload nginx, and then switch this on. It is tested on your home page before it stays on.', 'wpo-tweaks' )
 				: __( 'The server answers with the stored copy by itself, without starting PHP or WordPress, which is the fastest a page can be served. Switching it on writes a block of rules to your .htaccess and tests them on your home page: if the test fails, it stays off and says why.', 'wpo-tweaks' ),
 			$locked,
-			$locked ? $reason : ''
+			$locked ? $reason : '',
+			$follows ? 'core_diet_cache_enabled' : '',
+			$follows ? Core_Diet_Cache_Accelerator::cache_off_reason() : ''
 		);
 
 		if ( $nginx && ! $locked && ! $cache_off ) {
@@ -871,7 +935,7 @@ class Core_Diet_Cache_Admin {
 		<div class="core-diet-cache-panel">
 			<div class="core-diet-cache-search">
 				<label class="core-diet-option-label" for="core-diet-cache-url">
-					<?php esc_html_e( 'Purge one URL, or leave it empty to purge everything', 'wpo-tweaks' ); ?>
+					<?php esc_html_e( 'Page to purge or test. Leave it empty to purge everything, or to test the home page.', 'wpo-tweaks' ); ?>
 				</label>
 				<input type="text"
 				       id="core-diet-cache-url"
@@ -888,7 +952,7 @@ class Core_Diet_Cache_Admin {
 			<p class="core-diet-cache-actions">
 				<button type="button" class="button" id="core-diet-cache-purge"><?php esc_html_e( 'Purge cache', 'wpo-tweaks' ); ?></button>
 				<button type="button" class="button" id="core-diet-cache-test"><?php esc_html_e( 'Test the cache now', 'wpo-tweaks' ); ?></button>
-				<span class="core-diet-cache-actions-hint"><?php esc_html_e( 'The test asks the site for its own home page as an anonymous visitor would.', 'wpo-tweaks' ); ?></span>
+				<span class="core-diet-cache-actions-hint"><?php esc_html_e( 'The test asks the site for that page as an anonymous visitor would. Switching the accelerator on always tests the home page.', 'wpo-tweaks' ); ?></span>
 			</p>
 
 			<div id="core-diet-cache-result" class="core-diet-cache-result" hidden></div>
@@ -917,24 +981,43 @@ class Core_Diet_Cache_Admin {
 	 * @param string $description Help text.
 	 * @param bool   $disabled    Whether the control is locked.
 	 * @param string $locked_why  Why it is locked, shown under the help text.
+	 * @param string $lock_on     Id of a toggle of this tab that locks this one
+	 *                            while it is off, mirrored live by the script of
+	 *                            the page (initOptionLocks() in admin.js).
+	 * @param string $lock_text   What the card says while that toggle is off.
+	 * @param callable|null $after Prints more of the card after its notes, such
+	 *                            as the confirmation of a second cache.
 	 */
-	private function render_toggle( $key, $label, $description = '', $disabled = false, $locked_why = '' ) {
+	private function render_toggle( $key, $label, $description = '', $disabled = false, $locked_why = '', $lock_on = '', $lock_text = '', $after = null ) {
 		$field_id = 'core_diet_cache_' . $key;
 		$name     = Core_Diet_Cache_Settings::OPTION_NAME . '[' . $key . ']';
 		$stored   = $this->settings->is_enabled( $key );
 
-		// A locked accelerator that is switched on stays a live checkbox, checked:
-		// a disabled one is not sent with the form, so the next save of any
-		// setting used to switch it off and forget its test, exactly while the
-		// .htaccess could not be written for a moment; and it has to stay
-		// possible to switch it off. The lock note says why it cannot run now.
-		// Only switching it on is locked.
-		if ( $disabled && $stored && 'accelerator' === $key ) {
+		// Locked only by the toggle it follows (the accelerator while the page
+		// cache is off): greyed, showing what is stored, with the value in a
+		// hidden field so a save keeps it, which is what the script does when it
+		// locks the card live and what the hard locks of the other tabs do. It
+		// does not run meanwhile, so there is nothing to switch off.
+		$follow_locked = $disabled && '' !== $lock_on;
+
+		// Any other lock on an accelerator that is switched on leaves a live
+		// checkbox, checked: a disabled one is not sent with the form, so the
+		// next save of any setting used to switch it off and forget its test,
+		// exactly while the .htaccess could not be written for a moment; and it
+		// has to stay possible to switch it off. The lock note says why it
+		// cannot run now. Only switching it on is locked.
+		if ( $disabled && $stored && 'accelerator' === $key && ! $follow_locked ) {
 			$disabled = false;
 		}
-		$checked = $stored && ! $disabled;
+		$checked = $stored && ( ! $disabled || $follow_locked );
 		?>
-		<div class="core-diet-option-card<?php echo $disabled ? ' core-diet-option-locked' : ''; ?>">
+		<div class="core-diet-option-card<?php echo $disabled ? ' core-diet-option-locked' : ''; ?>"
+			<?php if ( '' !== $lock_on ) : ?>
+				data-lock-on="<?php echo esc_attr( $lock_on ); ?>"
+				data-lock-when="0"
+				data-lock-mode="hard"
+				data-lock-text="<?php echo esc_attr( $lock_text ); ?>"
+			<?php endif; ?>>
 			<div class="core-diet-option-header">
 				<label class="core-diet-option-label" for="<?php echo esc_attr( $field_id ); ?>">
 					<?php echo esc_html( $label ); ?>
@@ -949,15 +1032,30 @@ class Core_Diet_Cache_Admin {
 					<span class="core-diet-toggle-slider"></span>
 				</label>
 			</div>
+			<?php if ( $follow_locked ) : ?>
+				<input type="hidden"
+				       class="core-diet-locked-value"
+				       name="<?php echo esc_attr( $name ); ?>"
+				       value="<?php echo $stored ? '1' : ''; ?>">
+			<?php endif; ?>
 			<?php if ( $description ) : ?>
 				<p class="core-diet-option-desc"><?php echo esc_html( $description ); ?></p>
 			<?php endif; ?>
-			<?php if ( '' !== $locked_why ) : ?>
-				<p class="core-diet-option-notice core-diet-option-notice-locked">
+			<?php
+			// Printed hidden too when the card can be locked later without a
+			// reload, so the script has somewhere to write the reason.
+			if ( '' !== $locked_why || '' !== $lock_on ) :
+				?>
+				<p class="core-diet-option-notice core-diet-option-notice-locked" <?php echo '' === $locked_why ? 'hidden' : ''; ?>>
 					<span class="dashicons dashicons-lock" aria-hidden="true"></span>
 					<span class="core-diet-option-notice-text"><?php echo esc_html( $locked_why ); ?></span>
 				</p>
 			<?php endif; ?>
+			<?php
+			if ( is_callable( $after ) ) {
+				call_user_func( $after );
+			}
+			?>
 		</div>
 		<?php
 	}

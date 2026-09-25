@@ -74,9 +74,19 @@ class Core_Diet_Cache_Compat {
 		 * about it reaches PHP, and Speed Optimizer is what switches it on and
 		 * purges it. Added in 3.7.0 after a store where DietPress was sending
 		 * headers that stopped that cache from storing a single page.
+		 *
+		 * Only while that cache is on. Speed Optimizer tells the hosting, answer
+		 * by answer, whether to keep the page (X-Cache-Enabled, from
+		 * Supercacher_Helper::set_cache_headers()), and with its dynamic cache and
+		 * its file cache both off it says False: there is no second cache to warn
+		 * about. Up to 3.7.0 the plugin being active was enough, so the warning,
+		 * and the confirmation it asks for, stayed with its cache off.
 		 */
 		if ( self::is_plugin_active( 'sg-cachepress' ) || class_exists( 'SiteGround_Optimizer\\Options\\Options' ) ) {
-			return 'SiteGround Speed Optimizer';
+			$dynamic = (int) get_option( 'siteground_optimizer_enable_cache', 0 );
+			$files   = (int) get_option( 'siteground_optimizer_file_caching', 0 );
+
+			return ( $dynamic || $files ) ? 'SiteGround Speed Optimizer' : '';
 		}
 		if ( isset( $_SERVER['KINSTA_CACHE_ZONE'] ) ) {
 			return 'Kinsta';
@@ -257,7 +267,13 @@ class Core_Diet_Cache_Compat {
 	}
 
 	/**
-	 * Risks worth stating that do not stop the module from running.
+	 * A page cache of the hosting that is on: the risk the confirmation is for.
+	 *
+	 * Enabling this module on top of one takes the confirmation of the Cache tab
+	 * (Core_Diet_Cache_Settings::sanitize()). Since 3.7.1 the pages this module
+	 * stores go out telling that cache not to keep them, so each page is kept in
+	 * one place; what the hosting still keeps is the rest of the site, which a
+	 * purge here does not reach.
 	 *
 	 * @return array Human readable sentences.
 	 */
@@ -268,15 +284,31 @@ class Core_Diet_Cache_Compat {
 		if ( $host ) {
 			$warnings['host'] = sprintf(
 				/* translators: %s: hosting provider name. */
-				__( '%s already serves a page cache of its own. Adding a second one can serve outdated content, because purging one does not purge the other. Enable this only if you know your hosting cache is off.', 'wpo-tweaks' ),
+				__( '%s has its own page cache switched on. This one can run on top of it: the pages DietPress stores tell that cache not to keep them, and the rest of the site stays in it, where purging DietPress does not reach.', 'wpo-tweaks' ),
 				$host
 			);
 		}
 
+		return $warnings;
+	}
+
+	/**
+	 * Things worth knowing about this server that ask for nothing.
+	 *
+	 * LiteSpeed caches pages at server level only through its own plugin, which
+	 * keeps this module off by itself (get_conflicting_plugins()). Up to 3.7.0 the
+	 * note was a warning and asked for the confirmation of a second cache that is
+	 * not there.
+	 *
+	 * @return array Human readable sentences.
+	 */
+	public static function get_notes() {
+		$notes = array();
+
 		if ( self::is_litespeed() ) {
-			$warnings['litespeed'] = __( 'This server runs LiteSpeed, whose own LiteSpeed Cache plugin caches pages at server level. This page cache works here too. Its accelerator reads the same rules as on Apache, and the test it runs when you switch it on tells whether LiteSpeed hands out the stored copies without PHP. Use one of the two page caches, never both.', 'wpo-tweaks' );
+			$notes['litespeed'] = __( 'This server runs LiteSpeed, whose own LiteSpeed Cache plugin caches pages at server level. This page cache works here too. Its accelerator reads the same rules as on Apache, and the test it runs when you switch it on tells whether LiteSpeed hands out the stored copies without PHP. Use one of the two page caches, never both.', 'wpo-tweaks' );
 		}
 
-		return $warnings;
+		return $notes;
 	}
 }

@@ -51,7 +51,7 @@ class Core_Diet_Cache_Engine {
 	/** @var bool|null Whether WordPress saw HTTPS when the cache was looked up. */
 	private $lookup_https = null;
 
-	/** @var string Transient holding the token of a self test in progress. */
+	/** @var string Prefix of the transients holding the token of each self test in progress. */
 	const DIAGNOSE_TRANSIENT = 'core_diet_cache_diagnose';
 
 	/** @var string Option noting when a page was kept out for being built for a phone. */
@@ -183,6 +183,15 @@ class Core_Diet_Cache_Engine {
 			// the one replaced, so X-DietPress-Cache-Clock vanished with the
 			// X-DietPress-Cache sent after it.
 			header( 'X-DietPress-Clock: ' . ( null === Core_Diet_Cache_Accelerator::server_clock_offset() ? 'missing' : 'seen' ) );
+
+			// The probe of this request of the test, back. A page built or served
+			// for it carries it; a copy of an earlier visit that a cache in front
+			// of the site hands out cannot, and that is how the test tells them
+			// apart (Core_Diet_Cache_Self_Test::answered_in_front()).
+			$probe = self::diagnostic_probe();
+			if ( '' !== $probe ) {
+				header( 'X-DietPress-Probe: ' . $probe );
+			}
 		}
 
 		$reason = $this->get_request_bypass_reason();
@@ -263,10 +272,53 @@ class Core_Diet_Cache_Engine {
 			return false;
 		}
 
-		$sent  = sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_DIETPRESS_DIAGNOSE'] ) );
-		$token = get_transient( self::DIAGNOSE_TRANSIENT );
+		$sent = sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_DIETPRESS_DIAGNOSE'] ) );
 
-		return is_string( $token ) && strlen( $token ) >= 32 && hash_equals( $token, $sent );
+		// Only something shaped like a token is looked up: the transient is
+		// named after it, and anything else is not one.
+		if ( 1 !== preg_match( '/^[A-Za-z0-9]{32,64}$/D', $sent ) ) {
+			return false;
+		}
+
+		$token = get_transient( self::diagnose_key( $sent ) );
+
+		return is_string( $token ) && hash_equals( $token, $sent );
+	}
+
+	/**
+	 * Name of the transient that holds the token of one self test.
+	 *
+	 * One per test, named after its token. With a single transient, two tests at
+	 * the same time (two administrators, or a save that tests the accelerator
+	 * while someone presses the button) replaced and deleted each other's token,
+	 * and the requests of the first one stopped being recognised: its bypass
+	 * reasons went missing, and since the probe is only echoed to the test, the
+	 * test read its own answer as a copy kept by a cache in front of the site
+	 * (found by the cross review of 3.7.1, 25 sep 2026).
+	 *
+	 * @param string $token Token of the test.
+	 * @return string
+	 */
+	public static function diagnose_key( $token ) {
+		return self::DIAGNOSE_TRANSIENT . '_' . substr( md5( (string) $token ), 0, 12 );
+	}
+
+	/**
+	 * The probe a request of the self test carries, to be echoed.
+	 *
+	 * Only read for a request that already proved it is the test, and only
+	 * letters and digits, so what goes back is never more than the test sent.
+	 *
+	 * @return string Probe, or empty.
+	 */
+	private static function diagnostic_probe() {
+		if ( empty( $_SERVER['HTTP_X_DIETPRESS_PROBE'] ) ) {
+			return '';
+		}
+
+		$probe = sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_DIETPRESS_PROBE'] ) );
+
+		return 1 === preg_match( '/^[A-Za-z0-9]{8,64}$/D', $probe ) ? $probe : '';
 	}
 
 	/**
@@ -449,6 +501,30 @@ class Core_Diet_Cache_Engine {
 
 		if ( ! headers_sent() ) {
 			header( 'X-DietPress-Cache: MISS' );
+
+			/*
+			 * A page this cache is about to store goes out telling the caches in
+			 * front not to keep it, unless something already said how long it
+			 * may be kept. Since 3.7.0 a page WordPress builds says nothing by
+			 * default, which is what lets the cache of a hosting store pages
+			 * while this one is off. With this one on, that silence let the
+			 * hosting cache keep the first build of each page and hand it out
+			 * ahead of this cache: purging here stopped reaching visitors, and
+			 * the self test read that copy as its own and blamed the cache
+			 * folder (SiteGround, aulawp.com, 25 sep 2026). A hit already said
+			 * max-age=0, so only the first build was being kept.
+			 *
+			 * Always this value and never the lifetime of hit_cache_control().
+			 * A lifetime chosen for HTML is sent by set_html_cache_control()
+			 * before this runs, so it is already there; and where that method
+			 * stayed out on purpose (a page marked personal through its filter)
+			 * a public lifetime must not come in through here, on a response
+			 * that may still set a cookie before it ends (cross review of
+			 * 3.7.1).
+			 */
+			if ( ! self::cache_control_sent() ) {
+				header( 'Cache-Control: max-age=0, must-revalidate' );
+			}
 		}
 
 		// After wp_ob_end_flush_all(), which flushes the buffers on shutdown
@@ -800,6 +876,21 @@ class Core_Diet_Cache_Engine {
 	}
 
 	/**
+	 * Whether this response already carries a Cache-Control header.
+	 *
+	 * @return bool
+	 */
+	private static function cache_control_sent() {
+		foreach ( headers_list() as $header ) {
+			if ( 0 === stripos( $header, 'cache-control:' ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
 	 * Why the rendered page must not be stored, if it must not.
 	 *
 	 * @param string $buffer Rendered page.
@@ -834,7 +925,14 @@ class Core_Diet_Cache_Engine {
 		// stored either: a hit would go out with the lifetime of the site instead.
 		foreach ( headers_list() as $header ) {
 			if ( 0 === stripos( $header, 'set-cookie:' ) ) {
-				return 'response sets a cookie';
+				// Named, because the name is what tells which plugin sets it, and
+				// without it the self test could only say that one does. Only the
+				// characters a cookie name normally has, and never a parenthesis,
+				// which would end the note the test reads it from.
+				$pair = explode( '=', trim( substr( $header, 11 ) ), 2 );
+				$name = substr( (string) preg_replace( '/[^A-Za-z0-9_.\-]/', '', $pair[0] ), 0, 40 );
+
+				return '' === $name ? 'response sets a cookie' : 'response sets a cookie: ' . $name;
 			}
 			if ( 0 === stripos( $header, 'cache-control:' ) && preg_match( '/\b(no-store|private)\b/i', $header ) ) {
 				return 'response is marked private or no-store';

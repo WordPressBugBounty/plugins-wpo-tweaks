@@ -215,17 +215,21 @@ class Core_Diet_Cache_Accelerator {
 	 * Every sentence names the cause and what still works, because the page
 	 * cache itself keeps working through PHP in all of these cases.
 	 *
+	 * @param bool $assume_cache_on Leave out the page cache being off, the one
+	 *                              reason the Cache tab lifts by itself when its
+	 *                              toggle is switched on, so the tab can tell that
+	 *                              lock apart from the rest.
 	 * @return string Empty when it can run.
 	 */
-	public static function get_unavailable_reason() {
+	public static function get_unavailable_reason( $assume_cache_on = false ) {
 		if ( is_multisite() ) {
 			return __( 'The accelerator is not available on a network of sites.', 'wpo-tweaks' );
 		}
 		if ( ( defined( 'DIETPRESS_DISABLE_CACHE' ) && DIETPRESS_DISABLE_CACHE ) || ( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) ) {
 			return __( 'The page cache is switched off by a constant on this site (DIETPRESS_DISABLE_CACHE or DONOTCACHEPAGE), so the server must not serve stored copies either.', 'wpo-tweaks' );
 		}
-		if ( ! Core_Diet_Cache::is_enabled() ) {
-			return __( 'Switch the page cache on first: the accelerator serves the copies it stores.', 'wpo-tweaks' );
+		if ( ! $assume_cache_on && ! Core_Diet_Cache::is_enabled() ) {
+			return self::cache_off_reason();
 		}
 		// WP-CLI has no web server to ask, so neither is detected there; the self
 		// test is what proves the rules work, from any context.
@@ -248,6 +252,18 @@ class Core_Diet_Cache_Accelerator {
 		}
 
 		return '';
+	}
+
+	/**
+	 * Why the accelerator waits while the page cache is off.
+	 *
+	 * Apart, because the Cache tab also writes it into the card, so the lock can
+	 * come back without a reload when the cache toggle is switched off.
+	 *
+	 * @return string
+	 */
+	public static function cache_off_reason() {
+		return __( 'Switch the page cache on first: the accelerator serves the copies it stores.', 'wpo-tweaks' );
 	}
 
 	/* ============================
@@ -450,12 +466,18 @@ class Core_Diet_Cache_Accelerator {
 		// phone copy where PHP would build the desktop one. No browser does that.
 		// Without that cache there is one copy for every device, so there is nothing
 		// to choose and the rules serve it to phones as well.
+		//
+		// wp_is_mobile() looks for "Opera Mini" and "Opera Mobi" with a space
+		// (vars.php:175-176 in WordPress 7.1.2), and up to 3.7.0 the rules had a dot
+		// there, which also matched any other character. \x20 is that space: the
+		// arguments of a rewrite directive are split at spaces, so the pattern
+		// cannot carry one written as it is.
 		if ( ! empty( $c['mobile'] ) ) {
 			$lines[] = 'RewriteRule ^ - [E=DPC_M:]';
 			$lines[] = 'RewriteCond %{HTTP:Sec-CH-UA-Mobile} ^\?1$';
 			$lines[] = 'RewriteRule ^ - [E=DPC_M:-mobile]';
 			$lines[] = 'RewriteCond %{HTTP:Sec-CH-UA-Mobile} =""';
-			$lines[] = 'RewriteCond %{HTTP_USER_AGENT} (Mobile|Android|Silk/|Kindle|BlackBerry|Opera.Mini|Opera.Mobi)';
+			$lines[] = 'RewriteCond %{HTTP_USER_AGENT} (Mobile|Android|Silk/|Kindle|BlackBerry|Opera\x20Mini|Opera\x20Mobi)';
 			$lines[] = 'RewriteRule ^ - [E=DPC_M:-mobile]';
 		}
 
@@ -619,7 +641,7 @@ class Core_Diet_Cache_Accelerator {
 			$l[] = 'set $dietpress_mobile "$http_sec_ch_ua_mobile|$http_user_agent";';
 			$l[] = 'set $dietpress_m "";';
 			$l[] = 'if ($dietpress_mobile ~ "^\?1\|") { set $dietpress_m "-mobile"; }';
-			$l[] = 'if ($dietpress_mobile ~ "^\|.*(Mobile|Android|Silk/|Kindle|BlackBerry|Opera.Mini|Opera.Mobi)") { set $dietpress_m "-mobile"; }';
+			$l[] = 'if ($dietpress_mobile ~ "^\|.*(Mobile|Android|Silk/|Kindle|BlackBerry|Opera Mini|Opera Mobi)") { set $dietpress_m "-mobile"; }';
 		}
 
 		// Plain HTTP only with no proxy header claiming HTTPS and not on port 443,
@@ -793,7 +815,10 @@ class Core_Diet_Cache_Accelerator {
 		 * responses either. That combination is not meant to exist: a page
 		 * cache belongs either here or at the hosting, never in both places,
 		 * and Core_Diet_Cache_Compat says so before this module can be switched
-		 * on.
+		 * on. The page the engine builds and stores goes out with max-age=0 as
+		 * well when nothing set a lifetime for it
+		 * (Core_Diet_Cache_Engine::maybe_start_capture()), or the cache in front
+		 * keeps that first build and hands it out ahead of this one.
 		 */
 		return 'max-age=0, must-revalidate';
 	}

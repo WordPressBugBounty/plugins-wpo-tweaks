@@ -4,7 +4,7 @@ Tags: performance, cache, optimization, cleanup, speed
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 7.1
-Stable tag: 3.7.0
+Stable tag: 3.7.1
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -23,7 +23,7 @@ By default WordPress loads functions, services and scripts that most sites do no
 * **Page caching, for free.** Serve anonymous visitors a copy stored on disk instead of building the page again. The feature people buy WP Rocket or a NitroPack subscription for, with no licence and no monthly fee.
 * **Served by your web server, not by PHP.** With the accelerator on, Apache or nginx hands out the stored copy by itself, without starting PHP or WordPress, and so can LiteSpeed when the test passes there. It is tested on your home page before it stays on, and cached pages still expire on time.
 * **No drop-in, no changes to wp-config.php.** Unlike WP Super Cache or W3 Total Cache, DietPress installs no `advanced-cache.php` and never edits `wp-config.php`. Switching it off leaves your site exactly as it was, with nothing orphaned behind.
-* **It tells you why.** Most cache plugins leave you guessing when nothing is cached. DietPress reports its own status, tests itself against your home page, and names the exact reason a page was skipped.
+* **It tells you why.** Most cache plugins leave you guessing when nothing is cached. DietPress reports its own status, tests any page you choose the way an anonymous visitor gets it, and names the exact reason a page was skipped.
 * **WooCommerce-safe by design.** Carts, checkout, my account and any visitor carrying a cart cookie always get the live site, so nobody ever sees somebody else's basket.
 * **Diet as well as speed.** Where Perfmatters focuses on disabling scripts, DietPress covers that ground and adds page caching, critical CSS, local Google Fonts and a dashboard, admin and email cleanup, in one plugin.
 * **Light on your server.** No account, no external service, no telemetry, no upsell nags. Everything runs on your own hosting.
@@ -269,7 +269,7 @@ If a plugin or theme does not enqueue scripts correctly, the JavaScript defer ma
 
 = Why is a page not being cached? =
 
-Open DietPress and go to the Cache tab, then press "Test the cache now": the site asks itself for its own home page and tells you whether the server served it, PHP served it from disk, it was rebuilt, or it was skipped, and when it was skipped, the exact reason. If you need the reason for one particular page, turn `WP_DEBUG` on and read the last line of that page's HTML source: DietPress writes the reason there, for example that the response set a cookie or that a plugin declared the page uncacheable. A page that was stored gets no comment. And if you check the X-DietPress-Cache header in your browser's developer tools, untick Disable cache there first: with it ticked, as with a forced reload, the browser asks for a fresh copy and DietPress rebuilds the page on purpose, so it shows MISS. An ordinary reload is served from the cache.
+Open DietPress and go to the Cache tab. Type or pick a page in the field of the purge section, or leave it empty for the home page, and press "Test the cache now": the site asks itself for that page as an anonymous visitor would, and tells you whether the server served it, PHP served it from disk, it was rebuilt, it was skipped, with the exact reason, or a cache in front of the site answered before WordPress. You can also turn `WP_DEBUG` on and read the last line of a page's HTML source: DietPress writes the reason there, for example that the response set a cookie or that a plugin declared the page uncacheable. A page that was stored gets no comment. And if you check the X-DietPress-Cache header in your browser's developer tools, untick Disable cache there first: with it ticked, as with a forced reload, the browser asks for a fresh copy and DietPress rebuilds the page on purpose, so it shows MISS. An ordinary reload is served from the cache.
 
 The three usual causes are a plugin that sets a cookie on every visit (a consent banner, some analytics scripts), a page that is genuinely personal (cart, checkout, my account, a password protected post), and a cache directory the server cannot write to. The status panel reports the third one on its own. On a site behind a proxy or CDN there is a fourth one: proxy headers that disagree with the HTTPS WordPress detects keep those visits out of the cache. Those visits are left out before the page is built, so they get no comment in the HTML source, except when WordPress only learns about HTTPS later in the request, where the comment says that HTTPS changed after the cache lookup. Either way the Cache tab tells you about them, and how to fix it.
 
@@ -287,7 +287,7 @@ Yes. WooCommerce marks the cart, the checkout and my account as uncacheable itse
 
 With another page cache plugin, no, and DietPress will not let you: two page caches on the same site serve each other's stale HTML and the result is very hard to diagnose. If W3 Total Cache, WP Super Cache, LiteSpeed Cache, WP Fastest Cache, Cache Enabler, Surge, WP Rocket or any of about thirty similar plugins is active, the toggle stays disabled and says which one. Object cache plugins such as Redis Object Cache are a different thing and are fine.
 
-With a hosting cache (Kinsta, WP Engine, SpinupWP, Cloudways and others) it is possible but rarely a good idea, because purging one does not purge the other. DietPress detects the usual ones and asks for an explicit confirmation before letting you enable it. On LiteSpeed servers the LiteSpeed Cache plugin is the other natural choice, since it caches at server level, so use one of the two. The accelerator of DietPress reads the same rules there as on Apache, and its test tells whether LiteSpeed serves the stored pages without PHP.
+With a hosting cache (Kinsta, WP Engine, SpinupWP, Cloudways and others) it is possible but rarely a good idea, because purging one does not purge the other. DietPress detects the usual ones and, while their page cache is on, asks you to tick a confirmation in the page cache card before switching its own on. With the DietPress page cache on, the pages it stores tell the caches in front not to keep them, so each page is cached in one place only. If the test of the Cache tab says a cache in front of the site answered, purge that cache once. On LiteSpeed servers the LiteSpeed Cache plugin is the other natural choice, since it caches at server level, so use one of the two. The accelerator of DietPress reads the same rules there as on Apache, and its test tells whether LiteSpeed serves the stored pages without PHP.
 
 = Are logged in users cached? =
 
@@ -311,6 +311,20 @@ With the accelerator on, the cookies, media types and URL patterns those filters
 
 == Changelog ==
 
+= 3.7.1 =
+Fixes the cache test behind a hosting cache, which kept the pages DietPress builds and served them ahead of it: purge that cache once after updating. The test now checks the page you choose, and the accelerator no longer switches on while the page cache is off.
+
+* Improved: "Test the cache now" tests the page in the field above it, typed or picked from the search, or the home page when the field is empty, and every result says which page it tested. Switching the accelerator on still tests the home page.
+* Improved: When a cache in front of the site answers the test instead of WordPress, the test says so and names the header that gave it away, instead of blaming the cache folder.
+* Improved: A page left out of the cache for setting a cookie now names the cookie, which usually tells which plugin sets it.
+* Improved: The confirmation for running on top of a hosting cache is now a tick box inside the page cache card, next to its warning, instead of a card of its own. Once ticked, the warning turns into a plain note there and no longer shows on the dashboard.
+* Fix: With the DietPress page cache on, the pages it builds go out telling the caches in front not to keep them, as the copies it serves already did. Since 3.7.0 they went out without saying anything, so a hosting cache could keep them and serve them ahead of DietPress, out of reach of its purges, and switching the accelerator on failed saying the cache folder could not be written.
+* Fix: The accelerator could be switched on while the page cache was off, and showed as on while nothing ran. It now stays locked until the page cache is on, and unlocks as soon as that toggle is ticked.
+* Fix: Saving any setting without the confirmation for a second cache switched off, and emptied, a page cache that was already running when a hosting cache appeared. The confirmation is now asked only when switching the page cache on, and the message says what to tick.
+* Fix: With a hosting whose page cache is switched on from its own plugin, the warning and the confirmation it asks for showed while that cache was off. They now appear only while it is on. On LiteSpeed servers the note about LiteSpeed Cache no longer asks for the confirmation, since that cache only runs through its own plugin, which already keeps this one off.
+* Fix: Two cache tests at the same time, by two administrators or by a save that tests the accelerator while someone presses the button, broke each other: the reasons went missing and the accelerator could refuse to switch on.
+* Fix: With a separate cache for mobile, the server rules of the accelerator took any character between Opera and Mini or Mobi as a phone, where WordPress takes only a space. On nginx the Cache tab asks to paste the rules again.
+
 = 3.7.0 =
 DietPress no longer tells browsers how long to keep your pages, so the cache of your hosting or your CDN can store them again. Also fixes a page cache that went on running after it had been blocked.
 
@@ -331,8 +345,8 @@ For older changelog entries, please check the [changelog.txt](https://plugins.sv
 
 == Upgrade Notice ==
 
-= 3.7.0 =
-DietPress no longer tells browsers how long to keep your pages, so the cache of your hosting or your CDN can store them again. Also fixes a page cache that went on running after it had been blocked.
+= 3.7.1 =
+Fixes the cache test behind a hosting cache, which kept the pages DietPress builds and served them ahead of it: purge that cache once after updating. The test now checks the page you choose, and the accelerator no longer switches on while the page cache is off.
 
 == Support ==
 

@@ -287,7 +287,9 @@ class Core_Diet_Cache_Settings {
 			return $defaults;
 		}
 
-		$clean = $defaults;
+		$clean  = $defaults;
+		$stored = get_option( self::OPTION_NAME, array() );
+		$stored = is_array( $stored ) ? $stored : array();
 
 		foreach ( array( 'enabled', 'separate_mobile', 'precompress_gzip', 'host_cache_ack', 'accelerator' ) as $key ) {
 			$clean[ $key ] = ! empty( $input[ $key ] );
@@ -302,8 +304,7 @@ class Core_Diet_Cache_Settings {
 		if ( isset( $input['gc_hour'] ) ) {
 			$clean['gc_hour'] = Core_Diet_Schedule::sanitize_hour( $input['gc_hour'] );
 		} else {
-			$stored           = get_option( self::OPTION_NAME, array() );
-			$clean['gc_hour'] = is_array( $stored ) && isset( $stored['gc_hour'] ) ? Core_Diet_Schedule::sanitize_hour( $stored['gc_hour'] ) : $defaults['gc_hour'];
+			$clean['gc_hour'] = isset( $stored['gc_hour'] ) ? Core_Diet_Schedule::sanitize_hour( $stored['gc_hour'] ) : $defaults['gc_hour'];
 		}
 
 		// 0 means "expire on events only". The ceiling is a month: past that the
@@ -340,12 +341,28 @@ class Core_Diet_Cache_Settings {
 		// A hosting cache in front of this one is the third of the three ticket
 		// types this module can generate, and the only one the site owner can
 		// see coming. Enabling on top of it takes a deliberate second click.
-		if ( $clean['enabled'] && ! $clean['host_cache_ack'] && Core_Diet_Cache_Compat::get_warnings() ) {
+		//
+		// Enabling, and only that. A cache that was already on when the hosting
+		// cache showed up (Speed Optimizer activated afterwards, for instance)
+		// used to be switched off, and emptied, by the next save of anything on
+		// the page, which read as if the setting saved that time, the
+		// accelerator in the case reported, had switched the cache off. So did
+		// the test of the tab, when it switched a failing accelerator off. And the
+		// message sent people to the confirmation alone, while the cache toggle
+		// came back unticked, so ticking it changed nothing.
+		if ( $clean['enabled'] && empty( $stored['enabled'] ) && ! $clean['host_cache_ack'] && Core_Diet_Cache_Compat::get_warnings() ) {
 			$clean['enabled'] = false;
 			add_settings_error(
 				self::OPTION_NAME,
 				'core_diet_cache_needs_ack',
-				__( 'Your hosting already serves a page cache. Tick the confirmation checkbox to enable this one on top of it.', 'wpo-tweaks' ),
+				// settings_errors() prints the message as it gets it.
+				esc_html(
+					sprintf(
+						/* translators: %s: label of the confirmation toggle of the Cache tab, "I understand the risk of a second cache". */
+						__( 'Your hosting already serves a page cache, so this one stayed off. To run it on top of that one, tick "%s" and switch the page cache on again.', 'wpo-tweaks' ),
+						__( 'I understand the risk of a second cache', 'wpo-tweaks' )
+					)
+				),
 				'error'
 			);
 		}

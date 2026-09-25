@@ -3,6 +3,18 @@ DietPress — Full changelog
 For each release, see the entries below. The latest version is always at the top.
 The current release notes also live in readme.txt under "== Changelog ==".
 
+= 3.7.1 =
+* Improved: "Test the cache now" tests the page in the field above it, typed or picked from the search, or the home page when the field is empty, and every result says which page it tested. Switching the accelerator on still tests the home page.
+* Improved: When a cache in front of the site answers the test instead of WordPress, the test says so and names the header that gave it away, instead of blaming the cache folder.
+* Improved: A page left out of the cache for setting a cookie now names the cookie, which usually tells which plugin sets it.
+* Improved: The confirmation for running on top of a hosting cache is now a tick box inside the page cache card, next to its warning, instead of a card of its own. Once ticked, the warning turns into a plain note there and no longer shows on the dashboard.
+* Fix: With the DietPress page cache on, the pages it builds go out telling the caches in front not to keep them, as the copies it serves already did. Since 3.7.0 they went out without saying anything, so a hosting cache could keep them and serve them ahead of DietPress, out of reach of its purges, and switching the accelerator on failed saying the cache folder could not be written.
+* Fix: The accelerator could be switched on while the page cache was off, and showed as on while nothing ran. It now stays locked until the page cache is on, and unlocks as soon as that toggle is ticked.
+* Fix: Saving any setting without the confirmation for a second cache switched off, and emptied, a page cache that was already running when a hosting cache appeared. The confirmation is now asked only when switching the page cache on, and the message says what to tick.
+* Fix: With a hosting whose page cache is switched on from its own plugin, the warning and the confirmation it asks for showed while that cache was off. They now appear only while it is on. On LiteSpeed servers the note about LiteSpeed Cache no longer asks for the confirmation, since that cache only runs through its own plugin, which already keeps this one off.
+* Fix: Two cache tests at the same time, by two administrators or by a save that tests the accelerator while someone presses the button, broke each other: the reasons went missing and the accelerator could refuse to switch on.
+* Fix: With a separate cache for mobile, the server rules of the accelerator took any character between Opera and Mini or Mobi as a phone, where WordPress takes only a space. On nginx the Cache tab asks to paste the rules again.
+
 = 3.7.0 =
 * New: A new choice in "Let browsers keep the HTML for", called "Send no rules for HTML", and it is what a new install gets. With it DietPress says nothing at all about how long one of your pages may be kept. Sites that were on the old default, "Always revalidate", are moved to it once when they update, with a notice that explains it; sites that had chosen 5 minutes, an hour or a day keep what they chose, and those values still work the same. The lifetimes of images, styles, scripts and fonts are not affected by this in any way.
 * Improved: However long you let browsers keep your pages, that is now decided in one place, when the page is built, instead of also being written into the .htaccess. The server rules could not know whether a visitor was logged in, whether the page was a cart or a checkout, or whether another plugin had already declared the page uncacheable, so on a page marked as not to be stored the response left with a second, contradictory instruction saying it could be kept for an hour. The setting itself works exactly as before.

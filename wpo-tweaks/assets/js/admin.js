@@ -775,8 +775,13 @@
 		}
 
 		if ( testBtn ) {
+			// The page in the field, or the home page when it is empty. Until
+			// 3.7.1 the button always tested the home page, right under the
+			// field where a page is chosen.
 			testBtn.addEventListener( 'click', function() {
-				run( testBtn, 'core_diet_cache_test', {} );
+				var input = document.getElementById( 'core-diet-cache-url' );
+
+				run( testBtn, 'core_diet_cache_test', { cache_url: input ? input.value.trim() : '' } );
 			} );
 		}
 
