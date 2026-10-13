@@ -25,6 +25,12 @@ class Core_Diet_Cache_Admin {
 	/** @var string Tab id within that page. */
 	const TAB_ID = 'cache';
 
+	/** @var string Action and nonce name of the "Purge cache" menu link. */
+	const MENU_PURGE_ACTION = 'core_diet_cache_purge_menu';
+
+	/** @var string Nonce name of the confirmation that link redirects back with. */
+	const MENU_PURGED_NONCE = 'core_diet_cache_purged';
+
 	/** @var Core_Diet_Cache_Settings */
 	private $settings;
 
@@ -54,6 +60,140 @@ class Core_Diet_Cache_Admin {
 		add_action( 'wp_ajax_core_diet_cache_purge', array( $this, 'ajax_purge' ) );
 		add_action( 'wp_ajax_core_diet_cache_test', array( $this, 'ajax_test' ) );
 		add_action( 'wp_ajax_core_diet_cache_search', array( $this, 'ajax_search' ) );
+
+		// The one exception to the above: the menu link, which has to work from
+		// any screen of the dashboard, where this plugin loads no script.
+		add_action( 'admin_menu', array( $this, 'add_purge_submenu' ), 20 );
+		add_action( 'admin_post_' . self::MENU_PURGE_ACTION, array( $this, 'handle_menu_purge' ) );
+		add_action( 'admin_notices', array( $this, 'menu_purge_notice' ) );
+		add_filter( 'removable_query_args', array( $this, 'removable_query_args' ) );
+	}
+
+	/**
+	 * Add "Purge cache" under the DietPress menu, while the page cache is on.
+	 *
+	 * Asked for often: emptying the cache meant opening the Cache tab and
+	 * scrolling to its last box. Under the plugin's own menu and not in the
+	 * admin bar, which every plugin already fills. A site that does not use the
+	 * page cache gets no submenu at all, so its menu stays a single entry.
+	 *
+	 * The entry is a link, not a page: it goes straight to admin-post.php with
+	 * its nonce, and WordPress prints a slug like that as it is (the else
+	 * branch of wp-admin/menu-header.php:276 in 7.1.3). That is also why the
+	 * ampersand is not written as an entity: since 6.9 the command palette
+	 * lists every menu entry and takes that same slug as its address, raw
+	 * (wp-includes/script-loader.php:3585), and an entity there would break
+	 * the nonce.
+	 */
+	public function add_purge_submenu() {
+		if ( ! Core_Diet_Cache::is_enabled() || ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		// With a second entry WordPress repeats the parent as the first one,
+		// named like the menu. Registered by hand so it says what it opens.
+		add_submenu_page(
+			self::PAGE_SLUG,
+			__( 'DietPress', 'wpo-tweaks' ),
+			__( 'Settings', 'wpo-tweaks' ),
+			'manage_options',
+			self::PAGE_SLUG
+		);
+
+		add_submenu_page(
+			self::PAGE_SLUG,
+			__( 'Purge cache', 'wpo-tweaks' ),
+			__( 'Purge cache', 'wpo-tweaks' ),
+			'manage_options',
+			'admin-post.php?action=' . self::MENU_PURGE_ACTION . '&_wpnonce=' . wp_create_nonce( self::MENU_PURGE_ACTION )
+		);
+	}
+
+	/**
+	 * Empty the page cache from the menu link and go back where it was clicked.
+	 *
+	 * The count travels back in the address and not in a transient: a
+	 * transient that is not there costs a query on every screen of the
+	 * dashboard that looks for it. It carries a nonce of its own, so the
+	 * notice only shows for the redirect this handler issued, and both
+	 * arguments are removable, so a reload does not bring it back.
+	 */
+	public function handle_menu_purge() {
+		check_admin_referer( self::MENU_PURGE_ACTION );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Unauthorized.', 'wpo-tweaks' ), 403 );
+		}
+
+		$settings_url = admin_url( 'admin.php?page=' . self::PAGE_SLUG . '&tab=' . self::TAB_ID );
+
+		// Switched off since the menu was printed, or a network, where the
+		// module never runs: nothing here to empty.
+		if ( ! Core_Diet_Cache::is_enabled() ) {
+			wp_safe_redirect( $settings_url );
+			exit;
+		}
+
+		$deleted = Core_Diet_Cache_Store::purge_all();
+
+		// Back to the screen the link was on, when it was a screen of this
+		// dashboard. From the command palette or a bookmark there is none.
+		$back = wp_get_referer();
+		if ( ! $back || 0 !== strpos( $back, admin_url() ) ) {
+			$back = $settings_url;
+		}
+
+		$back = remove_query_arg( array( 'core_diet_purged', '_dp_purged' ), $back );
+		$back = add_query_arg(
+			array(
+				'core_diet_purged' => (int) $deleted,
+				'_dp_purged'       => wp_create_nonce( self::MENU_PURGED_NONCE ),
+			),
+			$back
+		);
+
+		wp_safe_redirect( $back );
+		exit;
+	}
+
+	/**
+	 * Confirm a purge made from the menu link.
+	 */
+	public function menu_purge_notice() {
+		if ( ! isset( $_GET['_dp_purged'] )
+			|| ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_dp_purged'] ) ), self::MENU_PURGED_NONCE )
+		) {
+			return;
+		}
+
+		if ( ! isset( $_GET['core_diet_purged'] ) || ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		$deleted = absint( wp_unslash( $_GET['core_diet_purged'] ) );
+
+		echo '<div class="notice notice-success is-dismissible"><p>';
+		echo esc_html(
+			sprintf(
+				/* translators: %s: number of files. */
+				_n( 'Cache emptied: %s file deleted.', 'Cache emptied: %s files deleted.', $deleted, 'wpo-tweaks' ),
+				number_format_i18n( $deleted )
+			)
+		);
+		echo '</p></div>';
+	}
+
+	/**
+	 * Let WordPress drop the confirmation from the address once it is shown.
+	 *
+	 * @param array $args Query arguments WordPress removes from the address bar.
+	 * @return array
+	 */
+	public function removable_query_args( $args ) {
+		$args[] = 'core_diet_purged';
+		$args[] = '_dp_purged';
+
+		return $args;
 	}
 
 	/**
@@ -631,55 +771,14 @@ class Core_Diet_Cache_Admin {
 	/**
 	 * Describe the state of a scheduled event in one phrase.
 	 *
-	 * Written because the panel used to print human_time_diff() on its own, and
-	 * that function has no direction: it answers "2 days" whether the cleanup
-	 * runs in two days or ran two days late. So the one card that could have
-	 * revealed an unattended cron was the card that hid it, and it read as
-	 * healthy on exactly the sites where nothing was being collected.
-	 *
-	 * The hour of grace before calling it late is deliberate. WordPress fires
-	 * its scheduled tasks on visits, so a few minutes past the hour is normal
-	 * on any site and saying so would be noise.
+	 * The phrase and the reason it exists live in Core_Diet_Schedule::describe()
+	 * since 3.7.2, so the Tools tab can say the same about the other tasks.
 	 *
 	 * @param int|false $timestamp Next run, as wp_next_scheduled() returns it.
-	 * @return array {
-	 *     @type string $text      Phrase for the card.
-	 *     @type bool   $late      Whether it is late enough to be worth explaining.
-	 *     @type bool   $scheduled Whether there is an event at all.
-	 * }
+	 * @return array See Core_Diet_Schedule::describe().
 	 */
 	private static function describe_schedule( $timestamp ) {
-		if ( ! $timestamp ) {
-			return array(
-				'text'      => __( 'not scheduled', 'wpo-tweaks' ),
-				'late'      => true,
-				'scheduled' => false,
-			);
-		}
-
-		$now = time();
-
-		if ( $timestamp > $now ) {
-			return array(
-				'text'      => sprintf(
-					/* translators: %s: time until the next run, for example "6 hours". */
-					__( 'in %s', 'wpo-tweaks' ),
-					human_time_diff( $now, $timestamp )
-				),
-				'late'      => false,
-				'scheduled' => true,
-			);
-		}
-
-		return array(
-			'text'      => sprintf(
-				/* translators: %s: how long the run is overdue, for example "2 days". */
-				__( '%s late', 'wpo-tweaks' ),
-				human_time_diff( $timestamp, $now )
-			),
-			'late'      => ( $now - $timestamp ) > HOUR_IN_SECONDS,
-			'scheduled' => true,
-		);
+		return Core_Diet_Schedule::describe( $timestamp );
 	}
 
 	/**
@@ -700,7 +799,9 @@ class Core_Diet_Cache_Admin {
 	 * @return array Sentences to show.
 	 */
 	private static function get_cron_warnings( $gc ) {
-		if ( empty( $gc['late'] ) ) {
+		$cause = Core_Diet_Schedule::late_cause( $gc );
+
+		if ( '' === $cause ) {
 			return array();
 		}
 
@@ -708,13 +809,13 @@ class Core_Diet_Cache_Admin {
 		// so an event still missing here was refused or removed again. The
 		// advice this used to give, switching the cache off and back on, only
 		// emptied the cache and ran into the same wall.
-		if ( empty( $gc['scheduled'] ) ) {
+		if ( 'missing' === $cause ) {
 			return array(
 				__( 'The cleanup is not scheduled, although DietPress schedules it again whenever it goes missing, so something on this site is removing it or keeping WordPress from saving it, usually a plugin that manages scheduled tasks. Visitors are not affected: an expired page is never served, it is rebuilt on its next visit. Expired copies only take up disk space until a cleanup runs.', 'wpo-tweaks' ),
 			);
 		}
 
-		if ( defined( 'DISABLE_WP_CRON' ) && DISABLE_WP_CRON ) {
+		if ( 'cron_off' === $cause ) {
 			return array(
 				__( 'The cleanup is overdue and WordPress cron is switched off on this site (DISABLE_WP_CRON), which is very likely the reason. With it off, no scheduled task runs unless your server calls wp-cron.php on a real schedule, and that includes scheduled posts, not only this cleanup. Check that cron job with your host. Visitors are not affected by the delay: an expired page is never served, it is rebuilt on its next visit. Expired copies only take up disk space until the cleanup runs.', 'wpo-tweaks' ),
 			);

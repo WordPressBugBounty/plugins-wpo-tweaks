@@ -943,6 +943,44 @@ class Core_Diet_Tools {
 	}
 
 	/**
+	 * Things that keep pages out of every cache and no option here can fix.
+	 *
+	 * Advice, not recommendations: there is nothing to switch on, so each entry
+	 * is marked as such and the page prints it without a toggle. Its key is not
+	 * a setting, which is also what keeps it out of a save.
+	 *
+	 * WooCommerce sets the woocommerce_recently_viewed cookie on every visit to
+	 * a product page while its "Recently Viewed Products list" widget counts as
+	 * active (wc_track_product_view(), includes/wc-product-functions.php:987 in
+	 * WooCommerce 11.2.1, on template_redirect), and is_active_widget() counts
+	 * it as active in any sidebar that is not the inactive one, whether the
+	 * theme prints that sidebar or not. A page that sets a cookie is not stored
+	 * by this cache nor by a hosting one, so a store built with a page builder,
+	 * where the classic sidebars are never shown, loses the cache on exactly
+	 * the pages it has most of. Found on a real store, 24 sep 2026.
+	 *
+	 * Nothing is removed from here: somebody placed that widget.
+	 *
+	 * @return array
+	 */
+	private function get_cache_advice() {
+		$out = array();
+
+		if ( class_exists( 'WooCommerce' ) && is_active_widget( false, false, 'woocommerce_recently_viewed_products', true ) ) {
+			$out[] = array(
+				'key'    => 'advice_wc_recently_viewed',
+				'label'  => __( 'The "Recently Viewed Products list" widget keeps product pages out of the cache', 'wpo-tweaks' ),
+				'reason' => __( 'It sets a cookie on every product page, even if your theme never shows it. Remove it under Appearance > Widgets if you do not use it.', 'wpo-tweaks' ),
+				'risk'   => 'moderate',
+				'tab'    => 'cache',
+				'advice' => true,
+			);
+		}
+
+		return $out;
+	}
+
+	/**
 	 * Read one of the page cache module's own settings.
 	 *
 	 * @param string $key Setting key.
@@ -962,6 +1000,7 @@ class Core_Diet_Tools {
 		// --- Cache tab ---
 
 		$recommendations = array_merge( $recommendations, $this->get_cache_recommendations( $settings ) );
+		$recommendations = array_merge( $recommendations, $this->get_cache_advice() );
 
 		// --- Light tab: always safe ---
 
@@ -1129,8 +1168,10 @@ class Core_Diet_Tools {
 			);
 		}
 
-		// Selective loading: suggest each module when its target is present.
-		if ( ! $settings->is_enabled( 'selective_woocommerce' ) && class_exists( 'WooCommerce' ) ) {
+		// Selective loading: suggest each module when it has something to act
+		// on. The module and the settings page ask the same question in the
+		// same place, Core_Diet_Perf_Selective::target_detected().
+		if ( ! $settings->is_enabled( 'selective_woocommerce' ) && Core_Diet_Perf_Selective::target_detected( 'selective_woocommerce' ) ) {
 			$recommendations[] = array(
 				'key'    => 'selective_woocommerce',
 				'label'  => Core_Diet_Settings::get_field_label( 'selective_woocommerce' ),
@@ -1140,7 +1181,7 @@ class Core_Diet_Tools {
 			);
 		}
 
-		if ( ! $settings->is_enabled( 'selective_cf7' ) && class_exists( 'WPCF7' ) ) {
+		if ( ! $settings->is_enabled( 'selective_cf7' ) && Core_Diet_Perf_Selective::target_detected( 'selective_cf7' ) ) {
 			$recommendations[] = array(
 				'key'    => 'selective_cf7',
 				'label'  => Core_Diet_Settings::get_field_label( 'selective_cf7' ),
@@ -1161,14 +1202,7 @@ class Core_Diet_Tools {
 			);
 		}
 
-		// Slider Revolution is not on wordpress.org and renamed its internals
-		// between versions 6 and 7, so three separate signals are checked.
-		$has_revslider = defined( 'RS_REVISION' )
-			|| class_exists( 'RevSliderFront' )
-			|| shortcode_exists( 'rev_slider' )
-			|| shortcode_exists( 'sr7' );
-
-		if ( ! $settings->is_enabled( 'selective_revslider' ) && $has_revslider ) {
+		if ( ! $settings->is_enabled( 'selective_revslider' ) && Core_Diet_Perf_Selective::target_detected( 'selective_revslider' ) ) {
 			$recommendations[] = array(
 				'key'    => 'selective_revslider',
 				'label'  => Core_Diet_Settings::get_field_label( 'selective_revslider' ),
@@ -1178,9 +1212,7 @@ class Core_Diet_Tools {
 			);
 		}
 
-		if ( ! $settings->is_enabled( 'selective_tablepress' )
-			&& defined( 'TABLEPRESS_BASENAME' )
-			&& ( ! function_exists( 'wp_is_block_theme' ) || ! wp_is_block_theme() ) ) {
+		if ( ! $settings->is_enabled( 'selective_tablepress' ) && Core_Diet_Perf_Selective::target_detected( 'selective_tablepress' ) ) {
 			$recommendations[] = array(
 				'key'    => 'selective_tablepress',
 				'label'  => Core_Diet_Settings::get_field_label( 'selective_tablepress' ),
@@ -1190,7 +1222,7 @@ class Core_Diet_Tools {
 			);
 		}
 
-		if ( ! $settings->is_enabled( 'selective_smash_balloon' ) && defined( 'SBIVER' ) ) {
+		if ( ! $settings->is_enabled( 'selective_smash_balloon' ) && Core_Diet_Perf_Selective::target_detected( 'selective_smash_balloon' ) ) {
 			$recommendations[] = array(
 				'key'    => 'selective_smash_balloon',
 				'label'  => Core_Diet_Settings::get_field_label( 'selective_smash_balloon' ),
@@ -1200,7 +1232,7 @@ class Core_Diet_Tools {
 			);
 		}
 
-		if ( ! $settings->is_enabled( 'selective_formidable' ) && class_exists( 'FrmAppHelper' ) ) {
+		if ( ! $settings->is_enabled( 'selective_formidable' ) && Core_Diet_Perf_Selective::target_detected( 'selective_formidable' ) ) {
 			$recommendations[] = array(
 				'key'    => 'selective_formidable',
 				'label'  => Core_Diet_Settings::get_field_label( 'selective_formidable' ),
@@ -1210,7 +1242,7 @@ class Core_Diet_Tools {
 			);
 		}
 
-		if ( ! $settings->is_enabled( 'selective_everest_forms' ) && defined( 'EVF_VERSION' ) ) {
+		if ( ! $settings->is_enabled( 'selective_everest_forms' ) && Core_Diet_Perf_Selective::target_detected( 'selective_everest_forms' ) ) {
 			$recommendations[] = array(
 				'key'    => 'selective_everest_forms',
 				'label'  => Core_Diet_Settings::get_field_label( 'selective_everest_forms' ),
@@ -1319,12 +1351,154 @@ class Core_Diet_Tools {
 	}
 
 	/**
-	 * Render the Tools tab content (import/export only).
+	 * Render the Tools tab content (import/export and scheduled tasks).
 	 */
 	public function render_tools_tab() {
 		?>
 		<div class="core-diet-tools-sections">
 			<?php $this->render_import_export_section(); ?>
+			<?php $this->render_scheduled_tasks_section(); ?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * The tasks DietPress leaves to WordPress cron, and where each one stands.
+	 *
+	 * The daily cleanup of transients had no card anywhere: it was scheduled
+	 * when its option was switched on and nothing ever said whether it ran. The
+	 * page cache cleanup has its own card on the Cache tab and is listed here
+	 * too, so there is one place that answers "is cron doing its job?".
+	 *
+	 * Each entry is read after the plugin has had its chance to schedule it on
+	 * this very request (Core_Diet_Database::init() and
+	 * Core_Diet_Cache::maybe_schedule_gc()), so one that is still missing was
+	 * refused or removed again.
+	 *
+	 * @return array[] One entry per task: label, frequency, on and state.
+	 */
+	private function get_scheduled_tasks() {
+		$frequencies = Core_Diet_Schedule::get_frequencies();
+		$tasks       = array();
+
+		$transients_on = Core_Diet_Settings::get_instance()->is_enabled( 'clean_transients' );
+		$tasks[]       = array(
+			'id'        => 'transients',
+			'label'     => Core_Diet_Settings::get_field_label( 'clean_transients' ),
+			'frequency' => $frequencies['daily'],
+			'on'        => $transients_on,
+			'state'     => $transients_on ? Core_Diet_Schedule::describe( wp_next_scheduled( 'core_diet_clean_transients' ) ) : null,
+		);
+
+		if ( class_exists( 'Core_Diet_Cache' ) && class_exists( 'Core_Diet_Cache_Settings' ) ) {
+			$cache_on  = Core_Diet_Cache::is_enabled();
+			$frequency = (string) Core_Diet_Cache_Settings::get_instance()->get( 'gc_frequency' );
+			$tasks[]   = array(
+				'id'        => 'cache',
+				'label'     => __( 'Clean up expired pages', 'wpo-tweaks' ),
+				'frequency' => isset( $frequencies[ $frequency ] ) ? $frequencies[ $frequency ] : '',
+				'on'        => $cache_on,
+				'state'     => $cache_on ? Core_Diet_Schedule::describe( wp_next_scheduled( Core_Diet_Cache::CRON_HOOK ) ) : null,
+			);
+		}
+
+		return $tasks;
+	}
+
+	/**
+	 * What to say about the tasks that are not running on time.
+	 *
+	 * The cause first, once for each different one, and then what each late
+	 * task costs, which in both cases is disk or database room and nothing a
+	 * visitor can see. A warning that left that out would read as if something
+	 * were broken.
+	 *
+	 * @param array[] $tasks Output of get_scheduled_tasks().
+	 * @return string[] Sentences to show, or none.
+	 */
+	private function get_scheduled_tasks_warnings( $tasks ) {
+		$causes = array();
+		$costs  = array();
+
+		foreach ( $tasks as $task ) {
+			$cause = $task['state'] ? Core_Diet_Schedule::late_cause( $task['state'] ) : '';
+
+			if ( '' === $cause ) {
+				continue;
+			}
+
+			$causes[ $cause ] = true;
+
+			if ( 'transients' === $task['id'] ) {
+				$costs[] = __( 'A late cleanup of transients breaks nothing: WordPress never uses an expired transient, they only take up room in the database until the cleanup runs.', 'wpo-tweaks' );
+			} elseif ( 'cache' === $task['id'] ) {
+				$costs[] = __( 'A late cleanup of the page cache does not reach visitors: an expired page is never served, it is rebuilt on its next visit. Expired copies only take up disk space until the cleanup runs.', 'wpo-tweaks' );
+			}
+		}
+
+		$out = array();
+
+		if ( isset( $causes['missing'] ) ) {
+			$out[] = __( 'A task that should be scheduled is not, although DietPress schedules it again whenever it goes missing, so something on this site is removing it or keeping WordPress from saving it, usually a plugin that manages scheduled tasks.', 'wpo-tweaks' );
+		}
+
+		if ( isset( $causes['cron_off'] ) ) {
+			$out[] = __( 'A task is overdue and WordPress cron is switched off on this site (DISABLE_WP_CRON), which is very likely the reason. With it off, no scheduled task runs unless your server calls wp-cron.php on a real schedule, and that includes scheduled posts. Check that cron job with your host.', 'wpo-tweaks' );
+		}
+
+		if ( isset( $causes['overdue'] ) ) {
+			$out[] = __( 'A task is overdue. WordPress runs its scheduled tasks when a page is built, so a site with little traffic, or one that serves most of its visits from a cache, can go a long time without running them. Scheduled posts wait too.', 'wpo-tweaks' );
+		}
+
+		return array_merge( $out, $costs );
+	}
+
+	/**
+	 * Render the scheduled tasks section.
+	 */
+	private function render_scheduled_tasks_section() {
+		$tasks = $this->get_scheduled_tasks();
+		?>
+		<div class="core-diet-tools-section">
+			<h2><?php esc_html_e( 'Scheduled tasks', 'wpo-tweaks' ); ?></h2>
+			<p class="core-diet-tab-description">
+				<?php esc_html_e( 'What DietPress leaves for WordPress to run on its own, and when each task is due next.', 'wpo-tweaks' ); ?>
+			</p>
+
+			<table class="widefat striped core-diet-tasks-table">
+				<thead>
+					<tr>
+						<th scope="col"><?php esc_html_e( 'Task', 'wpo-tweaks' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'How often', 'wpo-tweaks' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Next run', 'wpo-tweaks' ); ?></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php foreach ( $tasks as $task ) : ?>
+						<tr>
+							<th scope="row"><?php echo esc_html( $task['label'] ); ?></th>
+							<?php if ( $task['on'] ) : ?>
+								<td><?php echo esc_html( $task['frequency'] ); ?></td>
+								<td>
+									<span class="<?php echo esc_attr( $task['state']['late'] ? 'core-diet-cache-value-late' : '' ); ?>">
+										<?php echo esc_html( $task['state']['text'] ); ?>
+									</span>
+								</td>
+							<?php else : ?>
+								<td>&mdash;</td>
+								<td><?php echo esc_html_x( 'off', 'scheduled task that is switched off', 'wpo-tweaks' ); ?></td>
+							<?php endif; ?>
+						</tr>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
+
+			<?php foreach ( $this->get_scheduled_tasks_warnings( $tasks ) as $warning ) : ?>
+				<p class="core-diet-option-notice core-diet-option-notice-warning core-diet-cache-block">
+					<span class="dashicons dashicons-warning" aria-hidden="true"></span>
+					<span class="core-diet-option-notice-text"><?php echo esc_html( $warning ); ?></span>
+				</p>
+			<?php endforeach; ?>
 		</div>
 		<?php
 	}

@@ -4,7 +4,7 @@ Tags: performance, cache, optimization, cleanup, speed
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 7.1
-Stable tag: 3.7.1
+Stable tag: 3.7.2
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -311,6 +311,19 @@ With the accelerator on, the cookies, media types and URL patterns those filters
 
 == Changelog ==
 
+= 3.7.2 =
+The RSS feed of a logged in user, and a page that sets a cookie when a lifetime is chosen for HTML, no longer go out marked as public. Adds a Purge cache entry to the DietPress menu, marks the selective loading modules whose plugin is on the site and lists the scheduled tasks in Tools.
+
+* Improved: While the page cache is on, the DietPress menu has a Purge cache entry. It empties the cache from any screen of the dashboard and brings you back to it, with a note of how much was deleted.
+* Improved: In Selective loading, on the Strict tab, the modules that have something to act on come first and carry a "Detected on this site" label, so it is clear which ones are yours. The label follows what the module would do and not only whether its plugin is installed: Formidable Forms gets it while it loads its styles on every page, and TablePress on a classic theme.
+* Improved: The site analyzer asks the same question as the module, so it no longer suggests the Formidable Forms module when Formidable already loads its styles only where a form is.
+* Improved: The Tools tab has a Scheduled tasks section that shows when the daily cleanup of transients and the cleanup of the page cache are due next. When one is late or missing it says so, with the likely reason and what it does and does not affect.
+* Improved: The site analyzer warns when the WooCommerce "Recently Viewed Products list" widget sits in a sidebar, even one the theme never shows. While it is there every product page sets a cookie, and no cache stores a page that sets a cookie: not this one, and not the one of the hosting.
+* Improved: The DNS prefetch hints for ajax.googleapis.com and stats.wp.com are printed only on pages that load a script or a style from them, or while Jetpack Stats is on. They were printed on every page of every site. The `dietpress_dns_prefetch_domains` filter still adds them back.
+* Fix: With Optimize RSS feeds on, which is the default, the RSS feed went out marked as public for an hour for everybody, logged in visitors included. For them it replaced the private, do not store answer WordPress gives, and the feed of somebody who can read private posts includes them, so a cache in front of the site that took the header at its word could hand that feed to other visitors. The header is now sent only to visitors who are not logged in, and never on a response that sets a cookie or is already marked private.
+* Fix: With a lifetime chosen for HTML pages under browser caching, a page that set a cookie went out marked as public, which lets a cache in front of the site keep it and hand that cookie to other visitors. It now goes out as private, with the same lifetime, so a cache in front that used to keep such pages anyway stops keeping them. Sites with the default, no lifetime for HTML, were not affected.
+* Fix: The answer the page cache gives a visitor who already has the current copy (a 304) was sent before declaring the type of the page, so on a site whose charset is not UTF-8 it could leave with the wrong one. Apache and PHP-FPM remove the type from that answer, so most sites never sent it.
+
 = 3.7.1 =
 Fixes the cache test behind a hosting cache, which kept the pages DietPress builds and served them ahead of it: purge that cache once after updating. The test now checks the page you choose, and the accelerator no longer switches on while the page cache is off.
 
@@ -345,8 +358,8 @@ For older changelog entries, please check the [changelog.txt](https://plugins.sv
 
 == Upgrade Notice ==
 
-= 3.7.1 =
-Fixes the cache test behind a hosting cache, which kept the pages DietPress builds and served them ahead of it: purge that cache once after updating. The test now checks the page you choose, and the accelerator no longer switches on while the page cache is off.
+= 3.7.2 =
+The RSS feed of a logged in user, and a page that sets a cookie when a lifetime is chosen for HTML, no longer go out marked as public. Adds a Purge cache entry to the DietPress menu, marks the selective loading modules whose plugin is on the site and lists the scheduled tasks in Tools.
 
 == Support ==
 

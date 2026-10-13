@@ -38,6 +38,14 @@ class Core_Diet_Htaccess {
 	const HTML_SEND_NOTHING = 'none';
 
 	/**
+	 * The public lifetime this response was given for its HTML, in seconds, or
+	 * null when set_html_cache_control() gave it none.
+	 *
+	 * @var int|null
+	 */
+	private $public_lifetime = null;
+
+	/**
 	 * Legacy marker names, cleaned up on every rewrite: the block written by
 	 * wpo-tweaks 2.x ("Zero Config Performance") and the pre-2.x one. Sites
 	 * updating get their old block replaced by the DietPress one the first
@@ -143,11 +151,138 @@ class Core_Diet_Htaccess {
 
 		$seconds = Core_Diet_Settings::period_to_seconds( $period );
 
-		$headers['Cache-Control'] = $seconds > 0
-			? 'max-age=' . $seconds . ', public'
-			: 'max-age=0, must-revalidate';
+		if ( $seconds <= 0 ) {
+			$headers['Cache-Control'] = 'max-age=0, must-revalidate';
+
+			return $headers;
+		}
+
+		// A cookie set this early, on init for instance, is already known.
+		if ( self::sets_cookie( self::sent_headers() ) ) {
+			$headers['Cache-Control'] = 'max-age=' . $seconds . ', private';
+
+			return $headers;
+		}
+
+		$headers['Cache-Control'] = 'max-age=' . $seconds . ', public';
+
+		// One set later, while the page is built, is not. See the callback.
+		if ( null === $this->public_lifetime ) {
+			$this->public_lifetime = $seconds;
+			add_action( 'template_redirect', array( $this, 'watch_public_response' ), 0 );
+		}
 
 		return $headers;
+	}
+
+	/**
+	 * Open the buffer that lets a public lifetime be taken back.
+	 *
+	 * The lifetime is decided on wp_headers, before the page is built, and
+	 * anything can still set a cookie while it is built: WooCommerce does on a
+	 * product page with its "recently viewed" widget, on template_redirect. That
+	 * response would leave saying both "any cache may keep this" and "this is
+	 * this visitor's cookie", and a cache in front that took the first at its
+	 * word would hand the cookie to everybody after. Most of them refuse to
+	 * store a response that sets a cookie, but that is their rule, not
+	 * something to count on (cross review of 3.7.1).
+	 *
+	 * Nothing tells PHP that the headers are about to leave except an output
+	 * buffer, so the page goes through one and its callback looks again.
+	 */
+	public function watch_public_response() {
+		if ( null === $this->public_lifetime ) {
+			return;
+		}
+
+		ob_start( array( $this, 'keep_cookie_response_private' ) );
+	}
+
+	/**
+	 * Output buffer callback: take `public` back if a cookie has appeared.
+	 *
+	 * Called at the end of the page, and before that whenever something flushes
+	 * it, which is the last moment the headers can still change. It only reads
+	 * and writes headers: nothing in an output buffer handler may fire a hook
+	 * or open a buffer of its own.
+	 *
+	 * @param string $buffer The page, or the part of it being flushed.
+	 * @return string The same, untouched.
+	 */
+	public function keep_cookie_response_private( $buffer ) {
+		if ( null === $this->public_lifetime || headers_sent() ) {
+			return $buffer;
+		}
+
+		$private = self::private_twin( self::sent_headers(), $this->public_lifetime );
+
+		if ( '' !== $private ) {
+			header( 'Cache-Control: ' . $private );
+			$this->public_lifetime = null;
+		}
+
+		return $buffer;
+	}
+
+	/**
+	 * The Cache-Control a response that sets a cookie must carry instead.
+	 *
+	 * Only when the header going out is still the one this class wrote. A
+	 * response something else has spoken for since is left alone, as it would
+	 * have been on wp_headers.
+	 *
+	 * The lifetime is kept and only `public` goes: how long a browser may keep
+	 * the page is the site's choice and a cookie does not change it. What a
+	 * cookie changes is who else may keep it, which is nobody.
+	 *
+	 * @param array $sent    Header lines, as headers_list() returns them.
+	 * @param int   $seconds The lifetime that was sent as public.
+	 * @return string The value to send, or '' to leave the response as it is.
+	 */
+	private static function private_twin( array $sent, $seconds ) {
+		if ( ! self::sets_cookie( $sent ) ) {
+			return '';
+		}
+
+		$ours  = 'max-age=' . (int) $seconds . ', public';
+		$found = array();
+
+		foreach ( $sent as $header ) {
+			if ( 0 === stripos( $header, 'cache-control:' ) ) {
+				$found[] = trim( substr( $header, strlen( 'cache-control:' ) ) );
+			}
+		}
+
+		if ( array( $ours ) !== $found ) {
+			return '';
+		}
+
+		return 'max-age=' . (int) $seconds . ', private';
+	}
+
+	/**
+	 * Whether any of these header lines sets a cookie.
+	 *
+	 * @param array $sent Header lines, as headers_list() returns them.
+	 * @return bool
+	 */
+	private static function sets_cookie( array $sent ) {
+		foreach ( $sent as $header ) {
+			if ( 0 === stripos( $header, 'set-cookie:' ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * The headers PHP holds for this response.
+	 *
+	 * @return array
+	 */
+	private static function sent_headers() {
+		return function_exists( 'headers_list' ) ? headers_list() : array();
 	}
 
 	/**

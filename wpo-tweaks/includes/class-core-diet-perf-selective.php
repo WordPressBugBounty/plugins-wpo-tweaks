@@ -103,6 +103,91 @@ class Core_Diet_Perf_Selective {
 	}
 
 	/* ============================
+	 * Target detection
+	 * ============================ */
+
+	/**
+	 * Whether a module has something to act on, on this site.
+	 *
+	 * One answer for the three places that ask: the module before it touches a
+	 * page, the analyzer before it suggests the option, and the settings page
+	 * to mark the card. Up to 3.7.1 they answered separately and did not agree:
+	 * the analyzer suggested the Formidable module whenever Formidable was
+	 * active, and the module only acts while Formidable loads its stylesheet on
+	 * every page.
+	 *
+	 * "Something to act on" and not "its plugin is installed", so nobody is
+	 * pointed at an option that would do nothing. Formidable set to one of its
+	 * own conditional modes has nothing left to remove, and TablePress on a
+	 * block theme already loads its stylesheet only where a table is.
+	 *
+	 * The block library module is not here on purpose: it depends on the theme
+	 * and not on a plugin, and it always answers false.
+	 *
+	 * @param string $setting Setting key of the module.
+	 * @return bool
+	 */
+	public static function target_detected( $setting ) {
+		switch ( $setting ) {
+			case 'selective_woocommerce':
+				return class_exists( 'WooCommerce' );
+
+			case 'selective_cf7':
+				return class_exists( 'WPCF7' );
+
+			case 'selective_formidable':
+				// Formidable ships with "load_style" on 'all', which enqueues the
+				// generated stylesheet everywhere.
+				if ( ! class_exists( 'FrmAppHelper' ) || ! method_exists( 'FrmAppHelper', 'get_settings' ) ) {
+					return false;
+				}
+
+				$frm_settings = FrmAppHelper::get_settings();
+
+				return isset( $frm_settings->load_style ) && 'all' === $frm_settings->load_style;
+
+			case 'selective_everest_forms':
+				return defined( 'EVF_VERSION' );
+
+			case 'selective_revslider':
+				// Slider Revolution is not on wordpress.org and renamed its
+				// internals between versions 6 and 7, so four signals are checked.
+				return defined( 'RS_REVISION' )
+					|| class_exists( 'RevSliderFront' )
+					|| shortcode_exists( 'rev_slider' )
+					|| shortcode_exists( 'sr7' );
+
+			case 'selective_tablepress':
+				return defined( 'TABLEPRESS_BASENAME' )
+					&& ( ! function_exists( 'wp_is_block_theme' ) || ! wp_is_block_theme() );
+
+			case 'selective_smash_balloon':
+				return defined( 'SBIVER' );
+		}
+
+		return false;
+	}
+
+	/**
+	 * The modules that have something to act on, by setting key.
+	 *
+	 * @return string[]
+	 */
+	public static function get_detected_settings() {
+		$candidates = array(
+			'selective_woocommerce',
+			'selective_cf7',
+			'selective_revslider',
+			'selective_tablepress',
+			'selective_smash_balloon',
+			'selective_formidable',
+			'selective_everest_forms',
+		);
+
+		return array_values( array_filter( $candidates, array( __CLASS__, 'target_detected' ) ) );
+	}
+
+	/* ============================
 	 * Module registry
 	 * ============================ */
 
@@ -119,7 +204,6 @@ class Core_Diet_Perf_Selective {
 	 *   setting         Setting key that switches the module on.
 	 *   early           Callback that registers the module hooks at plugin load
 	 *                   time (native-switch modules only).
-	 *   active          Callback returning whether the target plugin is present.
 	 *   detect          Callback returning whether this page shows its content.
 	 *   styles          Style handles removed when no content is detected.
 	 *   scripts         Script handles removed when no content is detected.
@@ -135,7 +219,6 @@ class Core_Diet_Perf_Selective {
 			'wc' => array(
 				'setting'       => 'selective_woocommerce',
 				'owner'         => array( 'woocommerce' ),
-				'active'        => array( $this, 'wc_is_active' ),
 				'detect'        => array( $this, 'wc_has_content' ),
 				'styles'        => array(
 					'woocommerce-general',
@@ -167,7 +250,6 @@ class Core_Diet_Perf_Selective {
 
 			'cf7' => array(
 				'setting'       => 'selective_cf7',
-				'active'        => array( $this, 'cf7_is_active' ),
 				'detect'        => array( $this, 'cf7_has_content' ),
 				'styles'        => array( 'contact-form-7', 'contact-form-7-rtl' ),
 				'scripts'       => array( 'contact-form-7', 'swv', 'wpcf7-recaptcha', 'google-recaptcha' ),
@@ -177,7 +259,6 @@ class Core_Diet_Perf_Selective {
 
 			'formidable' => array(
 				'setting'       => 'selective_formidable',
-				'active'        => array( $this, 'formidable_is_active' ),
 				'detect'        => array( $this, 'formidable_has_content' ),
 				'styles'        => array( 'formidable' ),
 				'scripts'       => array(),
@@ -187,7 +268,6 @@ class Core_Diet_Perf_Selective {
 
 			'everest_forms' => array(
 				'setting'       => 'selective_everest_forms',
-				'active'        => array( $this, 'everest_forms_is_active' ),
 				'detect'        => array( $this, 'everest_forms_has_content' ),
 				'styles'        => array( 'everest-forms-general', 'jquery-intl-tel-input' ),
 				'scripts'       => array(),
@@ -291,7 +371,7 @@ class Core_Diet_Perf_Selective {
 	 * @param array  $module Module definition.
 	 */
 	private function run_dequeue_module( $slug, $module ) {
-		if ( isset( $module['active'] ) && ! call_user_func( $module['active'] ) ) {
+		if ( ! self::target_detected( $module['setting'] ) ) {
 			return;
 		}
 
@@ -492,15 +572,6 @@ class Core_Diet_Perf_Selective {
 	 * ============================ */
 
 	/**
-	 * Whether WooCommerce is active.
-	 *
-	 * @return bool
-	 */
-	private function wc_is_active() {
-		return class_exists( 'WooCommerce' );
-	}
-
-	/**
 	 * Whether the current page shows WooCommerce content.
 	 *
 	 * Covers the WooCommerce conditional tags (shop, product, archives, cart,
@@ -580,15 +651,6 @@ class Core_Diet_Perf_Selective {
 	 * ============================ */
 
 	/**
-	 * Whether Contact Form 7 is active.
-	 *
-	 * @return bool
-	 */
-	private function cf7_is_active() {
-		return class_exists( 'WPCF7' );
-	}
-
-	/**
 	 * Whether the current page renders a Contact Form 7 form.
 	 *
 	 * Scans the queried content (singular post or the posts in the main
@@ -610,25 +672,6 @@ class Core_Diet_Perf_Selective {
 	/* ============================
 	 * Formidable Forms
 	 * ============================ */
-
-	/**
-	 * Whether Formidable Forms is active and loading its CSS on every page.
-	 *
-	 * Formidable ships with the "load_style" setting on 'all', which enqueues
-	 * the generated stylesheet everywhere. When the admin has already picked
-	 * one of the conditional modes there is nothing to do.
-	 *
-	 * @return bool
-	 */
-	private function formidable_is_active() {
-		if ( ! class_exists( 'FrmAppHelper' ) || ! method_exists( 'FrmAppHelper', 'get_settings' ) ) {
-			return false;
-		}
-
-		$frm_settings = FrmAppHelper::get_settings();
-
-		return isset( $frm_settings->load_style ) && 'all' === $frm_settings->load_style;
-	}
 
 	/**
 	 * Whether the current page renders a Formidable form or view.
@@ -667,15 +710,6 @@ class Core_Diet_Perf_Selective {
 	/* ============================
 	 * Everest Forms
 	 * ============================ */
-
-	/**
-	 * Whether Everest Forms is active.
-	 *
-	 * @return bool
-	 */
-	private function everest_forms_is_active() {
-		return defined( 'EVF_VERSION' );
-	}
 
 	/**
 	 * Whether the current page renders an Everest Forms form.

@@ -384,12 +384,17 @@ class Core_Diet_Cache_Engine {
 			header( 'Vary: ' . implode( ', ', $vary ) );
 		}
 
+		// Declared before the 304 below and not after it. A 304 that leaves
+		// without a type gets the one PHP falls back to, text/html in UTF-8,
+		// which is not the type of the page on a site whose charset is another.
+		// Apache and PHP-FPM drop the type of a 304 anyway; a server that does
+		// not would have answered with a charset the stored copy never had.
+		header( 'Content-Type: text/html; charset=' . get_option( 'blog_charset', 'UTF-8' ) );
+
 		if ( $this->client_has_current_copy( $mtime ) ) {
 			status_header( 304 );
 			exit;
 		}
-
-		header( 'Content-Type: text/html; charset=' . get_option( 'blog_charset', 'UTF-8' ) );
 
 		$path = $gzip ? $gz_file : $file;
 

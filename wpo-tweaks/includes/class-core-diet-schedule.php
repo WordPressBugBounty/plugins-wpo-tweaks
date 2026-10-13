@@ -231,4 +231,91 @@ class Core_Diet_Schedule {
 	public static function minute_offset() {
 		return (int) ( abs( crc32( (string) home_url() ) ) % 60 );
 	}
+
+	/**
+	 * Describe the state of a scheduled event in one phrase.
+	 *
+	 * Written because the cache panel used to print human_time_diff() on its
+	 * own, and that function has no direction: it answers "2 days" whether the
+	 * cleanup runs in two days or ran two days late. So the one card that could
+	 * have revealed an unattended cron was the card that hid it, and it read as
+	 * healthy on exactly the sites where nothing was being collected.
+	 *
+	 * The hour of grace before calling it late is deliberate. WordPress fires
+	 * its scheduled tasks on visits, so a few minutes past the hour is normal
+	 * on any site and saying so would be noise.
+	 *
+	 * Lived in the Cache tab until 3.7.2, where only the page cache cleanup
+	 * could use it. The daily cleanup of transients had no card anywhere.
+	 *
+	 * @param int|false $timestamp Next run, as wp_next_scheduled() returns it.
+	 * @return array {
+	 *     @type string $text      Phrase for the card.
+	 *     @type bool   $late      Whether it is late enough to be worth explaining.
+	 *     @type bool   $scheduled Whether there is an event at all.
+	 * }
+	 */
+	public static function describe( $timestamp ) {
+		if ( ! $timestamp ) {
+			return array(
+				'text'      => __( 'not scheduled', 'wpo-tweaks' ),
+				'late'      => true,
+				'scheduled' => false,
+			);
+		}
+
+		$now = time();
+
+		if ( $timestamp > $now ) {
+			return array(
+				'text'      => sprintf(
+					/* translators: %s: time until the next run, for example "6 hours". */
+					__( 'in %s', 'wpo-tweaks' ),
+					human_time_diff( $now, $timestamp )
+				),
+				'late'      => false,
+				'scheduled' => true,
+			);
+		}
+
+		return array(
+			'text'      => sprintf(
+				/* translators: %s: how long the run is overdue, for example "2 days". */
+				__( '%s late', 'wpo-tweaks' ),
+				human_time_diff( $timestamp, $now )
+			),
+			'late'      => ( $now - $timestamp ) > HOUR_IN_SECONDS,
+			'scheduled' => true,
+		);
+	}
+
+	/**
+	 * Why a task is not running on time, as a bare slug, or '' when it is.
+	 *
+	 * Only speaks when the event is actually overdue or missing. A site with
+	 * DISABLE_WP_CRON and a real system cron behind it is correctly configured,
+	 * and warning it about a schedule that is being met would be the kind of
+	 * permanent notice people learn to scroll past.
+	 *
+	 * The words are left to each screen: what a late run costs is not the same
+	 * for the page cache as for the transients.
+	 *
+	 * @param array $state Output of describe() for the task.
+	 * @return string '', 'missing', 'cron_off' or 'overdue'.
+	 */
+	public static function late_cause( $state ) {
+		if ( empty( $state['late'] ) ) {
+			return '';
+		}
+
+		if ( empty( $state['scheduled'] ) ) {
+			return 'missing';
+		}
+
+		if ( defined( 'DISABLE_WP_CRON' ) && DISABLE_WP_CRON ) {
+			return 'cron_off';
+		}
+
+		return 'overdue';
+	}
 }

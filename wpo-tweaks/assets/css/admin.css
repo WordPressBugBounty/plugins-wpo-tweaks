@@ -229,6 +229,26 @@
 	color: #50575e;
 }
 
+/* A card with something to say about itself next to its label, such as a
+   selective loading module whose plugin is on this site. The words carry the
+   meaning; the edge only helps find the card in a long section. */
+.core-diet-option-badge {
+	display: inline-block;
+	margin-left: 6px;
+	padding: 1px 7px;
+	border-radius: 3px;
+	background: #f0f6fc;
+	color: var(--dp-accent-dark);
+	font-size: 10px;
+	font-weight: 600;
+	white-space: nowrap;
+	vertical-align: middle;
+}
+
+.core-diet-option-badged {
+	border-left: 3px solid var(--dp-accent);
+}
+
 /* A hard locked card: the option cannot apply, so it reads as unavailable. */
 .core-diet-option-locked .core-diet-option-header {
 	opacity: 0.55;
@@ -1014,6 +1034,15 @@
    instead of sitting flush against whatever comes next. */
 .core-diet-cache-block {
 	margin: 0 0 12px;
+}
+
+/* The scheduled tasks of the Tools tab. */
+.core-diet-tasks-table {
+	margin: 0 0 16px;
+}
+
+.core-diet-tasks-table tbody th {
+	font-weight: 500;
 }
 
 .core-diet-cache-panel {

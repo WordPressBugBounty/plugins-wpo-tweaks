@@ -450,12 +450,16 @@
 		var riskLabels = { safe: s.riskSafe, recommended: s.riskRecommended, moderate: s.riskModerate };
 		var tabLabels  = { light: s.tabLight, moderate: s.tabModerate, strict: s.tabStrict, cache: s.tabCache };
 
-		// Separate boolean (toggleable) from select (info-only) recommendations.
+		// Separate boolean (toggleable) from select (info-only) recommendations,
+		// and both from advice, which is not an option and has nothing to save.
 		var toggleable = [];
 		var infoOnly   = [];
+		var advice     = [];
 
 		recommendations.forEach( function( rec ) {
-			if ( rec.value ) {
+			if ( rec.advice ) {
+				advice.push( rec );
+			} else if ( rec.value ) {
 				infoOnly.push( rec );
 			} else {
 				toggleable.push( rec );
@@ -473,14 +477,25 @@
 
 		var html = '';
 
-		// Quick-enable buttons.
-		html += '<div class="core-diet-rec-filters">';
-		html += '<span class="core-diet-rec-filters-label">' + escHtml( s.quickSelect ) + '</span>';
-		html += '<button type="button" class="button button-small core-diet-rec-filter" data-filter="all">' + escHtml( s.filterAll ) + '</button>';
-		html += '<button type="button" class="button button-small core-diet-rec-filter" data-filter="safe">' + escHtml( s.filterSafe ) + '</button>';
-		html += '<button type="button" class="button button-small core-diet-rec-filter" data-filter="safe-recommended">' + escHtml( s.filterSafeRec ) + '</button>';
-		html += '<span class="core-diet-rec-counter" id="core-diet-rec-counter"></span>';
-		html += '</div>';
+		// Advice first: what it describes takes more away than any option
+		// below can give back.
+		advice.forEach( function( rec ) {
+			html += '<p class="core-diet-option-notice core-diet-option-notice-warning core-diet-cache-block">';
+			html += '<span class="dashicons dashicons-warning" aria-hidden="true"></span>';
+			html += '<span><strong>' + escHtml( rec.label ) + '.</strong> ' + escHtml( rec.reason ) + '</span>';
+			html += '</p>';
+		} );
+
+		// Quick-enable buttons, only when there is something to select.
+		if ( toggleable.length ) {
+			html += '<div class="core-diet-rec-filters">';
+			html += '<span class="core-diet-rec-filters-label">' + escHtml( s.quickSelect ) + '</span>';
+			html += '<button type="button" class="button button-small core-diet-rec-filter" data-filter="all">' + escHtml( s.filterAll ) + '</button>';
+			html += '<button type="button" class="button button-small core-diet-rec-filter" data-filter="safe">' + escHtml( s.filterSafe ) + '</button>';
+			html += '<button type="button" class="button button-small core-diet-rec-filter" data-filter="safe-recommended">' + escHtml( s.filterSafeRec ) + '</button>';
+			html += '<span class="core-diet-rec-counter" id="core-diet-rec-counter"></span>';
+			html += '</div>';
+		}
 
 		// Toggleable cards grouped by tab.
 		// Same order as the tabs themselves. A tab missing from this list would
@@ -513,10 +528,12 @@
 			html += '</div>';
 		}
 
-		// Save button.
-		html += '<div class="core-diet-rec-save-wrap">';
-		html += '<button type="button" class="button button-primary" id="core-diet-save-recs">' + escHtml( s.saveRecs ) + '</button>';
-		html += '</div>';
+		// Save button, only when there is something to save.
+		if ( toggleable.length ) {
+			html += '<div class="core-diet-rec-save-wrap">';
+			html += '<button type="button" class="button button-primary" id="core-diet-save-recs">' + escHtml( s.saveRecs ) + '</button>';
+			html += '</div>';
+		}
 
 		container.innerHTML = html;
 

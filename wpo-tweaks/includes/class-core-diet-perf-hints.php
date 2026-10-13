@@ -92,11 +92,77 @@ class Core_Diet_Perf_Hints {
 			$prefetch_domains = array_diff( $prefetch_domains, array( '//secure.gravatar.com' ) );
 		}
 
+		/*
+		 * The other two were printed on every page of every site, and on most
+		 * of them nothing is ever requested from either: WordPress does not load
+		 * jQuery from Google, and stats.wp.com is Jetpack's. They stay only
+		 * where the page is about to load something from them, which is what a
+		 * hint is for. This runs on wp_head right after wp_enqueue_scripts, so
+		 * what the page has queued is known. Dropped before the filter runs,
+		 * like the two above.
+		 */
+		foreach ( array( 'ajax.googleapis.com', 'stats.wp.com' ) as $host ) { // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- Not offloading: the domain is named here in order to drop its dns-prefetch hint, nothing is ever loaded from it.
+			if ( ! $this->page_loads_from( $host ) ) {
+				$prefetch_domains = array_diff( $prefetch_domains, array( '//' . $host ) );
+			}
+		}
+
 		$prefetch_domains = apply_filters( 'dietpress_dns_prefetch_domains', $prefetch_domains );
 
 		foreach ( $prefetch_domains as $domain ) {
 			echo '<link rel="dns-prefetch" href="' . esc_url( $domain ) . '">' . "\n";
 		}
+	}
+
+	/**
+	 * Whether this page is about to load a script or a style from a host.
+	 *
+	 * Looks at what is queued and at what the queued handles depend on. A file
+	 * queued later, from the footer, is not seen. For stats.wp.com that would
+	 * be the common case rather than the odd one, since a stats script has no
+	 * reason to be queued this early, so Jetpack is asked whether its Stats
+	 * module is on as well.
+	 *
+	 * @param string $host Host name, without scheme.
+	 * @return bool
+	 */
+	private function page_loads_from( $host ) {
+		if ( 'stats.wp.com' === $host
+			&& class_exists( 'Jetpack' )
+			&& method_exists( 'Jetpack', 'is_module_active' )
+			&& Jetpack::is_module_active( 'stats' ) ) {
+			return true;
+		}
+
+		foreach ( array( wp_scripts(), wp_styles() ) as $registry ) {
+			if ( ! $registry instanceof WP_Dependencies ) {
+				continue;
+			}
+
+			$pending = (array) $registry->queue;
+			$seen    = array();
+
+			while ( $pending ) {
+				$handle = array_pop( $pending );
+
+				if ( isset( $seen[ $handle ] ) || ! isset( $registry->registered[ $handle ] ) ) {
+					continue;
+				}
+
+				$seen[ $handle ] = true;
+				$item            = $registry->registered[ $handle ];
+
+				if ( is_string( $item->src ) && false !== strpos( $item->src, '//' . $host . '/' ) ) {
+					return true;
+				}
+
+				foreach ( (array) $item->deps as $dep ) {
+					$pending[] = $dep;
+				}
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -196,12 +262,60 @@ class Core_Diet_Perf_Hints {
 	}
 
 	/**
+	 * Let the RSS feed be kept for an hour, when it is the same for everybody.
+	 *
+	 * Up to 3.7.1 this header went out on every request for the feed. For a
+	 * logged in visitor WordPress had already sent "no-store, private"
+	 * (WP::send_headers(), wp-includes/class-wp.php:443 in 7.1.3), and this
+	 * replaced it with "public": the feed of somebody who can read private
+	 * posts includes them, and a cache in front that took the header at its
+	 * word could hand that feed to anybody for an hour. Measured on 13 oct 2026.
+	 */
+	public function core_diet_feed_cache_control() {
+		$sent = function_exists( 'headers_list' ) ? headers_list() : array();
+
+		if ( ! self::feed_may_be_public( $sent, is_user_logged_in(), defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) ) {
+			return;
+		}
+
+		header( 'Cache-Control: public, max-age=3600' );
+	}
+
+	/**
+	 * Whether a feed may be marked as public.
+	 *
+	 * Not for a logged in visitor, not for a response that has declared itself
+	 * uncacheable or sets a cookie, and not over a Cache-Control that already
+	 * says the response is for one visitor or must not be kept.
+	 *
+	 * @param array $sent         Header lines, as headers_list() returns them.
+	 * @param bool  $logged_in    Whether the visitor is logged in.
+	 * @param bool  $do_not_cache Whether DONOTCACHEPAGE is set.
+	 * @return bool
+	 */
+	private static function feed_may_be_public( array $sent, $logged_in, $do_not_cache ) {
+		if ( $logged_in || $do_not_cache ) {
+			return false;
+		}
+
+		foreach ( $sent as $header ) {
+			if ( 0 === stripos( $header, 'set-cookie:' ) ) {
+				return false;
+			}
+
+			if ( 0 === stripos( $header, 'cache-control:' ) && preg_match( '/\b(private|no-store|no-cache)\b/i', $header ) ) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
 	 * Optimize feeds
 	 */
 	public function core_diet_optimize_feeds() {
-		add_action( 'do_feed_rss2', function() {
-			header( 'Cache-Control: public, max-age=3600' );
-		}, 1 );
+		add_action( 'do_feed_rss2', array( $this, 'core_diet_feed_cache_control' ), 1 );
 
 		add_filter( 'pre_option_posts_per_rss', function() {
 			return '10';

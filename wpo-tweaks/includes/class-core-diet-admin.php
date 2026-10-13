@@ -641,7 +641,16 @@ class Core_Diet_Admin {
 			'selective_formidable'     => __( 'Load Formidable Forms styles only on pages with a form', 'wpo-tweaks' ),
 			'selective_everest_forms'  => __( 'Load Everest Forms styles only on pages with a form', 'wpo-tweaks' ),
 		);
-		$this->render_card_group( $selective_fields );
+
+		// The modules that have something to act on here go first and say so.
+		// Eight cards used to look the same whether their plugin was on the
+		// site or not, and nobody could tell which ones were theirs.
+		$detected = Core_Diet_Perf_Selective::get_detected_settings();
+		$this->render_card_group(
+			$selective_fields,
+			$detected,
+			array_fill_keys( $detected, __( 'Detected on this site', 'wpo-tweaks' ) )
+		);
 
 		// --- Compression and connections (.htaccess) ---
 		//
@@ -918,8 +927,10 @@ class Core_Diet_Admin {
 	 * @param array $fields Associative array of setting key => label.
 	 * @param array $pinned Keys that must stay first whatever their length,
 	 *                      such as the master switch of a group.
+	 * @param array $badges Associative array of setting key => short text shown
+	 *                      next to the label of that card.
 	 */
-	private function render_card_group( $fields, $pinned = array() ) {
+	private function render_card_group( $fields, $pinned = array(), $badges = array() ) {
 		$descriptions = Core_Diet_Settings::get_descriptions();
 
 		$first = array();
@@ -948,7 +959,12 @@ class Core_Diet_Admin {
 		);
 
 		foreach ( $first + $fields as $key => $label ) {
-			$this->render_toggle_card( $key, $label, isset( $descriptions[ $key ] ) ? $descriptions[ $key ] : '' );
+			$this->render_toggle_card(
+				$key,
+				$label,
+				isset( $descriptions[ $key ] ) ? $descriptions[ $key ] : '',
+				isset( $badges[ $key ] ) ? $badges[ $key ] : ''
+			);
 		}
 	}
 
@@ -958,8 +974,9 @@ class Core_Diet_Admin {
 	 * @param string $key         Setting key.
 	 * @param string $label       Field label.
 	 * @param string $description Optional description.
+	 * @param string $badge       Optional short text shown next to the label.
 	 */
-	private function render_toggle_card( $key, $label, $description = '' ) {
+	private function render_toggle_card( $key, $label, $description = '', $badge = '' ) {
 		$settings = Core_Diet_Settings::get_instance();
 		$field_id = 'core_diet_' . $key;
 		$name     = Core_Diet_Settings::OPTION_NAME . '[' . $key . ']';
@@ -993,6 +1010,9 @@ class Core_Diet_Admin {
 		} elseif ( 'inactive' === $type ) {
 			$card_class .= ' core-diet-option-inactive';
 		}
+		if ( '' !== $badge ) {
+			$card_class .= ' core-diet-option-badged';
+		}
 
 		// Most locks depend on another toggle on this same page, so the card
 		// carries what the script needs to mirror the lock without a reload.
@@ -1017,9 +1037,18 @@ class Core_Diet_Admin {
 				data-lock-text="<?php echo esc_attr( $lock_text ); ?>"
 			<?php endif; ?>>
 			<div class="core-diet-option-header">
-				<label class="core-diet-option-label" for="<?php echo esc_attr( $field_id ); ?>">
-					<?php echo esc_html( $label ); ?>
-				</label>
+				<?php if ( '' !== $badge ) : ?>
+					<div>
+						<label class="core-diet-option-label" for="<?php echo esc_attr( $field_id ); ?>">
+							<?php echo esc_html( $label ); ?>
+						</label>
+						<span class="core-diet-option-badge"><?php echo esc_html( $badge ); ?></span>
+					</div>
+				<?php else : ?>
+					<label class="core-diet-option-label" for="<?php echo esc_attr( $field_id ); ?>">
+						<?php echo esc_html( $label ); ?>
+					</label>
+				<?php endif; ?>
 				<label class="core-diet-toggle">
 					<input type="checkbox"
 					       id="<?php echo esc_attr( $field_id ); ?>"
