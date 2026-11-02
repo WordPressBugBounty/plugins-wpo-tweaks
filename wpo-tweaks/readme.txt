@@ -4,7 +4,7 @@ Tags: performance, cache, optimization, cleanup, speed
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 7.1
-Stable tag: 3.7.2
+Stable tag: 3.7.3
 License: GPLv2+
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -311,6 +311,13 @@ With the accelerator on, the cookies, media types and URL patterns those filters
 
 == Changelog ==
 
+= 3.7.3 =
+Fixes a fatal error when another plugin deletes or edits a term before WordPress has finished loading, as some WPML upgrade routines do. The page cache now empties itself completely after such a change.
+
+* Fix: With the page cache on, the site stopped with a fatal error (Call to a member function get_extra_permastruct() on null) when another plugin deleted or edited a category, a tag or any other term before WordPress had finished loading. WPML does this in some of its upgrade routines. Deleting a post or changing the status of a comment that early failed the same way. The cache now waits until WordPress can build the links of the site. When the change comes earlier and touches public content, it empties the whole cache at the end of that request, because it cannot yet tell which pages showed it.
+* Fix: Changing a term of a taxonomy with no public pages of its own, like the private ones WPML uses, no longer empties the cached home page. When a post changes, the archives it belongs to are chosen the same way: those of a taxonomy whose pages visitors can see, whether or not it is marked as public.
+* Fix: Deleting a navigation menu now empties the whole cache, as saving one already did. Until now it emptied only the home page, and every other page kept showing the deleted menu.
+
 = 3.7.2 =
 The RSS feed of a logged in user, and a page that sets a cookie when a lifetime is chosen for HTML, no longer go out marked as public. Adds a Purge cache entry to the DietPress menu, marks the selective loading modules whose plugin is on the site and lists the scheduled tasks in Tools.
 
@@ -358,8 +365,8 @@ For older changelog entries, please check the [changelog.txt](https://plugins.sv
 
 == Upgrade Notice ==
 
-= 3.7.2 =
-The RSS feed of a logged in user, and a page that sets a cookie when a lifetime is chosen for HTML, no longer go out marked as public. Adds a Purge cache entry to the DietPress menu, marks the selective loading modules whose plugin is on the site and lists the scheduled tasks in Tools.
+= 3.7.3 =
+Fixes a fatal error when another plugin deletes or edits a term before WordPress has finished loading, as some WPML upgrade routines do. The page cache now empties itself completely after such a change.
 
 == Support ==
 

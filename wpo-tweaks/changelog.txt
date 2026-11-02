@@ -3,6 +3,11 @@ DietPress — Full changelog
 For each release, see the entries below. The latest version is always at the top.
 The current release notes also live in readme.txt under "== Changelog ==".
 
+= 3.7.3 =
+* Fix: With the page cache on, the site stopped with a fatal error (Call to a member function get_extra_permastruct() on null) when another plugin deleted or edited a category, a tag or any other term before WordPress had finished loading. WPML does this in some of its upgrade routines. Deleting a post or changing the status of a comment that early failed the same way. The cache now waits until WordPress can build the links of the site. When the change comes earlier and touches public content, it empties the whole cache at the end of that request, because it cannot yet tell which pages showed it.
+* Fix: Changing a term of a taxonomy with no public pages of its own, like the private ones WPML uses, no longer empties the cached home page. When a post changes, the archives it belongs to are chosen the same way: those of a taxonomy whose pages visitors can see, whether or not it is marked as public.
+* Fix: Deleting a navigation menu now empties the whole cache, as saving one already did. Until now it emptied only the home page, and every other page kept showing the deleted menu.
+
 = 3.7.2 =
 * Improved: While the page cache is on, the DietPress menu has a Purge cache entry. It empties the cache from any screen of the dashboard and brings you back to it, with a note of how much was deleted.
 * Improved: In Selective loading, on the Strict tab, the modules that have something to act on come first and carry a "Detected on this site" label, so it is clear which ones are yours. The label follows what the module would do and not only whether its plugin is installed: Formidable Forms gets it while it loads its styles on every page, and TablePress on a classic theme.

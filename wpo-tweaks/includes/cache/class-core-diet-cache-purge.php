@@ -20,6 +20,9 @@ class Core_Diet_Cache_Purge {
 	/** @var Core_Diet_Cache_Settings */
 	private $settings;
 
+	/** @var bool Whether the whole cache is already due to be emptied when this request ends. */
+	private $purge_all_pending = false;
+
 	/**
 	 * Constructor.
 	 *
@@ -67,6 +70,9 @@ class Core_Diet_Cache_Purge {
 			'switch_theme',
 			'customize_save_after',
 			'wp_update_nav_menu',
+			// Until 3.7.3 deleting a menu reached the home page only, by way of
+			// its term; nav_menu has no archive and those hooks now skip it.
+			'wp_delete_nav_menu',
 			'update_option_sidebars_widgets',
 			'activated_plugin',
 			'deactivated_plugin',
@@ -115,6 +121,47 @@ class Core_Diet_Cache_Purge {
 	}
 
 	/**
+	 * Whether the address of a post or a term can be worked out yet.
+	 *
+	 * Not before init. $wp_rewrite does not exist until wp-settings.php creates
+	 * it, after plugins_loaded, and the link functions call it: get_term_link(),
+	 * get_author_posts_url(), get_year_link() and the permalink of a page all end
+	 * in a fatal error before that. WPML deleting terms from an upgrade routine on
+	 * plugins_loaded took sites down this way. Between the two, the link that
+	 * comes out is not the address the copy was stored under either: core
+	 * registers its own taxonomies without rewrite rules until init
+	 * (create_initial_taxonomies(), wp-includes/taxonomy.php:30 in 7.1.4), which
+	 * is the same test made here, and plugins register theirs on init.
+	 *
+	 * @return bool
+	 */
+	private function links_ready() {
+		return did_action( 'init' ) > 0;
+	}
+
+	/**
+	 * Empty the whole cache when this request ends.
+	 *
+	 * For a change to public content made before its pages can be named. Leaving
+	 * it alone would keep the old copy served until it expires, and a change
+	 * nobody can locate is what a full purge is for. Once per request, and at
+	 * the end of it, so a routine that changes hundreds of terms empties the
+	 * cache once and after its last change, not halfway through. Core hooks
+	 * shutdown long before any plugin loads (wp-settings.php:166), so it also
+	 * runs for a request that stops before init. Priority 0, ahead of the flush
+	 * on priority 1 that stores the page of this very request, which was built
+	 * after the change.
+	 */
+	private function purge_all_at_shutdown() {
+		if ( $this->purge_all_pending ) {
+			return;
+		}
+
+		$this->purge_all_pending = true;
+		add_action( 'shutdown', array( $this, 'purge_all' ), 0 );
+	}
+
+	/**
 	 * Purge one URL, its pagination and its comment pagination.
 	 *
 	 * @param string $url Absolute URL on this site.
@@ -142,6 +189,16 @@ class Core_Diet_Cache_Purge {
 	public function purge_post( $post ) {
 		$post = get_post( $post );
 		if ( ! $post instanceof WP_Post ) {
+			return 0;
+		}
+
+		// Before init no link can be built (see links_ready()), so the whole cache
+		// goes instead. The comment hooks reach this without asking whether the
+		// post is public, which is asked here so as not to empty it for nothing.
+		if ( ! $this->links_ready() ) {
+			if ( $this->is_public_post( $post ) ) {
+				$this->purge_all_at_shutdown();
+			}
 			return 0;
 		}
 
@@ -200,9 +257,11 @@ class Core_Diet_Cache_Purge {
 			}
 		}
 
-		// Every archive of every term it belongs to.
+		// Every archive of every term it belongs to. What gives a taxonomy an
+		// archive is being viewable, not being public, and it is the same test
+		// the term hooks make.
 		foreach ( get_object_taxonomies( $post->post_type, 'objects' ) as $taxonomy ) {
-			if ( empty( $taxonomy->public ) ) {
+			if ( ! is_taxonomy_viewable( $taxonomy ) ) {
 				continue;
 			}
 			$terms = get_the_terms( $post, $taxonomy->name );
@@ -279,6 +338,11 @@ class Core_Diet_Cache_Purge {
 			|| $post_after->post_type !== $post_before->post_type;
 
 		if ( ! $moved ) {
+			return;
+		}
+
+		if ( ! $this->links_ready() ) {
+			$this->purge_all_at_shutdown();
 			return;
 		}
 
@@ -379,9 +443,37 @@ class Core_Diet_Cache_Purge {
 	 * @return int Files deleted.
 	 */
 	private function purge_term_archive( $term_id, $taxonomy ) {
+		if ( ! $this->may_purge_term( $taxonomy ) ) {
+			return 0;
+		}
+
 		$link = get_term_link( (int) $term_id, (string) $taxonomy );
 
 		return is_wp_error( $link ) ? 0 : $this->purge_url( $link );
+	}
+
+	/**
+	 * Whether a term's pages may be purged by their address on this request.
+	 *
+	 * Not for a taxonomy with no archive of its own: WPML keeps the translation
+	 * priority of its posts in a private one, and a page that does not exist was
+	 * never cached. Not before init either (see links_ready()), when the whole
+	 * cache is emptied at the end of the request instead.
+	 *
+	 * @param string $taxonomy Taxonomy name.
+	 * @return bool
+	 */
+	private function may_purge_term( $taxonomy ) {
+		if ( ! is_taxonomy_viewable( (string) $taxonomy ) ) {
+			return false;
+		}
+
+		if ( ! $this->links_ready() ) {
+			$this->purge_all_at_shutdown();
+			return false;
+		}
+
+		return true;
 	}
 
 	/**
@@ -407,7 +499,11 @@ class Core_Diet_Cache_Purge {
 	 * @param string $taxonomy Taxonomy name.
 	 */
 	public function on_term_changed( $term_id, $tt_id, $taxonomy ) {
-		$link = get_term_link( (int) $term_id, $taxonomy );
+		if ( ! $this->may_purge_term( $taxonomy ) ) {
+			return;
+		}
+
+		$link = get_term_link( (int) $term_id, (string) $taxonomy );
 		if ( ! is_wp_error( $link ) ) {
 			$this->purge_url( $link );
 		}
